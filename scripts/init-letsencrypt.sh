@@ -1,23 +1,27 @@
 #!/bin/bash
 # Amorçage du certificat Let's Encrypt pour recrutement.acgt.cd.
 #
-# À lancer UNE fois sur le VPS (167.71.45.222), après que le DNS pointe bien
-# vers le serveur et que la base + le réseau partagé existent :
+# Appelé automatiquement par scripts/deploy.sh au tout premier déploiement
+# (quand aucun certificat n'existe). Lançable aussi à la main :
 #
-#   docker network create acgt_net                     # si pas déjà fait
-#   docker compose -f docker-compose.db.yml up -d
-#   ./scripts/init-letsencrypt.sh
-#   docker compose -f docker-compose.prod.yml up -d
+#   ./scripts/init-letsencrypt.sh                 # vrai certificat
+#   STAGING=1 ./scripts/init-letsencrypt.sh       # certificat de test (rate-limit large)
 #
-# Inspiré du script de référence wmnnd/nginx-certbot.
+# Méthode STANDALONE : Certbot ouvre lui-même le port 80 et répond au challenge,
+# SANS Nginx. On évite ainsi le cercle vicieux « Nginx a besoin du certificat
+# pour démarrer, mais le certificat a besoin de Nginx pour être validé ».
+# Le renouvellement, lui, se fait en webroot via Nginx (conteneur certbot du
+# compose) une fois le site en ligne.
+#
+# Prérequis : le DNS recrutement.acgt.cd doit pointer vers ce serveur, et le
+# port 80 doit être joignable depuis Internet (pare-feu / firewall cloud ouvert).
 set -e
 
 DOMAIN="recrutement.acgt.cd"
 EMAIL="${LETSENCRYPT_EMAIL:-recrutement@acgt.cd}"   # surchargé via variable d'env
-STAGING="${STAGING:-0}"                              # 1 = certificat de test (évite le rate-limit)
-
-DATA_PATH="./certbot"
-RSA_KEY_SIZE=4096
+STAGING="${STAGING:-0}"                              # 1 = certificat de test
+CERTBOT_CONF="acgt_certbot_conf"                     # volume partagé avec Nginx
+CERTBOT_WWW="acgt_certbot_www"
 
 # Détecte `docker compose` (v2) ou `docker-compose` (v1) et cible le compose prod.
 if docker compose version >/dev/null 2>&1; then
@@ -26,48 +30,27 @@ else
   COMPOSE="docker-compose -f docker-compose.prod.yml"
 fi
 
-echo "### 1. Démarrage de Nginx avec un certificat factice (pour qu'il boote)..."
-
-# Certificat auto-signé temporaire dans le volume certbot_conf via le conteneur certbot.
-LIVE_PATH="/etc/letsencrypt/live/$DOMAIN"
-$COMPOSE run --rm --entrypoint "\
-  sh -c 'mkdir -p $LIVE_PATH && \
-  openssl req -x509 -nodes -newkey rsa:$RSA_KEY_SIZE -days 1 \
-    -keyout $LIVE_PATH/privkey.pem \
-    -out $LIVE_PATH/fullchain.pem \
-    -subj /CN=localhost'" certbot
-
-echo "### 2. Démarrage de Nginx..."
-$COMPOSE up -d web
-sleep 3
-
-echo "### 3. Suppression du certificat factice..."
-$COMPOSE run --rm --entrypoint "\
-  rm -rf /etc/letsencrypt/live/$DOMAIN \
-  /etc/letsencrypt/archive/$DOMAIN \
-  /etc/letsencrypt/renewal/$DOMAIN.conf" certbot
-
-echo "### 4. Demande du vrai certificat Let's Encrypt..."
-
-# Argument staging (certificat de test) le cas échéant.
 STAGING_ARG=""
 if [ "$STAGING" != "0" ]; then STAGING_ARG="--staging"; fi
 
-$COMPOSE run --rm --entrypoint "\
-  certbot certonly --webroot -w /var/www/certbot \
-    $STAGING_ARG \
-    --email $EMAIL \
-    -d $DOMAIN \
-    --rsa-key-size $RSA_KEY_SIZE \
-    --agree-tos \
-    --no-eff-email \
-    --force-renewal" certbot
+echo "### 1. Libération du port 80 (arrêt de Nginx s'il tourne)..."
+$COMPOSE stop web 2>/dev/null || true
 
-echo "### 5. Rechargement de Nginx avec le vrai certificat..."
-# Les réglages SSL sont en dur dans la config Nginx : aucun fichier externe à
-# récupérer, Nginx recharge simplement le certificat fraîchement émis.
-$COMPOSE exec web nginx -s reload
+echo "### 2. Demande du certificat Let's Encrypt (mode standalone)..."
+# Certbot écoute lui-même sur le port 80 (publié via -p) et sert le challenge.
+# Le certificat est écrit dans le volume partagé avec Nginx.
+docker run --rm \
+  -p 80:80 \
+  -v "${CERTBOT_CONF}:/etc/letsencrypt" \
+  -v "${CERTBOT_WWW}:/var/www/certbot" \
+  certbot/certbot:latest certonly --standalone \
+    $STAGING_ARG \
+    --non-interactive --agree-tos --no-eff-email \
+    --email "$EMAIL" \
+    -d "$DOMAIN"
+
+echo "### 3. Démarrage de Nginx avec le certificat..."
+$COMPOSE up -d web
 
 echo
-echo "### Terminé. HTTPS actif sur https://$DOMAIN"
-echo "Lancez ensuite l'ensemble : $COMPOSE up -d"
+echo "### Terminé. Certificat en place pour $DOMAIN"
