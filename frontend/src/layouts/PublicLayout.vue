@@ -1,9 +1,17 @@
 <script setup>
 import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
+const auth = useAuthStore()
+const router = useRouter()
 const drawer = ref(false)
 const annee = new Date().getFullYear()
+
+async function deconnexion() {
+  await auth.deconnexion()
+  router.push({ name: 'eligibles' })
+}
 </script>
 
 <template>
@@ -14,21 +22,43 @@ const annee = new Date().getFullYear()
         <RouterLink :to="{ name: 'eligibles' }" class="logo">ACGT</RouterLink>
 
         <nav class="liens">
+          <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" class="lien">Mes dossiers</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" class="lien">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" class="lien">Candidats retenus</RouterLink>
         </nav>
 
         <div class="d-flex align-center ga-2">
-          <RouterLink :to="{ name: 'candidat-connexion' }" class="btn-connexion">Connexion</RouterLink>
+          <!-- Connecté : menu compte ; sinon : bouton Connexion -->
+          <v-menu v-if="auth.estConnecte">
+            <template #activator="{ props }">
+              <button v-bind="props" class="compte">
+                <v-avatar color="primary" size="34"><v-icon color="white" size="20">mdi-account</v-icon></v-avatar>
+                <span class="compte-mail d-none d-md-inline">{{ auth.utilisateur?.email }}</span>
+                <v-icon size="18" color="grey">mdi-chevron-down</v-icon>
+              </button>
+            </template>
+            <v-list>
+              <v-list-item :title="auth.utilisateur?.email"
+                           :subtitle="auth.estAdmin ? 'Administrateur' : 'Candidat'" disabled />
+              <v-divider />
+              <v-list-item v-if="auth.estAdmin" prepend-icon="mdi-cog" title="Espace admin" :to="{ name: 'validation' }" />
+              <v-list-item v-else prepend-icon="mdi-folder-account" title="Mes dossiers" :to="{ name: 'mes-dossiers' }" />
+              <v-list-item prepend-icon="mdi-logout" title="Déconnexion" @click="deconnexion" />
+            </v-list>
+          </v-menu>
+          <RouterLink v-else :to="{ name: 'candidat-connexion' }" class="btn-connexion">Connexion</RouterLink>
+
           <button class="burger" @click="drawer = !drawer">☰</button>
         </div>
       </div>
       <!-- menu mobile -->
       <transition name="fade">
         <nav v-if="drawer" class="liens-mobile">
+          <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" @click="drawer = false">Mes dossiers</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" @click="drawer = false">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" @click="drawer = false">Candidats retenus</RouterLink>
-          <RouterLink :to="{ name: 'candidat-connexion' }" @click="drawer = false">Connexion</RouterLink>
+          <RouterLink v-if="!auth.estConnecte" :to="{ name: 'candidat-connexion' }" @click="drawer = false">Connexion</RouterLink>
+          <a v-else @click="deconnexion(); drawer = false">Déconnexion</a>
         </nav>
       </transition>
     </header>
@@ -58,6 +88,9 @@ const annee = new Date().getFullYear()
   font-weight: 700; font-size: 0.9rem; text-decoration: none; transition: all 0.2s;
 }
 .btn-connexion:hover { background: #283593; }
+.compte { display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 9999px; transition: background 0.2s; }
+.compte:hover { background: #f5f2fb; }
+.compte-mail { font-size: 0.85rem; font-weight: 600; color: #1f2933; }
 .burger { display: none; background: none; border: none; font-size: 1.4rem; color: #1a237e; cursor: pointer; }
 .material-i { display: none; }
 .liens-mobile { display: none; flex-direction: column; padding: 8px 24px 16px; background: #fff; border-top: 1px solid #eee; }

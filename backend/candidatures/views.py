@@ -238,6 +238,29 @@ class DossierViewSet(viewsets.ModelViewSet):
         self._verifier_modifiable(self.get_object())
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Comptes de dossiers par statut (scopés par rôle), pour les KPI.
+
+        Reprend le scoping de `get_queryset` mais sans le filtre `statut`, afin
+        de fournir les totaux de chaque statut en une seule requête.
+        """
+        user = request.user
+        qs = Dossier.objects.all()
+        if roles.est_admin(user):
+            pass
+        elif roles.est_evaluateur(user):
+            qs = qs.filter(Q(affectations__evaluateur=user) | Q(deposant=user)).distinct()
+        else:
+            qs = qs.filter(deposant=user)
+
+        appel = request.query_params.get('appel')
+        if appel:
+            qs = qs.filter(appel_id=appel)
+
+        par_statut = {row['statut']: row['n'] for row in qs.values('statut').annotate(n=Count('id'))}
+        return Response({'total': sum(par_statut.values()), 'par_statut': par_statut})
+
     @action(detail=True, methods=['get', 'post'])
     def pieces(self, request, pk=None):
         """GET : liste les pièces. POST : ajoute une pièce (brouillon, déposant)."""

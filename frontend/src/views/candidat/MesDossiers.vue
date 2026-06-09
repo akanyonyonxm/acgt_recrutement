@@ -11,6 +11,11 @@ const loading = ref(true)
 const ACTIFS = ['brouillon', 'depose', 'en_examen']
 const nbActifs = computed(() => dossiers.value.filter((d) => ACTIFS.includes(d.statut)).length)
 
+const ACCENT = {
+  brouillon: '#90A4AE', depose: '#FBC02D', en_examen: '#0288D1',
+  retenu: '#388E3C', non_retenu: '#D32F2F', rejete: '#D32F2F',
+}
+
 async function charger() {
   loading.value = true
   try {
@@ -27,74 +32,86 @@ async function supprimer(d) {
   charger()
 }
 const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+const reference = (d) => `ACGT-${new Date(d.cree_le).getFullYear()}-${String(d.id).padStart(3, '0')}`
 const bloque = () => cand.charge && !cand.peutPostuler
 onMounted(charger)
 </script>
 
 <template>
-  <v-container class="py-8" style="max-width: 1140px">
+  <v-container class="py-8 px-6" style="max-width: 1200px">
     <!-- En-tête -->
-    <div class="d-flex align-center flex-wrap ga-3 mb-1">
-      <div>
-        <h1 class="text-h4 font-weight-bold text-primary">Tableau de bord</h1>
-        <p class="text-body-1 text-medium-emphasis">Gérez vos candidatures et suivez l'évolution de vos dossiers.</p>
+    <div class="d-flex align-center flex-wrap ga-4 mb-6">
+      <div class="flex-grow-1">
+        <h1 class="text-h4 font-weight-bold text-primary">Mes dossiers</h1>
+        <p class="text-body-1 text-medium-emphasis mb-0">Gérez vos candidatures et suivez leur évolution.</p>
       </div>
-      <v-spacer />
       <v-chip color="primary" variant="tonal" size="large" prepend-icon="mdi-folder-multiple">
         {{ nbActifs }} dossier(s) actif(s)
       </v-chip>
+      <v-btn v-if="!bloque()" color="accent" size="large" rounded="lg" class="text-primary font-weight-bold"
+             prepend-icon="mdi-plus" :to="{ name: 'postuler' }">
+        Déposer un dossier
+      </v-btn>
     </div>
 
-    <v-row class="mt-2">
-      <v-col cols="12">
-        <div v-if="loading" class="text-center py-10"><v-progress-circular indeterminate color="primary" /></div>
+    <!-- Bandeau « déjà postulé » -->
+    <v-alert v-if="bloque() && dossiers.length" type="info" variant="tonal" density="comfortable"
+             class="mb-5" icon="mdi-check-circle-outline">
+      Vous avez déjà postulé aux appels à candidature disponibles.
+    </v-alert>
 
-        <template v-else-if="dossiers.length">
-          <v-card v-for="d in dossiers" :key="d.id" class="dossier-carte pa-5 mb-4">
-            <div class="d-flex align-center flex-wrap ga-4">
-              <v-avatar color="primary" variant="tonal" rounded="lg" size="52">
-                <v-icon size="28">mdi-briefcase-outline</v-icon>
-              </v-avatar>
-              <div class="flex-grow-1" style="min-width: 180px">
-                <div class="d-flex align-center ga-2 mb-1">
-                  <span class="text-caption font-weight-bold text-medium-emphasis">DOSSIER #{{ d.id }}</span>
-                  <StatutBadge :statut="d.statut" :libelle="d.statut_libelle" />
-                </div>
-                <div class="text-h6 font-weight-bold">{{ d.poste_libelle || (d.nom + ' ' + d.prenom) }}</div>
-                <div class="text-caption text-medium-emphasis mt-1">
-                  <v-icon size="x-small">mdi-calendar</v-icon> {{ dateFr(d.cree_le) }}
-                  · {{ d.appel_titre }}
-                </div>
-              </div>
-              <div class="d-flex ga-2">
-                <v-btn v-if="d.statut === 'brouillon'" color="primary" variant="outlined"
-                       :to="{ name: 'postuler', query: { dossier: d.id } }" append-icon="mdi-arrow-right">Continuer</v-btn>
-                <v-btn v-else color="primary" variant="outlined"
-                       :to="{ name: 'dossier-candidat', params: { id: d.id } }" append-icon="mdi-arrow-right">Voir détails</v-btn>
-                <v-btn v-if="d.statut === 'brouillon'" icon="mdi-delete" variant="text" color="error" @click="supprimer(d)" />
-              </div>
+    <div v-if="loading" class="text-center py-10"><v-progress-circular indeterminate color="primary" /></div>
+
+    <!-- Liste des dossiers -->
+    <template v-else-if="dossiers.length">
+      <v-card v-for="d in dossiers" :key="d.id" class="dossier-carte mb-4"
+              :style="{ borderLeftColor: ACCENT[d.statut] }">
+        <div class="d-flex align-center flex-wrap ga-4 pa-5">
+          <v-avatar :color="ACCENT[d.statut]" variant="tonal" rounded="lg" size="54">
+            <v-icon size="28" :color="ACCENT[d.statut]">mdi-account-hard-hat</v-icon>
+          </v-avatar>
+          <div class="flex-grow-1" style="min-width: 200px">
+            <div class="d-flex align-center ga-3 mb-1">
+              <span class="ref">DOSSIER #{{ reference(d) }}</span>
+              <StatutBadge :statut="d.statut" :libelle="d.statut_libelle" />
             </div>
-          </v-card>
-        </template>
-
-        <v-card v-else class="pa-10 text-center">
-          <v-icon size="56" color="grey-lighten-1" class="mb-3">mdi-folder-open-outline</v-icon>
-          <p class="text-body-1 mb-4">Vous n'avez encore déposé aucun dossier.</p>
-        </v-card>
-
-        <div class="d-flex justify-end mt-2">
-          <v-btn color="accent" size="large" rounded="lg" class="text-primary font-weight-bold" prepend-icon="mdi-plus"
-                 :to="bloque() ? undefined : { name: 'postuler' }" :disabled="bloque()">
-            Déposer un nouveau dossier
-            <v-tooltip v-if="bloque()" activator="parent" location="bottom">Vous avez déjà postulé aux appels disponibles</v-tooltip>
-          </v-btn>
+            <div class="text-h6 font-weight-bold" style="line-height:1.2">
+              {{ d.poste_libelle || (d.nom + ' ' + d.prenom) }}
+            </div>
+            <div class="text-body-2 text-medium-emphasis mt-1 d-flex align-center flex-wrap ga-1">
+              <v-icon size="small">mdi-calendar</v-icon>{{ dateFr(d.cree_le) }}
+              <v-icon size="small" class="ml-3">mdi-bullhorn-outline</v-icon>{{ d.appel_titre }}
+            </div>
+          </div>
+          <div class="d-flex ga-1">
+            <v-btn v-if="d.statut === 'brouillon'" color="primary" variant="outlined" rounded="lg"
+                   :to="{ name: 'postuler', query: { dossier: d.id } }" append-icon="mdi-arrow-right">Continuer</v-btn>
+            <v-btn v-else color="primary" variant="outlined" rounded="lg"
+                   :to="{ name: 'dossier-candidat', params: { id: d.id } }" append-icon="mdi-arrow-right">Voir détails</v-btn>
+            <v-btn v-if="d.statut === 'brouillon'" icon="mdi-delete-outline" variant="text" color="error" @click="supprimer(d)" />
+          </div>
         </div>
-      </v-col>
-    </v-row>
+      </v-card>
+    </template>
+
+    <!-- État vide -->
+    <v-card v-else class="pa-12 text-center" variant="flat" style="border:1px dashed #c6c5d4">
+      <v-avatar color="primary" variant="tonal" size="72" class="mb-4"><v-icon size="40">mdi-folder-open-outline</v-icon></v-avatar>
+      <h2 class="text-h6 font-weight-bold mb-1">Aucun dossier pour le moment</h2>
+      <p class="text-body-2 text-medium-emphasis mb-5">Déposez votre première candidature pour démarrer.</p>
+      <v-btn color="accent" size="large" rounded="lg" class="text-primary font-weight-bold"
+             prepend-icon="mdi-plus" :to="{ name: 'postuler' }">Déposer un dossier</v-btn>
+    </v-card>
   </v-container>
 </template>
 
 <style scoped>
-.dossier-carte { border: 1px solid #e2e6ea; transition: box-shadow 0.2s, transform 0.2s; }
-.dossier-carte:hover { box-shadow: 0 8px 24px rgba(26,35,126,0.10); transform: translateY(-2px); }
+.dossier-carte {
+  border: 1px solid #e2e6ea;
+  border-left: 4px solid #90A4AE;
+  border-radius: 16px;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.dossier-carte:hover { box-shadow: 0 10px 28px rgba(26,35,126,0.10); transform: translateY(-2px); }
+.ref { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; color: #767683; text-transform: uppercase; }
 </style>

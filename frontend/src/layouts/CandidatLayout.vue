@@ -7,6 +7,7 @@ import api from '../api'
 const auth = useAuthStore()
 const router = useRouter()
 const drawer = ref(false)
+const annee = new Date().getFullYear()
 const snack = ref({ show: false, color: 'success', text: '' })
 const envoiEnCours = ref(false)
 
@@ -85,6 +86,10 @@ async function deconnexion() {
       <router-view />
     </main>
 
+    <footer class="pied-bas">
+      © {{ annee }} Agence Congolaise des Grands Travaux (ACGT). Tous droits réservés.
+    </footer>
+
     <v-snackbar v-model="snack.show" :color="snack.color" timeout="4000">{{ snack.text }}</v-snackbar>
   </div>
 </template>
@@ -107,6 +112,7 @@ async function deconnexion() {
 .liens-mobile a { padding: 10px 0; color: #1a237e; font-weight: 600; text-decoration: none; }
 @media (max-width: 800px) { .liens { display: none; } .burger { display: block; } .liens-mobile { display: flex; } }
 .contenu { flex-grow: 1; }
+.pied-bas { background: #1a237e; color: #fff; text-align: center; padding: 18px; font-size: 0.8rem; opacity: 0.95; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

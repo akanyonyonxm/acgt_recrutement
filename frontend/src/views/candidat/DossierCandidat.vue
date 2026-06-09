@@ -35,7 +35,7 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
 </script>
 
 <template>
-  <v-container v-if="dossier" class="py-6" style="max-width: 1140px">
+  <v-container v-if="dossier" class="py-6 px-6" style="max-width: 1200px">
     <!-- Fil d'ariane -->
     <div class="text-caption text-medium-emphasis mb-2">
       <RouterLink :to="{ name: 'mes-dossiers' }" class="text-medium-emphasis">Mes dossiers</RouterLink>
@@ -59,7 +59,7 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
     </div>
 
     <!-- Frise de statut -->
-    <v-card class="pa-6 mb-5">
+    <v-card flat border class="pa-6 mb-5">
       <div class="text-subtitle-2 font-weight-bold text-medium-emphasis mb-5">STATUT DE LA CANDIDATURE</div>
       <div class="frise">
         <template v-for="(e, i) in ETAPES" :key="i">
@@ -80,7 +80,7 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
       <!-- Colonne gauche -->
       <v-col cols="12" md="7">
         <!-- Historique -->
-        <v-card class="mb-5">
+        <v-card flat border class="mb-5">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-history</v-icon> Historique du dossier
           </v-card-title>
@@ -98,34 +98,32 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
         </v-card>
 
         <!-- Documents transmis -->
-        <v-card>
+        <v-card flat border>
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-file-multiple</v-icon> Documents transmis
             <v-spacer />
             <span class="text-caption text-medium-emphasis">{{ dossier.pieces.length }} fichier(s)</span>
           </v-card-title>
           <v-divider />
-          <v-row class="pa-3" dense>
-            <v-col v-for="p in dossier.pieces" :key="p.id" cols="12" sm="6">
-              <div class="doc-box">
-                <v-avatar color="primary" variant="tonal" rounded="lg" size="40" class="mr-3">
-                  <v-icon>{{ iconePiece(p.type_piece.code) }}</v-icon>
-                </v-avatar>
-                <div class="flex-grow-1" style="min-width:0">
-                  <div class="doc-nom">{{ p.nom_original }}</div>
-                  <div class="doc-meta">{{ p.type_piece.libelle }} · {{ kos(p.taille) }}</div>
-                </div>
-                <v-btn icon="mdi-download" variant="text" color="primary" size="small"
-                       :href="`/api/dossiers/${dossier.id}/pieces/${p.id}/telecharger/`" target="_blank" />
+          <div class="pa-4 d-flex flex-column ga-3">
+            <div v-for="p in dossier.pieces" :key="p.id" class="doc-box">
+              <v-avatar color="primary" variant="tonal" rounded="lg" size="40" class="mr-3">
+                <v-icon>{{ iconePiece(p.type_piece.code) }}</v-icon>
+              </v-avatar>
+              <div class="flex-grow-1" style="min-width:0">
+                <div class="doc-nom">{{ p.nom_original }}</div>
+                <div class="doc-meta">{{ p.type_piece.libelle }} · {{ kos(p.taille) }}</div>
               </div>
-            </v-col>
-          </v-row>
+              <v-btn icon="mdi-download" variant="text" color="primary" size="small"
+                     :href="`/api/dossiers/${dossier.id}/pieces/${p.id}/telecharger/`" target="_blank" />
+            </div>
+          </div>
         </v-card>
       </v-col>
 
       <!-- Colonne droite -->
       <v-col cols="12" md="5">
-        <v-card class="pa-5 mb-4 note" color="primary">
+        <v-card flat class="pa-5 mb-4 note" color="primary">
           <div class="text-subtitle-1 font-weight-bold mb-2">Note institutionnelle</div>
           <p class="text-body-2" style="opacity:0.88">
             L'Agence Congolaise des Grands Travaux assure un traitement équitable et transparent de chaque dossier.
@@ -133,19 +131,20 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
           </p>
         </v-card>
 
-        <v-card class="pa-5">
-          <div class="text-subtitle-1 font-weight-bold mb-3">Besoin d'assistance ?</div>
-          <div class="d-flex align-center">
-            <v-avatar color="primary" variant="tonal" rounded="lg" size="40" class="mr-3">
-              <v-icon>mdi-email-outline</v-icon>
-            </v-avatar>
+        <v-card flat border class="pa-5">
+          <div class="d-flex align-center mb-4">
+            <v-avatar color="primary" size="48" class="mr-3"><v-icon color="white" size="26">mdi-account</v-icon></v-avatar>
             <div>
-              <div class="text-caption text-medium-emphasis">Support candidat</div>
-              <a href="mailto:info@recrutement.acgt.cd" class="font-weight-bold text-primary text-decoration-none">
-                info@recrutement.acgt.cd
-              </a>
+              <div class="text-subtitle-1 font-weight-bold" style="line-height:1.2">
+                {{ dossier.nom }} {{ dossier.postnom }} {{ dossier.prenom }}
+              </div>
+              <div class="text-caption text-medium-emphasis">Candidat</div>
             </div>
           </div>
+          <v-divider class="mb-2" />
+          <div class="info-ligne"><span class="info-l">Poste visé</span><span class="info-v">{{ dossier.poste_libelle || '—' }}</span></div>
+          <div class="info-ligne"><span class="info-l">Email de contact</span><span class="info-v">{{ dossier.email }}</span></div>
+          <div class="info-ligne"><span class="info-l">Déposé par</span><span class="info-v">{{ dossier.deposant }}</span></div>
         </v-card>
       </v-col>
     </v-row>
@@ -163,7 +162,12 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
 .frise-line { flex: 1; height: 4px; margin-top: 24px; border-radius: 2px; background: #e0e3e8; transition: background 0.3s; }
 .frise-line.done { background: #1a237e; }
 
-.doc-box { display: flex; align-items: center; background: #f7f8fb; border: 1px solid #eceff4; border-radius: 12px; padding: 10px 12px; height: 100%; }
+.doc-box { display: flex; align-items: center; background: #f7f8fb; border: 1px solid #eceff4; border-radius: 12px; padding: 10px 12px; height: 100%; transition: background 0.15s, border-color 0.15s; }
+.doc-box:hover { background: #f0f3fb; border-color: #c9d4ee; }
+.info-ligne { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f0f1f4; }
+.info-ligne:last-child { border-bottom: none; }
+.info-l { font-size: 0.8rem; color: #767683; }
+.info-v { font-size: 0.85rem; font-weight: 600; color: #1f2933; text-align: right; word-break: break-word; }
 .doc-nom { font-size: 0.85rem; font-weight: 600; color: #1f2933; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .doc-meta { font-size: 0.72rem; color: #767683; }
 </style>

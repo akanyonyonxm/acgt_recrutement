@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../../api'
 import StatutBadge from '../../components/StatutBadge.vue'
+import StatCard from '../../components/StatCard.vue'
 
 const router = useRouter()
 const dossiers = ref([])
@@ -10,15 +11,17 @@ const appels = ref([])
 const statut = ref('depose')
 const appel = ref(null)
 const chargement = ref(false)
+const stats = ref({ total: 0, par_statut: {} })
 
-const STATUTS = [
-  { value: 'depose', title: 'À valider (déposés)' },
-  { value: 'en_examen', title: 'En examen' },
-  { value: 'retenu', title: 'Retenus' },
-  { value: 'non_retenu', title: 'Non retenus' },
-  { value: 'rejete', title: 'Rejetés' },
-  { value: '', title: 'Tous' },
+const KPIS = [
+  { key: '', label: 'Total', icon: 'mdi-folder-multiple', color: '#1a237e' },
+  { key: 'depose', label: 'À valider', icon: 'mdi-inbox-arrow-down', color: '#FBC02D' },
+  { key: 'en_examen', label: 'En examen', icon: 'mdi-magnify-scan', color: '#0288D1' },
+  { key: 'retenu', label: 'Retenus', icon: 'mdi-check-circle', color: '#388E3C' },
+  { key: 'non_retenu', label: 'Non retenus', icon: 'mdi-close-circle', color: '#D32F2F' },
+  { key: 'rejete', label: 'Rejetés', icon: 'mdi-cancel', color: '#9E9E9E' },
 ]
+const compte = (key) => (key === '' ? stats.value.total : stats.value.par_statut[key] || 0)
 
 const ENTETES = [
   { title: '#', key: 'id', width: 70 },
@@ -30,6 +33,12 @@ const ENTETES = [
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
 
+async function chargerStats() {
+  const params = {}
+  if (appel.value) params.appel = appel.value
+  const { data } = await api.get('/dossiers/stats/', { params })
+  stats.value = data
+}
 async function charger() {
   chargement.value = true
   try {
@@ -42,41 +51,39 @@ async function charger() {
     chargement.value = false
   }
 }
+function filtrer(key) { statut.value = key; charger() }
+function changerAppel() { charger(); chargerStats() }
 
 onMounted(async () => {
   const { data } = await api.get('/appels/')
   appels.value = data.results.map((a) => ({ value: a.id, title: a.titre }))
-  await charger()
+  await Promise.all([charger(), chargerStats()])
 })
 
-function ouvrir(_, { item }) {
-  router.push({ name: 'dossier', params: { id: item.id } })
-}
+function ouvrir(_, { item }) { router.push({ name: 'dossier', params: { id: item.id } }) }
 const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR')
 </script>
 
 <template>
   <div>
-    <div class="d-flex align-center mb-6">
-      <v-icon color="primary" size="32" class="mr-3">mdi-check-decagram-outline</v-icon>
+    <div class="d-flex align-center mb-5">
+      <v-icon color="primary" size="30" class="mr-3">mdi-check-decagram-outline</v-icon>
       <h1 class="text-h5 font-weight-bold text-primary">Validation des dossiers</h1>
       <v-spacer />
-      <v-chip color="primary" variant="tonal">{{ dossiers.length }} dossier(s)</v-chip>
+      <v-select v-model="appel" :items="appels" label="Filtrer par appel" clearable hide-details
+                density="compact" variant="outlined" style="max-width: 280px" @update:modelValue="changerAppel" />
     </div>
 
-    <v-card class="mb-4 pa-4">
-      <v-row dense>
-        <v-col cols="12" sm="6" md="4">
-          <v-select v-model="statut" :items="STATUTS" label="Statut" hide-details @update:modelValue="charger" />
-        </v-col>
-        <v-col cols="12" sm="6" md="4">
-          <v-select v-model="appel" :items="appels" label="Appel à candidature" clearable
-                    hide-details @update:modelValue="charger" />
-        </v-col>
-      </v-row>
-    </v-card>
+    <!-- KPI statistiques -->
+    <v-row dense class="mb-5">
+      <v-col v-for="k in KPIS" :key="k.key" cols="6" sm="4" md="2">
+        <StatCard :icon="k.icon" :value="compte(k.key)" :label="k.label" :color="k.color"
+                  clickable :active="statut === k.key" @click="filtrer(k.key)" />
+      </v-col>
+    </v-row>
 
-    <v-card>
+    <!-- Tableau -->
+    <v-card flat border>
       <v-data-table
         :headers="ENTETES"
         :items="dossiers"
@@ -85,6 +92,7 @@ const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR')
         @click:row="ouvrir"
         no-data-text="Aucun dossier dans cette catégorie."
         items-per-page="25"
+        class="tableau-admin"
       >
         <template #item.candidat="{ item }">
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
@@ -103,3 +111,8 @@ const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR')
     </v-card>
   </div>
 </template>
+
+<style scoped>
+.tableau-admin :deep(thead th) { background: #f4f5f9; font-weight: 700 !important; color: #1a237e !important; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.tableau-admin :deep(tbody tr) { cursor: pointer; }
+</style>

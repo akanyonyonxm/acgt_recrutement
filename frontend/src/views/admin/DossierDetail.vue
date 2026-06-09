@@ -116,7 +116,7 @@ onMounted(charger)
     <v-row>
       <!-- Colonne gauche : infos + pièces -->
       <v-col cols="12" md="6">
-        <v-card class="mb-4">
+        <v-card flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold">Informations</v-card-title>
           <v-divider />
           <div class="pa-4">
@@ -144,7 +144,7 @@ onMounted(charger)
           </div>
         </v-card>
 
-        <v-card>
+        <v-card flat border>
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-paperclip</v-icon> Pièces jointes
             <v-chip size="x-small" class="ml-2" color="primary" variant="tonal">{{ dossier.pieces.length }}</v-chip>
@@ -172,7 +172,7 @@ onMounted(charger)
       <!-- Colonne droite : actions selon statut -->
       <v-col cols="12" md="6">
         <!-- DÉPOSÉ -->
-        <v-card v-if="estDepose" class="mb-4">
+        <v-card v-if="estDepose" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-account-search</v-icon> Vérifier l'éligibilité
           </v-card-title>
@@ -214,7 +214,7 @@ onMounted(charger)
         </v-card>
 
         <!-- EN EXAMEN : désignation -->
-        <v-card v-if="estEnExamen" class="mb-4">
+        <v-card v-if="estEnExamen" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-account-tie</v-icon> Évaluateurs désignés
           </v-card-title>
@@ -246,7 +246,7 @@ onMounted(charger)
         </v-card>
 
         <!-- Avis -->
-        <v-card v-if="evaluations.length" class="mb-4">
+        <v-card v-if="evaluations.length" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-comment-check-outline</v-icon> Avis des évaluateurs
           </v-card-title>
@@ -263,7 +263,7 @@ onMounted(charger)
         </v-card>
 
         <!-- Historique -->
-        <v-card>
+        <v-card flat border>
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-history</v-icon> Historique
           </v-card-title>

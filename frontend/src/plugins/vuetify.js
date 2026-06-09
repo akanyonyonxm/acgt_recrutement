@@ -26,7 +26,7 @@ export default createVuetify({
     },
   },
   defaults: {
-    VCard: { rounded: 'xl' },
+    VCard: { rounded: 'lg' },
     VTextField: { variant: 'outlined', density: 'comfortable', color: 'primary', rounded: 'lg' },
     VSelect: { variant: 'outlined', density: 'comfortable', color: 'primary', rounded: 'lg' },
     VTextarea: { variant: 'outlined', density: 'comfortable', color: 'primary', rounded: 'lg' },
