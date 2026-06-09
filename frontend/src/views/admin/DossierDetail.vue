@@ -211,7 +211,7 @@ onMounted(charger)
                 </v-list-item-subtitle>
               </v-list-item>
               <v-list-item v-if="!resultats.length" class="text-medium-emphasis">
-                Lancez une recherche pour rattacher (optionnel).
+                Recherchez puis sélectionnez la personne dans la liste d'éligibilité.
               </v-list-item>
             </v-list>
             <v-alert v-if="ligneChoisie" type="success" variant="tonal" density="compact" class="mt-2">
@@ -220,13 +220,17 @@ onMounted(charger)
             </v-alert>
           </v-card-text>
           <v-divider />
+          <v-alert v-if="!ligneChoisie" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
+            Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir décider.
+          </v-alert>
           <v-card-actions class="pa-4">
-            <v-btn color="success" variant="flat" prepend-icon="mdi-check"
+            <v-btn color="success" variant="flat" prepend-icon="mdi-check" :disabled="!ligneChoisie"
                    @click="demanderConfirmation('Approuver le dossier', 'Le dossier passera en examen et le candidat sera notifié par email.', approuver, 'success')">
               Approuver → examen
             </v-btn>
             <v-spacer />
-            <v-btn color="error" variant="outlined" prepend-icon="mdi-close" @click="dialogRejet = true">
+            <v-btn color="error" variant="outlined" prepend-icon="mdi-close" :disabled="!ligneChoisie"
+                   @click="dialogRejet = true">
               Rejeter
             </v-btn>
           </v-card-actions>
