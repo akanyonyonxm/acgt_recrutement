@@ -18,6 +18,8 @@ const ligneChoisie = ref(null)
 
 const motifRejet = ref('')
 const dialogRejet = ref(false)
+const motifNonRetenu = ref('')
+const dialogNonRetenir = ref(false)
 
 const evaluateurs = ref([])
 const affectations = ref([])
@@ -71,6 +73,11 @@ const approuver = () => action('approuver', ligneChoisie.value ? { eligibilite_i
 function rejeter() {
   if (!motifRejet.value.trim()) return notifier('Le motif est obligatoire.', 'error')
   action('rejeter', { motif: motifRejet.value })
+}
+const retenir = () => action('retenir')
+function nonRetenir() {
+  if (!motifNonRetenu.value.trim()) return notifier('Le motif est obligatoire.', 'error')
+  action('non-retenir', { motif: motifNonRetenu.value })
 }
 
 async function affecter() {
@@ -245,6 +252,26 @@ onMounted(charger)
           </v-card-text>
         </v-card>
 
+        <!-- EN EXAMEN : décision finale (l'admin tranche) -->
+        <v-card v-if="estEnExamen" flat border class="mb-4">
+          <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
+            <v-icon color="primary" class="mr-2">mdi-gavel</v-icon> Décision finale
+          </v-card-title>
+          <v-divider />
+          <v-card-text class="text-body-2 text-medium-emphasis">
+            Tranche définitive du dossier (notifie le candidat par email). À faire après
+            consultation des avis ci-dessous.
+          </v-card-text>
+          <v-card-actions class="px-4 pb-4">
+            <v-btn color="success" variant="flat" prepend-icon="mdi-check-bold" @click="retenir">
+              Retenir
+            </v-btn>
+            <v-spacer />
+            <v-btn color="error" variant="outlined" prepend-icon="mdi-close-thick"
+                   @click="dialogNonRetenir = true">Non retenir</v-btn>
+          </v-card-actions>
+        </v-card>
+
         <!-- Avis -->
         <v-card v-if="evaluations.length" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
@@ -298,6 +325,23 @@ onMounted(charger)
           <v-spacer />
           <v-btn variant="outlined" @click="dialogRejet = false">Annuler</v-btn>
           <v-btn color="error" variant="flat" @click="rejeter">Confirmer le rejet</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Dialog non-retenir -->
+    <v-dialog v-model="dialogNonRetenir" max-width="480">
+      <v-card>
+        <v-card-title class="bg-error text-white d-flex align-center">
+          <v-icon class="mr-2">mdi-close-circle</v-icon>Non retenir le dossier
+        </v-card-title>
+        <v-card-text class="pt-4">
+          <v-textarea v-model="motifNonRetenu" label="Motif (obligatoire)" rows="3" autofocus />
+        </v-card-text>
+        <v-card-actions class="pa-4 pt-0">
+          <v-spacer />
+          <v-btn variant="outlined" @click="dialogNonRetenir = false">Annuler</v-btn>
+          <v-btn color="error" variant="flat" @click="nonRetenir">Confirmer</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

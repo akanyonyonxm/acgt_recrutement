@@ -19,12 +19,16 @@ async function soumettre() {
   enCours.value = true
   try {
     await auth.connexion(email.value, motDePasse.value)
-    if (!auth.estAdmin) {
-      erreur.value = "Ce compte n'a pas accès à l'espace administrateur."
+    if (route.query.suite) {
+      router.push(route.query.suite)
+    } else if (auth.estAdmin) {
+      router.push({ name: 'validation' })
+    } else if (auth.estEvaluateur) {
+      router.push({ name: 'eval-dossiers' })
+    } else {
+      erreur.value = "Ce compte n'a pas accès à l'espace de traitement."
       await auth.deconnexion()
-      return
     }
-    router.push(route.query.suite || { name: 'validation' })
   } catch (e) {
     erreur.value = e.response?.data?.detail || 'Email ou mot de passe incorrect.'
   } finally {
@@ -46,7 +50,7 @@ async function soumettre() {
                 Traitement des candidatures
               </h1>
               <div class="text-subtitle-2 text-medium-emphasis mb-2">
-                Espace administrateur — connectez-vous pour continuer
+                Espace de traitement — connectez-vous pour continuer
               </div>
             </div>
 

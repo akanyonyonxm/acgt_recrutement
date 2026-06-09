@@ -94,6 +94,25 @@ const routes = [
       },
     ],
   },
+  // Espace évaluateur (examen des dossiers désignés)
+  {
+    path: '/evaluateur',
+    component: () => import('../layouts/EvaluateurLayout.vue'),
+    meta: { role: 'evaluateur' },
+    children: [
+      { path: '', redirect: '/evaluateur/dossiers' },
+      {
+        path: 'dossiers',
+        name: 'eval-dossiers',
+        component: () => import('../views/evaluateur/Dossiers.vue'),
+      },
+      {
+        path: 'dossiers/:id',
+        name: 'eval-dossier',
+        component: () => import('../views/evaluateur/DossierExamen.vue'),
+      },
+    ],
+  },
 ]
 
 const router = createRouter({
@@ -116,11 +135,16 @@ router.beforeEach(async (to) => {
     return true
   }
 
-  // Espace agent/admin.
+  // Espace agent (admin / évaluateur) : connexion via /traitement.
   if (!auth.estConnecte) {
     return { name: 'connexion', query: { suite: to.fullPath } }
   }
   if (to.meta.role === 'admin' && !auth.estAdmin) {
+    return { name: 'connexion' }
+  }
+  // L'espace évaluateur est accessible aux évaluateurs (un admin/superuser
+  // cumule le rôle évaluateur, il y a donc aussi accès).
+  if (to.meta.role === 'evaluateur' && !auth.estEvaluateur) {
     return { name: 'connexion' }
   }
   return true

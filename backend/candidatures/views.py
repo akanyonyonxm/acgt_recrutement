@@ -529,9 +529,10 @@ class DossierViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Vous n'êtes pas désigné sur ce dossier.")
 
     def _verifier_validateur(self, dossier):
-        """L'utilisateur peut-il valider ce dossier (désigné + autorisé) ?"""
+        """Qui peut trancher retenir/non-retenir : l'admin, ou un évaluateur
+        désigné ET autorisé (peut_valider) sur ce dossier précis."""
         user = self.request.user
-        if user.is_superuser:
+        if roles.est_admin(user):
             return
         autorise = dossier.affectations.filter(
             evaluateur=user, peut_valider=True,
@@ -566,20 +567,25 @@ class DossierViewSet(viewsets.ModelViewSet):
 
     # --- Décision (évaluateur désigné ET autorisé, dossier EN_EXAMEN) ----
 
+    # Décision finale : l'admin tranche, ou un évaluateur désigné autorisé.
+    _peut_decider = staticmethod(
+        lambda u: roles.est_admin(u) or roles.est_evaluateur(u)
+    )
+
     @action(detail=True, methods=['post'])
     def retenir(self, request, pk=None):
-        """EN_EXAMEN → RETENU (évaluateur désigné et autorisé)."""
+        """EN_EXAMEN → RETENU (admin, ou évaluateur désigné et autorisé)."""
         return self._transition(
-            request, Dossier.Statut.RETENU, roles.est_evaluateur,
+            request, Dossier.Statut.RETENU, self._peut_decider,
             verif_validateur=True,
             email=('Vous êtes retenu(e) pour la suite', 'dossier_retenu.html'),
         )
 
     @action(detail=True, methods=['post'], url_path='non-retenir')
     def non_retenir(self, request, pk=None):
-        """EN_EXAMEN → NON_RETENU (évaluateur désigné et autorisé, motif requis)."""
+        """EN_EXAMEN → NON_RETENU (admin ou évaluateur autorisé, motif requis)."""
         return self._transition(
-            request, Dossier.Statut.NON_RETENU, roles.est_evaluateur,
+            request, Dossier.Statut.NON_RETENU, self._peut_decider,
             motif_obligatoire=True, verif_validateur=True,
             email=('Décision concernant votre candidature', 'dossier_non_retenu.html'),
         )
