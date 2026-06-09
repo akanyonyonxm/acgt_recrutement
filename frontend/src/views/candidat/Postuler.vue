@@ -182,7 +182,7 @@ async function soumettre() {
         </v-expand-transition>
         <v-row dense>
           <v-col cols="12" sm="4"><v-text-field v-model="form.nom" label="Nom" /></v-col>
-          <v-col cols="12" sm="4"><v-text-field v-model="form.postnom" label="Post-nom" /></v-col>
+          <v-col cols="12" sm="4"><v-text-field v-model="form.postnom" label="Postnom" /></v-col>
           <v-col cols="12" sm="4"><v-text-field v-model="form.prenom" label="Prénom" /></v-col>
         </v-row>
         <v-text-field v-model="form.email" label="Email de contact" type="email" prepend-inner-icon="mdi-email"

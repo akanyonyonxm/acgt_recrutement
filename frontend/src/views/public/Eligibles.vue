@@ -95,7 +95,7 @@ function aller(p) {
           <table class="tableau">
             <thead>
               <tr>
-                <th class="num">#</th><th>NOM</th><th>POST-NOM</th><th>PRÉNOM</th><th>STATUT</th>
+                <th class="num">#</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>STATUT</th>
               </tr>
             </thead>
             <tbody>

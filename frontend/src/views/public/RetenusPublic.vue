@@ -101,7 +101,7 @@ onMounted(async () => {
         <div class="tableau-scroll">
           <table class="tableau">
             <thead>
-              <tr><th class="num">#</th><th>NOM</th><th>POST-NOM</th><th>PRÉNOM</th><th>STATUT</th></tr>
+              <tr><th class="num">#</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>STATUT</th></tr>
             </thead>
             <tbody>
               <tr v-for="(e, i) in items" :key="e.id" :class="{ zebra: i % 2 }">
