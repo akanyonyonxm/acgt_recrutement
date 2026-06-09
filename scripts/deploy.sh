@@ -15,8 +15,12 @@ CERTBOT_VOLUME="acgt_certbot_conf"
 # Se place à la racine du projet quel que soit le répertoire d'appel.
 cd "$(dirname "$0")/.."
 
-echo "### 1/5 Mise à jour du code (git pull)..."
-git pull --ff-only
+echo "### 1/5 Mise à jour du code..."
+# On aligne le serveur exactement sur origin/main (reset --hard) plutôt qu'un
+# pull : robuste face à toute dérive locale (bit exécutable, fin de ligne...).
+# Les fichiers ignorés (.env, fichiers_prives) ne sont pas touchés.
+git fetch origin
+git reset --hard origin/main
 
 echo "### 2/5 Réseau Docker partagé..."
 docker network inspect acgt_net >/dev/null 2>&1 || docker network create acgt_net
