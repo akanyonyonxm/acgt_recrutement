@@ -402,6 +402,7 @@ class ListeEligibilite(models.Model):
     prenom = models.CharField('prénom', max_length=100, blank=True)
     type_eligibilite = models.CharField(
         'type', max_length=20, choices=Type.choices, default=Type.STAGE,
+        blank=True,
     )
     annee = models.PositiveIntegerField('année', null=True, blank=True)
     reference = models.CharField('référence interne', max_length=100, blank=True)
