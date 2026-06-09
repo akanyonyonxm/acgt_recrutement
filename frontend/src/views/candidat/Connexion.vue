@@ -30,10 +30,16 @@ async function soumettre() {
 
 <template>
   <div class="mesh">
+    <RouterLink :to="{ name: 'eligibles' }" class="lien-accueil">
+      <v-icon size="18" class="mr-1">mdi-arrow-left</v-icon>
+      Retour à l'accueil
+    </RouterLink>
     <v-container class="py-10 d-flex justify-center">
     <v-card class="pa-2 glass" max-width="440" width="100%">
       <div class="text-center pt-6 px-6">
-        <div class="logo-box mb-3"><img :src="logo" alt="ACGT" width="64" /></div>
+        <RouterLink :to="{ name: 'eligibles' }" class="logo-box mb-3 d-inline-flex">
+          <img :src="logo" alt="ACGT — Accueil" width="64" />
+        </RouterLink>
         <h1 class="text-h6 font-weight-bold text-primary">Connexion candidat</h1>
         <p class="text-body-2 text-medium-emphasis">Accédez à votre espace sécurisé</p>
       </div>
@@ -62,6 +68,7 @@ async function soumettre() {
 
 <style scoped>
 .mesh {
+  position: relative;
   min-height: 100vh;
   background-color: #0d1b2a;
   background-image:
@@ -80,5 +87,18 @@ async function soumettre() {
   background: #fff; border: 4px solid #f5f5f5; border-radius: 20px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
+.logo-box:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,0.18); }
+
+/* Lien de retour à l'accueil, posé en haut à gauche sur le fond sombre. */
+.lien-accueil {
+  position: absolute; top: 24px; left: 24px;
+  display: inline-flex; align-items: center;
+  color: rgba(255, 255, 255, 0.85); text-decoration: none;
+  font-size: 0.9rem; font-weight: 500;
+  padding: 6px 10px; border-radius: 9999px;
+  transition: background 0.2s, color 0.2s;
+}
+.lien-accueil:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
 </style>
