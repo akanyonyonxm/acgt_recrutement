@@ -40,6 +40,16 @@ npm run build    # build de production dans dist/
 ```
 Lancer **les deux** serveurs (Django sur 8000, Vite sur 5173) pour le dev. Le proxy Vite rend l'API même-origine → cookies de session + CSRF sans CORS.
 
+## Déploiement & données (règle impérative)
+
+Le déploiement automatique (CI/CD GitHub Actions → `scripts/deploy.sh`, lui-même appelé à chaque push sur `main`) ne doit **JAMAIS détruire ni écraser les données ni les documents**. Les données (base PostgreSQL) et les documents (pièces jointes) vivent dans des **volumes Docker persistants** (`acgt_pgdata`, `acgt_media_data`) qui survivent aux redéploiements — ne jamais les recréer/supprimer dans le pipeline.
+
+- **Interdit en CI / dans `deploy.sh` / dans `entrypoint.sh`** : tout ce qui détruit ou remet à zéro — `docker compose down -v` (suppression de volumes), `flush`, suppression/`delete()` en masse, `import_eligibilite --vider`, `seed_demo.py` / `seed_eligibles.py`, réinitialisation du mot de passe admin (`ADMIN_RESET_PASSWORD=True`), purge de `fichiers_prives/`, ou toute migration destructrice de données.
+- **Autorisé en CI (automatique)** : uniquement des opérations **additives et idempotentes** — `migrate` (migrations non destructrices), `collectstatic`, `init_roles`, `creer_admin` (crée le compte s'il manque, **ne réécrase pas** le mot de passe).
+- **Opérations destructrices ou d'initialisation** (remplacement de la liste d'éligibilité, seed de démo, reset de mot de passe, purge, restauration) : les placer dans des **scripts séparés, lancés MANUELLEMENT** sur le serveur (jamais dans le pipeline ni l'entrypoint).
+
+Avant d'ajouter une étape au déploiement, vérifier qu'elle est non destructrice ; en cas de doute, en faire un script manuel.
+
 ## Architecture
 
 Le système repose sur **une machine à états** : le dossier de candidature et son cycle de vie sont le cœur de tout. Comprendre `candidatures/models.py` + `views.py` + `roles.py` ensemble est nécessaire pour être productif.
