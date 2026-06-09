@@ -78,6 +78,11 @@ const routes = [
         component: () => import('../views/admin/DossierDetail.vue'),
       },
       {
+        path: 'eligibilite',
+        name: 'eligibilite',
+        component: () => import('../views/admin/Eligibilite.vue'),
+      },
+      {
         path: 'appels',
         name: 'appels',
         component: () => import('../views/admin/Appels.vue'),

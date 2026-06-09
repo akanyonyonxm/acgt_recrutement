@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
@@ -46,6 +47,7 @@ from .serializers import (
     TypePieceSerializer,
 )
 from .services.email import envoyer_email
+from .services.import_eligibilite import ImportEligibiliteErreur, importer_eligibles
 from .utils import tokens_recherche
 
 User = get_user_model()
@@ -94,6 +96,36 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         for token in tokens_recherche(self.request.query_params.get('q', '')):
             qs = qs.filter(texte_recherche__contains=token)
         return qs
+
+    @action(detail=False, methods=['post'], url_path='importer',
+            parser_classes=[MultiPartParser, FormParser])
+    def importer(self, request):
+        """Importe un classeur Excel d'éligibles (admin).
+
+        Champs multipart : `fichier` (.xlsx), `remplacer` (bool : vider d'abord),
+        `publier` (bool : publier les lignes importées). Renvoie le récapitulatif.
+        """
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+
+        fichier = request.FILES.get('fichier')
+        if not fichier:
+            raise ValidationError({'fichier': "Aucun fichier fourni."})
+        if not fichier.name.lower().endswith('.xlsx'):
+            raise ValidationError({'fichier': "Format attendu : .xlsx"})
+
+        def vrai(v):
+            return str(v).lower() in ('1', 'true', 'on', 'oui')
+
+        try:
+            resultat = importer_eligibles(
+                fichier,
+                remplacer=vrai(request.data.get('remplacer')),
+                publier=vrai(request.data.get('publier')),
+            )
+        except ImportEligibiliteErreur as exc:
+            raise ValidationError({'detail': str(exc)})
+        return Response(resultat)
 
 
 class AppelCandidatureViewSet(viewsets.ModelViewSet):

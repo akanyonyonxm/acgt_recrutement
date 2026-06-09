@@ -13,6 +13,7 @@ const drawer = ref(!mobile.value)
 
 const NAV = [
   { to: { name: 'validation' }, icon: 'mdi-check-decagram-outline', t1: 'Validation', t2: 'des dossiers' },
+  { to: { name: 'eligibilite' }, icon: 'mdi-account-multiple-check-outline', t1: 'Liste', t2: 'éligibilité' },
   { to: { name: 'appels' }, icon: 'mdi-bullhorn-outline', t1: 'Appels à', t2: 'candidature' },
   { to: { name: 'retenus' }, icon: 'mdi-trophy-outline', t1: 'Publication', t2: 'des retenus' },
 ]
