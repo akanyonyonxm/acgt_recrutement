@@ -300,10 +300,13 @@ async function soumettre() {
           </v-row>
 
           <div class="recap-label mt-5 mb-2">Pièces jointes ({{ dossier.pieces.length }})</div>
-          <v-chip v-for="p in dossier.pieces" :key="p.id" class="mr-2 mb-2" color="primary"
-                  variant="tonal" prepend-icon="mdi-file-check" size="small">
-            {{ p.type_piece.libelle }} — {{ p.nom_original }}
-          </v-chip>
+          <div class="d-flex flex-column ga-2">
+            <div v-for="p in dossier.pieces" :key="p.id" class="piece-ligne">
+              <v-icon color="primary" size="20" class="mr-2">mdi-file-check</v-icon>
+              <span class="font-weight-bold mr-1">{{ p.type_piece.libelle }}</span>
+              <span class="text-medium-emphasis text-truncate">— {{ p.nom_original }}</span>
+            </div>
+          </div>
 
           <v-alert type="info" variant="tonal" density="compact" class="mt-5">
             Une fois soumis, le dossier ne pourra plus être modifié. Un accusé de réception vous sera envoyé par email.
@@ -378,4 +381,10 @@ async function soumettre() {
   font-weight: 600;
 }
 .recap-valeur { font-size: 15px; font-weight: 600; color: #1f2933; }
+
+.piece-ligne {
+  display: flex; align-items: center;
+  background: #f5f2fb; border: 1px solid #e4e1ea; border-radius: 10px;
+  padding: 10px 14px; font-size: 0.9rem; color: #1f2933;
+}
 </style>
