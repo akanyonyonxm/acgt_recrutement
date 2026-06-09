@@ -12,7 +12,7 @@ const page = ref(1)
 
 const ENTETES = [
   { title: 'Nom', key: 'nom' },
-  { title: 'Post-nom', key: 'postnom' },
+  { title: 'Postnom', key: 'postnom' },
   { title: 'Prénom', key: 'prenom' },
   { title: 'Type', key: 'type_libelle' },
   { title: 'Année', key: 'annee' },
@@ -84,7 +84,7 @@ onMounted(() => charger())
 
     <v-row dense class="mb-5">
       <v-col cols="6" md="3">
-        <StatCard icon="mdi-account-group" :value="total" label="Personnes éligibles" color="#1a237e" />
+        <StatCard icon="mdi-account-group" :value="total" label="Éligibles" description="Dans la liste" color="#1a237e" />
       </v-col>
     </v-row>
 

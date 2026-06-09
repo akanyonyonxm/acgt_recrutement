@@ -16,12 +16,12 @@ const total = ref(0)
 const stats = ref({ total: 0, par_statut: {} })
 
 const KPIS = [
-  { key: '', label: 'Total', icon: 'mdi-folder-multiple', color: '#1a237e' },
-  { key: 'depose', label: 'À valider', icon: 'mdi-inbox-arrow-down', color: '#FBC02D' },
-  { key: 'en_examen', label: 'En examen', icon: 'mdi-magnify-scan', color: '#0288D1' },
-  { key: 'retenu', label: 'Retenus', icon: 'mdi-check-circle', color: '#388E3C' },
-  { key: 'non_retenu', label: 'Non retenus', icon: 'mdi-close-circle', color: '#D32F2F' },
-  { key: 'rejete', label: 'Rejetés', icon: 'mdi-cancel', color: '#9E9E9E' },
+  { key: '', label: 'Total', desc: 'Tous les dossiers', icon: 'mdi-folder-multiple', color: '#1a237e' },
+  { key: 'depose', label: 'À valider', desc: 'En attente', icon: 'mdi-inbox-arrow-down', color: '#EF6C00' },
+  { key: 'en_examen', label: 'En examen', desc: 'En cours', icon: 'mdi-magnify-scan', color: '#0288D1' },
+  { key: 'retenu', label: 'Retenus', desc: 'Candidats retenus', icon: 'mdi-check-circle', color: '#2E7D32' },
+  { key: 'non_retenu', label: 'Non retenus', desc: 'Écartés', icon: 'mdi-close-circle', color: '#C62828' },
+  { key: 'rejete', label: 'Rejetés', desc: 'Refusés', icon: 'mdi-cancel', color: '#607D8B' },
 ]
 const compte = (key) => (key === '' ? stats.value.total : stats.value.par_statut[key] || 0)
 
@@ -107,8 +107,8 @@ onMounted(async () => {
     <!-- KPI -->
     <v-row dense class="mb-5">
       <v-col v-for="k in KPIS" :key="k.key" cols="6" sm="4" md="2">
-        <StatCard :icon="k.icon" :value="compte(k.key)" :label="k.label" :color="k.color"
-                  clickable :active="statut === k.key" @click="filtrer(k.key)" />
+        <StatCard :icon="k.icon" :value="compte(k.key)" :label="k.label" :description="k.desc"
+                  :color="k.color" clickable :active="statut === k.key" @click="filtrer(k.key)" />
       </v-col>
     </v-row>
 

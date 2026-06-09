@@ -43,10 +43,10 @@ onMounted(async () => {
 
     <!-- KPI statistiques -->
     <v-row dense class="mb-5">
-      <v-col cols="6" md="3"><StatCard icon="mdi-bullhorn" :value="nbAppels" label="Appels" color="#1a237e" /></v-col>
-      <v-col cols="6" md="3"><StatCard icon="mdi-earth" :value="nbPublies" label="Appels publiés" color="#0288D1" /></v-col>
-      <v-col cols="6" md="3"><StatCard icon="mdi-folder-multiple" :value="totalDossiers" label="Dossiers reçus" color="#FBC02D" /></v-col>
-      <v-col cols="6" md="3"><StatCard icon="mdi-trophy" :value="nbListesRetenus" label="Listes de retenus publiées" color="#388E3C" /></v-col>
+      <v-col cols="6" md="3"><StatCard icon="mdi-bullhorn" :value="nbAppels" label="Appels" description="Au total" color="#1a237e" /></v-col>
+      <v-col cols="6" md="3"><StatCard icon="mdi-earth" :value="nbPublies" label="Appels publiés" description="Visibles" color="#0288D1" /></v-col>
+      <v-col cols="6" md="3"><StatCard icon="mdi-folder-multiple" :value="totalDossiers" label="Dossiers reçus" description="Toutes campagnes" color="#EF6C00" /></v-col>
+      <v-col cols="6" md="3"><StatCard icon="mdi-trophy" :value="nbListesRetenus" label="Listes publiées" description="Retenus en ligne" color="#2E7D32" /></v-col>
     </v-row>
 
     <v-card flat border>

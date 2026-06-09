@@ -12,9 +12,9 @@ const statut = ref('en_examen')
 const stats = ref({ total: 0, par_statut: {} })
 
 const KPIS = [
-  { key: 'en_examen', label: 'À examiner', icon: 'mdi-magnify-scan', color: '#0288D1' },
-  { key: 'retenu', label: 'Retenus', icon: 'mdi-check-circle', color: '#388E3C' },
-  { key: 'non_retenu', label: 'Non retenus', icon: 'mdi-close-circle', color: '#D32F2F' },
+  { key: 'en_examen', label: 'À examiner', desc: 'En cours', icon: 'mdi-magnify-scan', color: '#0288D1' },
+  { key: 'retenu', label: 'Retenus', desc: 'Validés', icon: 'mdi-check-circle', color: '#2E7D32' },
+  { key: 'non_retenu', label: 'Non retenus', desc: 'Écartés', icon: 'mdi-close-circle', color: '#C62828' },
 ]
 const compte = (key) => stats.value.par_statut[key] || 0
 
@@ -55,8 +55,8 @@ onMounted(async () => { await Promise.all([charger(), chargerStats()]) })
 
     <v-row dense class="mb-5">
       <v-col v-for="k in KPIS" :key="k.key" cols="6" sm="4" md="3">
-        <StatCard :icon="k.icon" :value="compte(k.key)" :label="k.label" :color="k.color"
-                  clickable :active="statut === k.key" @click="filtrer(k.key)" />
+        <StatCard :icon="k.icon" :value="compte(k.key)" :label="k.label" :description="k.desc"
+                  :color="k.color" clickable :active="statut === k.key" @click="filtrer(k.key)" />
       </v-col>
     </v-row>
 

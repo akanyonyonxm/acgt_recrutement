@@ -60,11 +60,13 @@ onMounted(rechargerAppels)
       <!-- KPI -->
       <v-row dense class="mb-5">
         <v-col cols="6" md="3">
-          <StatCard icon="mdi-account-check" :value="retenus.length" label="Personnes retenues" color="#388E3C" />
+          <StatCard icon="mdi-account-check" :value="retenus.length" label="Personnes retenues"
+                    description="Pour cet appel" color="#2E7D32" />
         </v-col>
         <v-col cols="6" md="3">
           <StatCard :icon="publiee ? 'mdi-earth' : 'mdi-earth-off'" :value="publiee ? 'Oui' : 'Non'"
-                    label="Liste publiée" :color="publiee ? '#0288D1' : '#9E9E9E'" />
+                    label="Liste publiée" :description="publiee ? 'Visible publiquement' : 'Non publiée'"
+                    :color="publiee ? '#0288D1' : '#607D8B'" />
         </v-col>
       </v-row>
 
@@ -81,7 +83,7 @@ onMounted(rechargerAppels)
         <v-divider />
         <v-table class="tableau-admin">
           <thead>
-            <tr><th style="width:64px">#</th><th>Nom</th><th>Post-nom</th><th>Prénom</th><th>Poste</th></tr>
+            <tr><th style="width:64px">#</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Poste</th></tr>
           </thead>
           <tbody>
             <tr v-for="(d, i) in retenus" :key="d.id">
