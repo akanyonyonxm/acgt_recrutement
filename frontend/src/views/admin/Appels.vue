@@ -1,9 +1,15 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../../api'
+import StatCard from '../../components/StatCard.vue'
 
 const appels = ref([])
 const chargement = ref(true)
+
+const nbAppels = computed(() => appels.value.length)
+const nbPublies = computed(() => appels.value.filter((a) => a.statut === 'publie').length)
+const nbListesRetenus = computed(() => appels.value.filter((a) => a.liste_retenus_publiee).length)
+const totalDossiers = computed(() => appels.value.reduce((s, a) => s + (a.nb_dossiers || 0), 0))
 
 const ENTETES = [
   { title: 'Titre', key: 'titre' },
@@ -25,19 +31,28 @@ onMounted(async () => {
 
 <template>
   <div>
-    <div class="d-flex align-center mb-6">
-      <v-icon color="primary" size="32" class="mr-3">mdi-bullhorn-outline</v-icon>
+    <div class="d-flex align-center mb-5">
+      <v-icon color="primary" size="30" class="mr-3">mdi-bullhorn-outline</v-icon>
       <h1 class="text-h5 font-weight-bold text-primary">Appels à candidature</h1>
       <v-spacer />
       <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus"
-             href="/admin/candidatures/appelcandidature/add/" target="_blank">
-        Nouvel appel (admin Django)
+             href="/console-3xfk2a/candidatures/appelcandidature/add/" target="_blank">
+        Nouvel appel
       </v-btn>
     </div>
 
-    <v-card>
+    <!-- KPI statistiques -->
+    <v-row dense class="mb-5">
+      <v-col cols="6" md="3"><StatCard icon="mdi-bullhorn" :value="nbAppels" label="Appels" color="#1a237e" /></v-col>
+      <v-col cols="6" md="3"><StatCard icon="mdi-earth" :value="nbPublies" label="Appels publiés" color="#0288D1" /></v-col>
+      <v-col cols="6" md="3"><StatCard icon="mdi-folder-multiple" :value="totalDossiers" label="Dossiers reçus" color="#FBC02D" /></v-col>
+      <v-col cols="6" md="3"><StatCard icon="mdi-trophy" :value="nbListesRetenus" label="Listes de retenus publiées" color="#388E3C" /></v-col>
+    </v-row>
+
+    <v-card flat border>
       <v-data-table :headers="ENTETES" :items="appels" :loading="chargement"
-                    no-data-text="Aucun appel. Créez-en un dans l'admin Django." items-per-page="25">
+                    no-data-text="Aucun appel. Créez-en un dans l'admin Django." items-per-page="25"
+                    class="tableau-admin">
         <template #item.titre="{ item }">
           <span class="font-weight-bold">{{ item.titre }}</span>
         </template>
@@ -67,3 +82,7 @@ onMounted(async () => {
     </p>
   </div>
 </template>
+
+<style scoped>
+.tableau-admin :deep(thead th) { background: #f4f5f9; font-weight: 700 !important; color: #1a237e !important; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+</style>

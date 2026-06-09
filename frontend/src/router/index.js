@@ -1,5 +1,9 @@
+import { ref } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+
+// Indique qu'une navigation est en cours (barre de progression en haut).
+export const navEnCours = ref(false)
 
 const routes = [
   { path: '/', redirect: '/eligibles' },
@@ -58,11 +62,11 @@ const routes = [
     ],
   },
   {
-    path: '/admin',
+    path: '/gestion',
     component: () => import('../layouts/AdminLayout.vue'),
     meta: { role: 'admin' },
     children: [
-      { path: '', redirect: '/admin/validation' },
+      { path: '', redirect: '/gestion/validation' },
       {
         path: 'validation',
         name: 'validation',
@@ -93,6 +97,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  navEnCours.value = true
   const auth = useAuthStore()
   if (!auth.charge) await auth.initialiser()
 
@@ -115,5 +120,8 @@ router.beforeEach(async (to) => {
   }
   return true
 })
+
+router.afterEach(() => { navEnCours.value = false })
+router.onError(() => { navEnCours.value = false })
 
 export default router

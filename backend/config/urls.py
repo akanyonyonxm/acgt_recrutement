@@ -18,7 +18,9 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # Admin technique Django sur une URL discrète (non devinable), distincte de
+    # l'espace de traitement métier (front Vue). Doit être proxifiée par Nginx.
+    path('console-3xfk2a/', admin.site.urls),
     path('api/auth/', include('comptes.urls')),
     path('api/', include('candidatures.urls')),
     # Auth navigateur de l'API DRF (login/logout) — pratique en développement.
