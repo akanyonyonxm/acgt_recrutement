@@ -63,12 +63,9 @@ $COMPOSE run --rm --entrypoint "\
     --no-eff-email \
     --force-renewal" certbot
 
-echo "### 5. Récupération des paramètres SSL recommandés (options-ssl + dhparams)..."
-$COMPOSE run --rm --entrypoint "\
-  sh -c 'wget -q -O /etc/letsencrypt/options-ssl-nginx.conf https://raw.githubusercontent.com/certbot/certbot/main/certbot-nginx/src/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf && \
-  openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048'" certbot
-
-echo "### 6. Rechargement de Nginx avec le vrai certificat..."
+echo "### 5. Rechargement de Nginx avec le vrai certificat..."
+# Les réglages SSL sont en dur dans la config Nginx : aucun fichier externe à
+# récupérer, Nginx recharge simplement le certificat fraîchement émis.
 $COMPOSE exec web nginx -s reload
 
 echo
