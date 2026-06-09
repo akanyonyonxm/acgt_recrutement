@@ -24,7 +24,7 @@ venv/Scripts/python.exe manage.py test                 # tests (tests.py vide po
 venv/Scripts/python.exe manage.py test candidatures.tests.NomDuTest   # un seul test
 ```
 
-API navigable DRF : `http://localhost:8000/api/` · Admin Django (technique) : `http://localhost:8000/admx/` (renommé depuis `/admin/` pour ne pas entrer en conflit avec l'espace de traitement Vue, servi sous `/admin/*` côté SPA ; accès agent/admin via `http://localhost:5173/traitement`)
+API navigable DRF : `http://localhost:8000/api/` · Admin Django (technique) : `http://localhost:8000/console-3xfk2a/` (URL discrète, renommée depuis `/admin/` pour ne pas entrer en conflit avec l'espace de traitement Vue). **Espaces SPA** : `/traitement` = connexion agent/admin (URL à saisir, non liée publiquement) ; `/gestion/*` = back-office (validation, dossiers, éligibilité, appels, retenus) ; `/candidat/*` = espace candidat. Le proxy Vite/Nginx proxifie `/api`, `/console-3xfk2a`, `/static`, `/media` vers Django ; tout le reste (`/gestion`, `/traitement`, `/candidat`…) est servi par le SPA.
 
 Dépendances : `venv/Scripts/python.exe -m pip install -r requirements.txt`.
 
@@ -35,7 +35,7 @@ Données de démo + comptes de test : `venv/Scripts/python.exe seed_demo.py` (ad
 ```bash
 cd frontend
 npm install
-npm run dev      # http://localhost:5173 (proxifie /api, /admx, /media, /static vers :8000 ; /admin reste au SPA)
+npm run dev      # http://localhost:5173 (proxifie /api, /console-3xfk2a, /media, /static vers :8000 ; /gestion, /traitement, /candidat servis par le SPA)
 npm run build    # build de production dans dist/
 ```
 Lancer **les deux** serveurs (Django sur 8000, Vite sur 5173) pour le dev. Le proxy Vite rend l'API même-origine → cookies de session + CSRF sans CORS.
