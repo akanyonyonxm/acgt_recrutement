@@ -156,6 +156,12 @@ onMounted(() => charger())
             Colonnes attendues (1re ligne = en-têtes) :
             <code>nom · postnom · prenom · type · annee · reference</code>.
             Seul « nom » est obligatoire ; « type » accepte « stage » ou « candidature ».
+            <div class="mt-3">
+              <v-btn variant="tonal" color="primary" size="small" prepend-icon="mdi-microsoft-excel"
+                     href="/api/eligibilite/modele/">
+                Télécharger le modèle Excel
+              </v-btn>
+            </div>
           </v-card-text>
         </v-card>
       </v-col>

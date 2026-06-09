@@ -8,7 +8,7 @@ contrôlent le rôle de l'utilisateur.
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Q
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -126,6 +126,36 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         except ImportEligibiliteErreur as exc:
             raise ValidationError({'detail': str(exc)})
         return Response(resultat)
+
+    @action(detail=False, methods=['get'], url_path='modele')
+    def modele(self, request):
+        """Télécharge un modèle Excel vierge (en-têtes attendus) pour l'import."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Éligibles'
+        entetes = ['nom', 'postnom', 'prenom', 'type', 'annee', 'reference']
+        ws.append(entetes)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        # Ligne-guide SANS nom : ignorée à l'import (« nom » obligatoire), mais
+        # montre le format attendu sans risquer d'importer une fausse personne.
+        ws.append(['', 'Mukendi', 'Jean', 'stage', 2021, 'optionnel'])
+        for i, largeur in enumerate([18, 18, 18, 16, 8, 16], start=1):
+            ws.column_dimensions[get_column_letter(i)].width = largeur
+
+        reponse = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        reponse['Content-Disposition'] = 'attachment; filename="modele_eligibles.xlsx"'
+        wb.save(reponse)
+        return reponse
 
 
 class AppelCandidatureViewSet(viewsets.ModelViewSet):
