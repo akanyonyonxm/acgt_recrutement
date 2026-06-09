@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ACGT - Assistant de Dépôt - Pièces Justificatives</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-container": "#8690ee",
+                    "surface-container-high": "#eae7ef",
+                    "outline": "#767683",
+                    "tertiary-container": "#5c1800",
+                    "surface-variant": "#e4e1ea",
+                    "inverse-on-surface": "#f2eff8",
+                    "surface-container-highest": "#e4e1ea",
+                    "surface-container-low": "#f5f2fb",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed": "#0f1c2c",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "background": "#fbf8ff",
+                    "primary-fixed-dim": "#bdc2ff",
+                    "on-tertiary-fixed-variant": "#7b2e12",
+                    "primary-container": "#1a237e",
+                    "secondary-container": "#d3e1f6",
+                    "on-tertiary-container": "#e17c5a",
+                    "error-container": "#ffdad6",
+                    "primary": "#000666",
+                    "on-primary": "#ffffff",
+                    "secondary": "#525f71",
+                    "secondary-fixed-dim": "#bac8dc",
+                    "on-secondary": "#ffffff",
+                    "primary-fixed": "#e0e0ff",
+                    "on-secondary-fixed-variant": "#3a4859",
+                    "on-tertiary-fixed": "#390c00",
+                    "surface-dim": "#dbd9e1",
+                    "on-primary-fixed-variant": "#343d96",
+                    "on-secondary-container": "#566475",
+                    "surface-bright": "#fbf8ff",
+                    "on-surface-variant": "#454652",
+                    "tertiary-fixed": "#ffdbd0",
+                    "surface-tint": "#4c56af",
+                    "on-tertiary": "#ffffff",
+                    "on-surface": "#1b1b21",
+                    "on-error-container": "#93000a",
+                    "inverse-surface": "#303036",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#d6e4f9",
+                    "surface": "#fbf8ff",
+                    "on-error": "#ffffff",
+                    "on-background": "#1b1b21",
+                    "surface-container": "#efecf5",
+                    "tertiary": "#380b00",
+                    "on-primary-fixed": "#000767",
+                    "inverse-primary": "#bdc2ff",
+                    "outline-variant": "#c6c5d4",
+                    "accent-yellow": "#FDD835"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "gutter": "16px",
+                    "container-max-width": "1200px",
+                    "base": "8px",
+                    "margin-desktop": "24px"
+            },
+            "fontFamily": {
+                    "headline-sm": ["Inter"],
+                    "label-lg": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "title-lg": ["Inter"],
+                    "title-md": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "headline-lg-mobile": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-sm": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.1px", "fontWeight": "500"}],
+                    "display-lg": ["57px", {"lineHeight": "64px", "letterSpacing": "-0.25px", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                    "title-lg": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+                    "title-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0.15px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.25px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0.5px", "fontWeight": "400"}],
+                    "headline-md": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "label-sm": ["11px", {"lineHeight": "16px", "letterSpacing": "0.5px", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .step-line {
+            height: 2px;
+            flex-grow: 1;
+            background-color: #e0e0ff;
+        }
+        .step-line.active {
+            background-color: #000666;
+        }
+        .card-hover:hover {
+            box-shadow: 0 4px 12px rgba(0, 6, 102, 0.05);
+            border-color: #000666;
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- Top Navigation Bar -->
+<header class="bg-surface border-b border-outline-variant fixed top-0 w-full z-50">
+<div class="flex justify-between items-center w-full px-margin-desktop max-w-container-max-width mx-auto h-16">
+<div class="text-title-lg font-title-lg font-bold text-primary">ACGT</div>
+<nav class="hidden md:flex space-x-8">
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200" href="#">Accueil</a>
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200" href="#">Candidats éligibles</a>
+<a class="text-primary border-b-2 border-primary font-bold pb-1" href="#">Espace Candidat</a>
+</nav>
+<button class="bg-primary text-on-primary px-6 py-2 rounded-xl font-label-lg hover:opacity-90 transition-all active:scale-95">Connexion</button>
+</div>
+</header>
+<main class="flex-grow pt-24 pb-16 px-margin-mobile md:px-margin-desktop max-w-4xl mx-auto w-full">
+<!-- Page Header & Stepper -->
+<section class="mb-12">
+<h1 class="text-headline-md font-headline-md text-primary mb-8 text-center md:text-left">Assistant de Dépôt</h1>
+<!-- Horizontal 3-step stepper -->
+<div class="flex items-center justify-between w-full max-w-2xl mx-auto md:mx-0">
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold">1</div>
+<span class="text-label-sm mt-2 text-primary">Informations</span>
+</div>
+<div class="step-line active mx-4"></div>
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold ring-4 ring-primary-fixed">2</div>
+<span class="text-label-sm mt-2 text-primary font-bold">Justificatifs</span>
+</div>
+<div class="step-line mx-4"></div>
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-surface-container-high text-secondary flex items-center justify-center font-bold">3</div>
+<span class="text-label-sm mt-2 text-secondary">Récapitulatif</span>
+</div>
+</div>
+</section>
+<!-- Main Content Canvas -->
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<h2 class="text-title-lg font-title-lg text-on-surface">Pièces Justificatives</h2>
+<span class="text-body-md text-secondary italic">Documents requis au format PDF, JPG ou PNG (max 5Mo)</span>
+</div>
+<!-- Grid of Cards (2 columns on desktop) -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<!-- Card: CV Unique (Success State) -->
+<div class="bg-white border border-outline-variant p-6 rounded-xl shadow-sm card-hover relative">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 bg-primary-fixed rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="description">description</span>
+</div>
+<span class="bg-tertiary-container/10 text-on-tertiary-container px-3 py-1 rounded-full text-label-sm font-bold">Obligatoire</span>
+</div>
+<h3 class="text-title-md font-title-md mb-2">CV unique</h3>
+<!-- Fichier déposé state -->
+<div class="mt-4 bg-surface-container-low p-4 rounded-lg border border-primary/10">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-green-600 font-bold" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div class="flex-grow min-w-0">
+<p class="text-body-md font-medium text-on-surface truncate">Mon_CV_Actualise_2024.pdf</p>
+<p class="text-label-sm text-secondary">Déposé le 24/05/2024 • 1.2 MB</p>
+</div>
+<button class="text-error hover:bg-error-container/20 p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined text-xl" data-icon="delete">delete</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Card: Pièce d'identité (Default State) -->
+<div class="bg-white border border-outline-variant p-6 rounded-xl shadow-sm card-hover flex flex-col">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 bg-primary-fixed rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="badge">badge</span>
+</div>
+<span class="bg-tertiary-container/10 text-on-tertiary-container px-3 py-1 rounded-full text-label-sm font-bold">Obligatoire</span>
+</div>
+<h3 class="text-title-md font-title-md mb-2">Pièce d'identité</h3>
+<p class="text-body-md text-secondary mb-6">Carte d'électeur, Passeport ou Permis de conduire valide.</p>
+<button class="mt-auto w-full py-3 border-2 border-dashed border-outline rounded-xl text-primary font-label-lg flex items-center justify-center gap-2 hover:bg-primary/5 hover:border-primary transition-all">
+<span class="material-symbols-outlined" data-icon="upload">upload</span>
+                        Télécharger le document
+                    </button>
+</div>
+<!-- Card: Diplômes (Default State with Multi-add) -->
+<div class="bg-white border border-outline-variant p-6 rounded-xl shadow-sm card-hover flex flex-col md:col-span-2">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 bg-primary-fixed rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="school">school</span>
+</div>
+<span class="bg-tertiary-container/10 text-on-tertiary-container px-3 py-1 rounded-full text-label-sm font-bold">Obligatoire</span>
+</div>
+<h3 class="text-title-md font-title-md mb-2">Diplômes</h3>
+<p class="text-body-md text-secondary mb-6">Veuillez joindre vos diplômes académiques les plus récents (Licence, Master, etc.).</p>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<button class="w-full py-3 border-2 border-dashed border-outline rounded-xl text-primary font-label-lg flex items-center justify-center gap-2 hover:bg-primary/5 hover:border-primary transition-all">
+<span class="material-symbols-outlined" data-icon="upload">upload</span>
+                            Télécharger un diplôme
+                        </button>
+<button class="w-full py-3 bg-secondary-container text-on-secondary-container rounded-xl font-label-lg flex items-center justify-center gap-2 hover:opacity-90 transition-all">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+                            Ajouter un autre diplôme
+                        </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Navigation Buttons -->
+<div class="mt-12 flex justify-between items-center border-t border-outline-variant pt-8">
+<button class="flex items-center gap-2 px-6 py-3 border border-primary text-primary rounded-xl font-label-lg hover:bg-primary-fixed transition-all active:scale-95">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+                Précédent
+            </button>
+<button class="flex items-center gap-2 px-10 py-3 bg-accent-yellow text-primary rounded-xl font-bold font-label-lg shadow-md hover:brightness-105 transition-all active:scale-95">
+                Suivant
+                <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</main>
+<!-- Footer Section -->
+<footer class="bg-primary dark:bg-primary-container mt-auto">
+<div class="w-full py-12 px-margin-desktop max-w-container-max-width mx-auto grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<div class="col-span-1">
+<div class="text-headline-sm font-headline-sm text-on-primary mb-4">ACGT</div>
+<p class="text-body-md font-body-md text-on-primary opacity-80 max-w-xs">
+                    L'Agence Congolaise des Grands Travaux œuvre pour le développement des infrastructures en RDC.
+                </p>
+</div>
+<div class="col-span-1 flex flex-col gap-3">
+<span class="text-on-primary font-bold mb-2">Liens utiles</span>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 hover:text-tertiary-fixed transition-opacity text-label-sm font-label-sm" href="#">Mentions Légales</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 hover:text-tertiary-fixed transition-opacity text-label-sm font-label-sm" href="#">Politique de Confidentialité</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 hover:text-tertiary-fixed transition-opacity text-label-sm font-label-sm" href="#">Aide &amp; Support</a>
+</div>
+<div class="col-span-1 flex flex-col gap-3">
+<span class="text-on-primary font-bold mb-2">Contact</span>
+<p class="text-on-primary-container opacity-80 text-label-sm font-label-sm">contact@acgt.cd</p>
+<p class="text-on-primary-container opacity-80 text-label-sm font-label-sm">+243 00 000 000</p>
+<div class="mt-4 flex gap-4">
+<span class="material-symbols-outlined text-on-primary cursor-pointer hover:text-accent-yellow transition-colors" data-icon="share">share</span>
+<span class="material-symbols-outlined text-on-primary cursor-pointer hover:text-accent-yellow transition-colors" data-icon="public">public</span>
+</div>
+</div>
+<div class="md:col-span-3 border-t border-white/10 mt-8 pt-8 text-center">
+<p class="text-label-sm font-label-sm text-on-primary opacity-60">© 2024 Agence Congolaise des Grands Travaux (ACGT). Tous droits réservés.</p>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interaction for file deletion
+        document.querySelectorAll('.text-error').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                if(confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) {
+                    const card = this.closest('.bg-surface-container-low');
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.95)';
+                    setTimeout(() => card.remove(), 200);
+                }
+            });
+        });
+
+        // Hover effects on buttons
+        const primaryBtn = document.querySelector('.bg-accent-yellow');
+        primaryBtn.addEventListener('mousedown', () => primaryBtn.style.transform = 'scale(0.98)');
+        primaryBtn.addEventListener('mouseup', () => primaryBtn.style.transform = 'scale(1)');
+    </script>
+</body></html>

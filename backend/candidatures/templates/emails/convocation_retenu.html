@@ -1,0 +1,14 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour,</p>
+  <p>
+    La liste des personnes retenues pour {{ appel }} vient d'être publiée, et le
+    dossier <strong>#{{ numero_dossier }}</strong> au nom de
+    <strong>{{ nom_candidat }}</strong> y figure.
+  </p>
+  <p>
+    Vous êtes <strong>convoqué(e) pour la suite du processus</strong> (tests).
+    Les modalités précises (date, lieu) vous seront communiquées prochainement ;
+    vous pouvez aussi consulter la liste publique des retenus sur la plateforme.
+  </p>
+{% endblock %}

@@ -1,0 +1,86 @@
+# Application recrutement.acgt.cd — compose de PRODUCTION : backend Django
+# (Gunicorn), Nginx (SPA Vue + reverse-proxy + TLS) et Certbot
+# (émission/renouvellement Let's Encrypt).
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Prérequis : la base tourne (docker-compose.db.yml) et le réseau partagé
+# existe (docker network create acgt_net). Le DNS de recrutement.acgt.cd doit
+# pointer vers 167.71.45.222 AVANT d'émettre le certificat (init-letsencrypt.sh).
+
+services:
+  # --- Backend Django + Gunicorn ---
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: acgt_backend
+    container_name: acgt_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Force PostgreSQL et pointe vers le service `db` du compose base.
+      DB_ENGINE: postgresql
+      DB_HOST: db
+      DB_PORT: "5432"
+    volumes:
+      # Pièces jointes privées persistantes (MEDIA_ROOT = /app/fichiers_prives).
+      - media_data:/app/fichiers_prives
+    expose:
+      - "8000"
+    networks:
+      - acgt_net
+
+  # --- Nginx : sert la SPA Vue, proxifie le backend, termine le TLS ---
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: acgt_web
+    container_name: acgt_web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Config de proxy/SSL éditable sans rebuild.
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # Certificats Let's Encrypt (partagés avec certbot).
+      - certbot_conf:/etc/letsencrypt:ro
+      # Webroot du challenge ACME (partagé avec certbot).
+      - certbot_www:/var/www/certbot:ro
+    # Recharge Nginx toutes les 6h pour prendre en compte les certificats
+    # fraîchement renouvelés par certbot, puis applique la config.
+    command: >
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    networks:
+      - acgt_net
+
+  # --- Certbot : émission initiale + renouvellement automatique ---
+  certbot:
+    image: certbot/certbot:latest
+    container_name: acgt_certbot
+    restart: unless-stopped
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    # Tente un renouvellement toutes les 12h (Let's Encrypt ne renouvelle que si
+    # le certificat expire dans <30 jours ; sinon no-op). Nginx, lui, recharge
+    # de son côté toutes les 6h pour servir le nouveau certificat.
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
+volumes:
+  media_data:
+    name: acgt_media_data
+  certbot_conf:
+    name: acgt_certbot_conf
+  certbot_www:
+    name: acgt_certbot_www
+
+networks:
+  acgt_net:
+    external: true

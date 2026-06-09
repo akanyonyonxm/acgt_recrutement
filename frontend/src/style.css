@@ -1,0 +1,17 @@
+/* Vuetify fournit le design system. Police Inter (charte ACGT) + reset minimal. */
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Inter sur toute l'application Vuetify */
+.v-application,
+.v-application .text-h1,
+.v-application .text-h2,
+.v-application .text-h3,
+.v-application .text-h4,
+.v-application .text-h5,
+.v-application .text-h6 {
+  font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+}

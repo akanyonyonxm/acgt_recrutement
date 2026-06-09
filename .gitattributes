@@ -1,0 +1,5 @@
+# Force les fins de ligne LF pour les scripts shell et l'entrypoint Docker,
+# même clonés depuis Windows : sinon ils échouent sur le serveur Linux
+# (« /bin/bash^M: bad interpreter »).
+*.sh        text eol=lf
+entrypoint.sh text eol=lf

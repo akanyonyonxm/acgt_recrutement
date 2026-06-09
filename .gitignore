@@ -1,0 +1,24 @@
+# Python / Django
+__pycache__/
+*.py[cod]
+backend/venv/
+backend/db.sqlite3
+backend/.env
+backend/staticfiles/
+
+# Environnement Docker de production + certificats Let's Encrypt
+/.env
+certbot/
+
+# Fichiers privés (pièces jointes des dossiers — ne jamais versionner)
+fichiers_prives/
+
+# Node / Vue
+frontend/node_modules/
+frontend/dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

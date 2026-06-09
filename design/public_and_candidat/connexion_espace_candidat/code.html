@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Connexion | ACGT Recruitment</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-container": "#8690ee",
+                        "surface-container-high": "#eae7ef",
+                        "outline": "#767683",
+                        "tertiary-container": "#5c1800",
+                        "surface-variant": "#e4e1ea",
+                        "inverse-on-surface": "#f2eff8",
+                        "surface-container-highest": "#e4e1ea",
+                        "surface-container-low": "#f5f2fb",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed": "#0f1c2c",
+                        "tertiary-fixed-dim": "#ffb59d",
+                        "background": "#fbf8ff",
+                        "primary-fixed-dim": "#bdc2ff",
+                        "on-tertiary-fixed-variant": "#7b2e12",
+                        "primary-container": "#1a237e",
+                        "secondary-container": "#d3e1f6",
+                        "on-tertiary-container": "#e17c5a",
+                        "error-container": "#ffdad6",
+                        "primary": "#000666",
+                        "on-primary": "#ffffff",
+                        "secondary": "#525f71",
+                        "secondary-fixed-dim": "#bac8dc",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#e0e0ff",
+                        "on-secondary-fixed-variant": "#3a4859",
+                        "on-tertiary-fixed": "#390c00",
+                        "surface-dim": "#dbd9e1",
+                        "on-primary-fixed-variant": "#343d96",
+                        "on-secondary-container": "#566475",
+                        "surface-bright": "#fbf8ff",
+                        "on-surface-variant": "#454652",
+                        "tertiary-fixed": "#ffdbd0",
+                        "surface-tint": "#4c56af",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#1b1b21",
+                        "on-error-container": "#93000a",
+                        "inverse-surface": "#303036",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#d6e4f9",
+                        "surface": "#fbf8ff",
+                        "on-error": "#ffffff",
+                        "on-background": "#1b1b21",
+                        "surface-container": "#efecf5",
+                        "tertiary": "#380b00",
+                        "on-primary-fixed": "#000767",
+                        "inverse-primary": "#bdc2ff",
+                        "outline-variant": "#c6c5d4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "gutter": "16px",
+                        "container-max-width": "1200px",
+                        "base": "8px",
+                        "margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["Inter"],
+                        "label-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "title-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "headline-lg-mobile": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.1px", "fontWeight": "500"}],
+                        "display-lg": ["57px", {"lineHeight": "64px", "letterSpacing": "-0.25px", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                        "title-lg": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "title-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0.15px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.25px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0.5px", "fontWeight": "400"}],
+                        "headline-md": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "label-sm": ["11px", {"lineHeight": "16px", "letterSpacing": "0.5px", "fontWeight": "500"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .bg-mesh {
+            background-color: #000666;
+            background-image: radial-gradient(at 0% 0%, hsla(234, 100%, 15%, 1) 0, transparent 50%),
+                              radial-gradient(at 50% 0%, hsla(242, 57%, 40%, 1) 0, transparent 50%),
+                              radial-gradient(at 100% 0%, hsla(220, 100%, 20%, 1) 0, transparent 50%);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-mesh min-h-screen flex flex-col justify-center items-center px-margin-mobile md:px-margin-desktop overflow-x-hidden">
+<!-- Atmospheric Layer -->
+<div class="fixed inset-0 pointer-events-none opacity-20">
+
+</div>
+<main class="relative z-10 w-full max-w-md">
+<!-- Brand Identity -->
+<div class="text-center mb-base * 10 flex flex-col items-center gap-4">
+<div class="bg-white p-3 rounded-xl shadow-lg inline-block">
+<img alt="ACGT Logo" class="w-16 h-16 object-contain" data-alt="A professional high-resolution minimalist logo of the Agence Congolaise des Grands Travaux, featuring clean architectural lines and authoritative typography. The style is modern corporate, set against a pristine white background with soft studio lighting. The color palette incorporates deep midnight blue and touches of vibrant yellow to convey institutional trust and national progress." src="https://lh3.googleusercontent.com/aida/AP1WRLv8ty8_BDyYYzoQZkYelGklGPW-mFtVTtfTBuZDshK9WUWWszPeTYxSl_L45fhGb8V_gs2AUQun72ZPaW9D9XjzfX4OpZYREliSi4uAU86jR5R-rwR_JWr0seF8fgnXKhg5BBC5kzQqU1Su1JP6PyrM23GNcOiOoUCdNKpg-_GqE_iL32f9j066_EwcytAI3kdq2h-kvH70w3G5hRwcVTq7lOQS9qcRLc74x8tpfsLgWV1m8DBIBE3nUPsv"/>
+</div>
+<div class="flex flex-col gap-1">
+<h1 class="text-on-primary font-headline-lg text-headline-lg-mobile md:text-headline-lg tracking-tight">ACGT</h1>
+<p class="text-on-primary-container text-body-md font-body-md opacity-90">Portail de Recrutement Officiel</p>
+</div>
+</div>
+<!-- Login Card -->
+<div class="glass-card rounded-xl p-8 shadow-2xl transition-all duration-300 hover:shadow-primary-container/20">
+<div class="mb-8">
+<h2 class="text-primary font-headline-sm text-headline-sm">Connexion</h2>
+<p class="text-secondary font-body-md text-body-md mt-1">Accédez à votre espace candidat sécurisé</p>
+</div>
+<form action="#" class="space-y-6" method="POST">
+<!-- Email Field -->
+<div class="relative group">
+<label class="block text-primary font-label-lg text-label-lg mb-2" for="email">Adresse E-mail</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">mail</span>
+<input class="w-full pl-12 pr-4 py-3 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all font-body-lg text-on-surface outline-none" id="email" name="email" placeholder="candidat@exemple.cd" required="" type="email"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="relative group">
+<div class="flex justify-between items-center mb-2">
+<label class="text-primary font-label-lg text-label-lg" for="password">Mot de passe</label>
+<a class="text-primary font-label-sm text-label-sm hover:underline" href="#">Oublié ?</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">lock</span>
+<input class="w-full pl-12 pr-12 py-3 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all font-body-lg text-on-surface outline-none" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors" onclick="togglePassword()" type="button">
+<span class="material-symbols-outlined" id="pw-toggle-icon">visibility</span>
+</button>
+</div>
+</div>
+<!-- Remember Me -->
+<div class="flex items-center gap-2">
+<input class="w-4 h-4 text-primary border-outline-variant rounded focus:ring-primary" id="remember" type="checkbox"/>
+<label class="text-secondary font-body-md text-body-md select-none" for="remember">Rester connecté</label>
+</div>
+<!-- CTA Button -->
+<button class="w-full py-4 bg-[#FDD835] hover:bg-[#FBC02D] text-primary font-bold rounded-xl shadow-md active:scale-[0.98] transition-all flex justify-center items-center gap-2 group" type="submit">
+<span class="text-label-lg font-bold">Se connecter</span>
+<span class="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</form>
+<!-- Registration Link -->
+<div class="mt-8 pt-6 border-t border-outline-variant text-center">
+<p class="text-secondary font-body-md text-body-md mb-2">Nouveau sur la plateforme ?</p>
+<a class="inline-flex items-center text-primary font-title-md text-title-md font-bold hover:text-primary-container transition-colors group" href="#">
+                    Créer un compte
+                    <span class="material-symbols-outlined ml-1 group-hover:translate-x-1 transition-transform">person_add</span>
+</a>
+</div>
+</div>
+<!-- Security Footer -->
+<div class="mt-8 flex items-center justify-center gap-4 text-on-primary-container opacity-80">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+<span class="text-label-sm font-label-sm">Certifié Sécurisé</span>
+</div>
+<div class="w-1 h-1 bg-on-primary-container rounded-full"></div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">gavel</span>
+<span class="text-label-sm font-label-sm">Conformité RGPD</span>
+</div>
+</div>
+</main>
+<!-- Background Atmospheric Interaction -->
+<script>
+        function togglePassword() {
+            const input = document.getElementById('password');
+            const icon = document.getElementById('pw-toggle-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.textContent = 'visibility_off';
+            } else {
+                input.type = 'password';
+                icon.textContent = 'visibility';
+            }
+        }
+
+        // Mouse follower effect for subtle glow behind the card
+        document.addEventListener('mousemove', (e) => {
+            const card = document.querySelector('.glass-card');
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Limit effect to container area
+            if (x > -100 && x < rect.width + 100 && y > -100 && y < rect.height + 100) {
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            }
+        });
+    </script>
+<style>
+        /* Interactive subtle highlight for the glass card */
+        .glass-card {
+            position: relative;
+        }
+        .glass-card::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            background: radial-gradient(400px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(253, 216, 53, 0.04), transparent 40%);
+            border-radius: inherit;
+            z-index: -1;
+        }
+    </style>
+</body></html>

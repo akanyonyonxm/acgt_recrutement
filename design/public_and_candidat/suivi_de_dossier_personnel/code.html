@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-container": "#8690ee",
+                        "surface-container-high": "#eae7ef",
+                        "outline": "#767683",
+                        "tertiary-container": "#5c1800",
+                        "surface-variant": "#e4e1ea",
+                        "inverse-on-surface": "#f2eff8",
+                        "surface-container-highest": "#e4e1ea",
+                        "surface-container-low": "#f5f2fb",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed": "#0f1c2c",
+                        "tertiary-fixed-dim": "#ffb59d",
+                        "background": "#fbf8ff",
+                        "primary-fixed-dim": "#bdc2ff",
+                        "on-tertiary-fixed-variant": "#7b2e12",
+                        "primary-container": "#1a237e",
+                        "secondary-container": "#d3e1f6",
+                        "on-tertiary-container": "#e17c5a",
+                        "error-container": "#ffdad6",
+                        "primary": "#000666",
+                        "on-primary": "#ffffff",
+                        "secondary": "#525f71",
+                        "secondary-fixed-dim": "#bac8dc",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#e0e0ff",
+                        "on-secondary-fixed-variant": "#3a4859",
+                        "on-tertiary-fixed": "#390c00",
+                        "surface-dim": "#dbd9e1",
+                        "on-primary-fixed-variant": "#343d96",
+                        "on-secondary-container": "#566475",
+                        "surface-bright": "#fbf8ff",
+                        "on-surface-variant": "#454652",
+                        "tertiary-fixed": "#ffdbd0",
+                        "surface-tint": "#4c56af",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#1b1b21",
+                        "on-error-container": "#93000a",
+                        "inverse-surface": "#303036",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#d6e4f9",
+                        "surface": "#fbf8ff",
+                        "on-error": "#ffffff",
+                        "on-background": "#1b1b21",
+                        "surface-container": "#efecf5",
+                        "tertiary": "#380b00",
+                        "on-primary-fixed": "#000767",
+                        "inverse-primary": "#bdc2ff",
+                        "outline-variant": "#c6c5d4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "gutter": "16px",
+                        "container-max-width": "1200px",
+                        "base": "8px",
+                        "margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["Inter"],
+                        "label-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "title-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "headline-lg-mobile": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.1px", "fontWeight": "500"}],
+                        "display-lg": ["57px", {"lineHeight": "64px", "letterSpacing": "-0.25px", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                        "title-lg": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "title-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0.15px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.25px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0.5px", "fontWeight": "400"}],
+                        "headline-md": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "label-sm": ["11px", {"lineHeight": "16px", "letterSpacing": "0.5px", "fontWeight": "500"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .progress-line::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #c6c5d4;
+            z-index: 0;
+        }
+        .progress-line-active::after {
+            background: linear-gradient(to right, #1a237e 50%, #c6c5d4 50%);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- Top Navigation Bar -->
+<nav class="bg-surface border-b border-outline-variant fixed top-0 w-full z-50">
+<div class="flex justify-between items-center w-full px-margin-desktop max-w-container-max-width mx-auto h-16">
+<div class="flex items-center gap-8">
+<span class="text-title-lg font-title-lg font-bold text-primary">ACGT</span>
+<div class="hidden md:flex gap-6">
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200" href="#">Accueil</a>
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200" href="#">Candidats éligibles</a>
+<a class="text-primary border-b-2 border-primary font-bold pb-1" href="#">Espace Candidat</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="h-10 w-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
+                    JD
+                </div>
+</div>
+</div>
+</nav>
+<main class="pt-24 pb-12 px-margin-mobile md:px-margin-desktop max-w-container-max-width mx-auto">
+<!-- Header Section -->
+<div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<nav class="flex items-center gap-2 text-label-lg text-secondary mb-2">
+<a class="hover:underline" href="#">Mes dossiers</a>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="text-on-surface">Dossier #ACGT-2024-0892</span>
+</nav>
+<h1 class="font-headline-lg text-headline-lg text-primary">Ingénieur en Génie Civil (Sénior)</h1>
+<p class="text-body-lg text-secondary mt-1">Référence: ACGT-R-2024-0012 • Déposé le 12 Octobre 2024</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-6 py-3 border border-primary text-primary font-bold rounded-xl hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined">download</span>
+<span>Télécharger Récapitulatif</span>
+</button>
+<button class="flex items-center gap-2 px-6 py-3 bg-[#FDD835] text-[#000666] font-bold rounded-xl shadow-md hover:brightness-95 transition-all">
+<span class="material-symbols-outlined">edit</span>
+<span>Modifier le dossier</span>
+</button>
+</div>
+</div>
+<!-- Progress Timeline (Horizontal) -->
+<div class="bg-surface-container-lowest rounded-xl p-8 border border-outline-variant mb-8 shadow-sm">
+<h2 class="text-title-md font-title-md text-primary mb-10">Statut de la candidature</h2>
+<div class="relative flex justify-between items-center max-w-4xl mx-auto">
+<!-- Connectors -->
+<div class="absolute top-1/2 left-0 w-full h-1 bg-outline-variant -translate-y-1/2"></div>
+<div class="absolute top-1/2 left-0 w-[50%] h-1 bg-primary -translate-y-1/2 transition-all duration-1000"></div>
+<!-- Steps -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<span class="mt-4 font-bold text-primary text-label-lg">Déposé</span>
+<span class="text-label-sm text-secondary">12 Oct. 2024</span>
+</div>
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-lg ring-4 ring-primary-fixed">
+<span class="material-symbols-outlined">search</span>
+</div>
+<span class="mt-4 font-bold text-primary text-label-lg">En examen</span>
+<span class="text-label-sm text-secondary">En cours</span>
+</div>
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-10 h-10 rounded-full bg-surface-container-high text-outline flex items-center justify-center">
+<span class="material-symbols-outlined">gavel</span>
+</div>
+<span class="mt-4 font-medium text-secondary text-label-lg">Décision</span>
+<span class="text-label-sm text-secondary">Attendu</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Left Column: History & Files -->
+<div class="lg:col-span-2 space-y-8">
+<!-- History Timeline (Vertical) -->
+<section class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-primary">history</span>
+<h2 class="text-title-lg font-title-lg text-on-surface">Historique du dossier</h2>
+</div>
+<div class="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-primary before:to-outline-variant">
+<!-- Event 1 -->
+<div class="relative flex items-start gap-6 group">
+<div class="absolute left-0 w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-primary z-10 ring-4 ring-surface-container-lowest">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</div>
+<div class="ml-12 pt-1">
+<h3 class="font-bold text-on-surface">Consultation par le service RH</h3>
+<p class="text-body-md text-secondary mt-1">Votre dossier a été ouvert et est actuellement en cours d'analyse technique par la commission de recrutement.</p>
+<span class="inline-block mt-2 text-label-sm text-primary font-bold">Hier à 14:30</span>
+</div>
+</div>
+<!-- Event 2 -->
+<div class="relative flex items-start gap-6 group">
+<div class="absolute left-0 w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-primary z-10 ring-4 ring-surface-container-lowest">
+<span class="material-symbols-outlined text-[20px]">assignment_turned_in</span>
+</div>
+<div class="ml-12 pt-1">
+<h3 class="font-bold text-on-surface">Dossier marqué comme complet</h3>
+<p class="text-body-md text-secondary mt-1">Tous les documents obligatoires ont été vérifiés par le système de pré-validation.</p>
+<span class="inline-block mt-2 text-label-sm text-secondary">13 Octobre 2024</span>
+</div>
+</div>
+<!-- Event 3 -->
+<div class="relative flex items-start gap-6 group">
+<div class="absolute left-0 w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary z-10 ring-4 ring-surface-container-lowest">
+<span class="material-symbols-outlined text-[20px]">send</span>
+</div>
+<div class="ml-12 pt-1">
+<h3 class="font-bold text-on-surface">Soumission du dossier</h3>
+<p class="text-body-md text-secondary mt-1">Le candidat a finalisé et soumis sa candidature pour le poste d'Ingénieur Génie Civil.</p>
+<span class="inline-block mt-2 text-label-sm text-secondary">12 Octobre 2024</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Uploaded Files Section -->
+<section class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">description</span>
+<h2 class="text-title-lg font-title-lg text-on-surface">Documents transmis</h2>
+</div>
+<span class="text-label-lg text-secondary">4 fichiers</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- File 1 -->
+<div class="p-4 rounded-xl border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all cursor-pointer flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-red-50 text-red-700 flex items-center justify-center">
+<span class="material-symbols-outlined">picture_as_pdf</span>
+</div>
+<div>
+<p class="font-bold text-on-surface group-hover:text-primary transition-colors">CV_Jean_Dupont.pdf</p>
+<p class="text-label-sm text-secondary">2.4 MB • Modifié le 12/10</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary">download</span>
+</div>
+<!-- File 2 -->
+<div class="p-4 rounded-xl border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all cursor-pointer flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+<span class="material-symbols-outlined">picture_as_pdf</span>
+</div>
+<div>
+<p class="font-bold text-on-surface group-hover:text-primary transition-colors">LM_Ingenieur_Civil.pdf</p>
+<p class="text-label-sm text-secondary">1.1 MB • Modifié le 12/10</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary">download</span>
+</div>
+<!-- File 3 -->
+<div class="p-4 rounded-xl border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all cursor-pointer flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-primary-fixed text-primary flex items-center justify-center">
+<span class="material-symbols-outlined">image</span>
+</div>
+<div>
+<p class="font-bold text-on-surface group-hover:text-primary transition-colors">Diplome_Ingenieur_UNIKIN.jpg</p>
+<p class="text-label-sm text-secondary">4.8 MB • Modifié le 10/10</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary">download</span>
+</div>
+<!-- File 4 -->
+<div class="p-4 rounded-xl border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all cursor-pointer flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-green-50 text-green-700 flex items-center justify-center">
+<span class="material-symbols-outlined">task</span>
+</div>
+<div>
+<p class="font-bold text-on-surface group-hover:text-primary transition-colors">Attestation_Service.pdf</p>
+<p class="text-label-sm text-secondary">850 KB • Modifié le 11/10</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary">download</span>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Sidebar Info -->
+<div class="space-y-8">
+<!-- Agency Message -->
+<section class="bg-primary text-on-primary rounded-xl p-6 shadow-xl relative overflow-hidden">
+<div class="relative z-10">
+<h3 class="text-title-lg font-bold mb-4">Note Institutionnelle</h3>
+<p class="text-body-md opacity-90 leading-relaxed mb-6">
+                            L'Agence Congolaise des Grands Travaux assure un traitement équitable et transparent de chaque dossier. Veuillez noter que le délai moyen d'examen est de 15 jours ouvrables.
+                        </p>
+<a class="text-label-lg font-bold underline hover:opacity-100 opacity-80 transition-opacity" href="#">Consulter la charte de recrutement</a>
+</div>
+<span class="material-symbols-outlined absolute -bottom-4 -right-4 text-[120px] opacity-10">policy</span>
+</section>
+<!-- Contact & Help -->
+<section class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm">
+<h3 class="text-title-md font-bold text-on-surface mb-4">Besoin d'assistance ?</h3>
+<div class="space-y-4">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">mail</span>
+</div>
+<div>
+<p class="text-label-sm text-secondary">Support Candidat</p>
+<p class="font-bold text-on-surface">recrutement@acgt.cd</p>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">call</span>
+</div>
+<div>
+<p class="text-label-sm text-secondary">Ligne Directe</p>
+<p class="font-bold text-on-surface">+243 81 000 0000</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Profile Card -->
+<section class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col items-center text-center">
+<div class="relative mb-4">
+<div class="w-24 h-24 rounded-full border-4 border-primary-fixed overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a young African engineer for a corporate profile. He is wearing a clean navy blue business shirt and looking confidently at the camera with a subtle smile. The background is a blurred office setting with architectural plans, maintaining a modern and institutional corporate aesthetic with soft, natural lighting." src="https://lh3.googleusercontent.com/aida/AP1WRLukCsti8pWt9rfJ2xTeCJzhvahcM8AsO9PIN2mguF_FLU_xo29ZuNKF6GGZIU-1jUR7d1Dk8GOC9Vmm0A7gilezlAiPbI-K1ieiuoi6e4kpTNJEmaUOLTIfVugF_IzuAB433JpXSoN8crxGHRc0NyX_ySAlRcRLlHwxvQiindPdmXK5CtHnv9lCac34CjaaFkdpriU5KQfvwN26iZi8wScRxfTlW5Rv3x0rkt3yMIN3vbH4JbpGwK7EKkYP"/>
+</div>
+<div class="absolute bottom-0 right-0 w-6 h-6 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<h3 class="font-bold text-on-surface">Jean-Robert Dupont</h3>
+<p class="text-label-sm text-secondary">Candidat ID: #9902</p>
+<div class="mt-4 w-full pt-4 border-t border-outline-variant flex justify-around">
+<div class="text-center">
+<p class="text-headline-sm font-bold text-primary">01</p>
+<p class="text-label-sm text-secondary uppercase">Actif</p>
+</div>
+<div class="text-center">
+<p class="text-headline-sm font-bold text-secondary">12</p>
+<p class="text-label-sm text-secondary uppercase">Total</p>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-primary text-on-primary">
+<div class="w-full py-12 px-margin-desktop max-w-container-max-width mx-auto grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<div>
+<span class="text-headline-sm font-headline-sm text-on-primary block mb-4">ACGT</span>
+<p class="text-body-md opacity-80 mb-4">Agence Congolaise des Grands Travaux - L'excellence au service du développement des infrastructures de la RDC.</p>
+<div class="flex gap-4">
+<span class="material-symbols-outlined cursor-pointer hover:text-secondary-fixed transition-colors">public</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-secondary-fixed transition-colors">face_nod</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-secondary-fixed transition-colors">video_library</span>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-bold uppercase tracking-wider text-label-sm">Navigation</h4>
+<div class="grid grid-cols-2 gap-2">
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-body-md transition-opacity" href="#">Mentions Légales</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-body-md transition-opacity" href="#">Contact</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-body-md transition-opacity" href="#">Confidentialité</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-body-md transition-opacity" href="#">Aide</a>
+</div>
+</div>
+<div>
+<h4 class="font-bold uppercase tracking-wider text-label-sm mb-4">Newsletter</h4>
+<p class="text-body-md opacity-80 mb-4">Restez informé des nouveaux appels d'offres et recrutements.</p>
+<div class="flex">
+<input class="bg-primary-container border-none text-on-primary rounded-l-lg w-full focus:ring-2 focus:ring-on-primary-container" placeholder="Votre email" type="email"/>
+<button class="bg-[#FDD835] text-[#000666] px-4 rounded-r-lg font-bold">OK</button>
+</div>
+</div>
+</div>
+<div class="w-full py-6 border-t border-on-primary-container/20 text-center px-margin-desktop max-w-container-max-width mx-auto">
+<p class="text-label-sm opacity-60">© 2024 Agence Congolaise des Grands Travaux (ACGT). Tous droits réservés.</p>
+</div>
+</footer>
+<script>
+        // Simple interaction for buttons
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.classList.add('scale-95', 'opacity-80');
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.classList.remove('scale-95', 'opacity-80');
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.classList.remove('scale-95', 'opacity-80');
+            });
+        });
+    </script>
+</body></html>

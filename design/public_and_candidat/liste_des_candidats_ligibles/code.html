@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ACGT - Candidats Éligibles</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-container": "#8690ee",
+                    "surface-container-high": "#eae7ef",
+                    "outline": "#767683",
+                    "tertiary-container": "#5c1800",
+                    "surface-variant": "#e4e1ea",
+                    "inverse-on-surface": "#f2eff8",
+                    "surface-container-highest": "#e4e1ea",
+                    "surface-container-low": "#f5f2fb",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed": "#0f1c2c",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "background": "#fbf8ff",
+                    "primary-fixed-dim": "#bdc2ff",
+                    "on-tertiary-fixed-variant": "#7b2e12",
+                    "primary-container": "#1a237e",
+                    "secondary-container": "#d3e1f6",
+                    "on-tertiary-container": "#e17c5a",
+                    "error-container": "#ffdad6",
+                    "primary": "#000666",
+                    "on-primary": "#ffffff",
+                    "secondary": "#525f71",
+                    "secondary-fixed-dim": "#bac8dc",
+                    "on-secondary": "#ffffff",
+                    "primary-fixed": "#e0e0ff",
+                    "on-secondary-fixed-variant": "#3a4859",
+                    "on-tertiary-fixed": "#390c00",
+                    "surface-dim": "#dbd9e1",
+                    "on-primary-fixed-variant": "#343d96",
+                    "on-secondary-container": "#566475",
+                    "surface-bright": "#fbf8ff",
+                    "on-surface-variant": "#454652",
+                    "tertiary-fixed": "#ffdbd0",
+                    "surface-tint": "#4c56af",
+                    "on-tertiary": "#ffffff",
+                    "on-surface": "#1b1b21",
+                    "on-error-container": "#93000a",
+                    "inverse-surface": "#303036",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#d6e4f9",
+                    "surface": "#fbf8ff",
+                    "on-error": "#ffffff",
+                    "on-background": "#1b1b21",
+                    "surface-container": "#efecf5",
+                    "tertiary": "#380b00",
+                    "on-primary-fixed": "#000767",
+                    "inverse-primary": "#bdc2ff",
+                    "outline-variant": "#c6c5d4"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "gutter": "16px",
+                    "container-max-width": "1200px",
+                    "base": "8px",
+                    "margin-desktop": "24px"
+            },
+            "fontFamily": {
+                    "headline-sm": ["Inter"],
+                    "label-lg": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "title-lg": ["Inter"],
+                    "title-md": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "headline-lg-mobile": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-sm": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.1px", "fontWeight": "500"}],
+                    "display-lg": ["57px", {"lineHeight": "64px", "letterSpacing": "-0.25px", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                    "title-lg": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+                    "title-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0.15px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.25px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0.5px", "fontWeight": "400"}],
+                    "headline-md": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "label-sm": ["11px", {"lineHeight": "16px", "letterSpacing": "0.5px", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .hero-pattern {
+            background-color: #1a237e;
+            background-image: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-pattern::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0.1;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-surface sticky top-0 z-50 border-b border-outline-variant">
+<nav class="flex justify-between items-center w-full px-margin-desktop max-w-container-max-width mx-auto h-16">
+<div class="flex items-center gap-base">
+<span class="text-title-lg font-title-lg font-bold text-primary">ACGT</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200 text-label-lg font-label-lg" href="#">Accueil</a>
+<a class="text-primary border-b-2 border-primary font-bold pb-1 text-label-lg font-label-lg" href="#">Candidats éligibles</a>
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200 text-label-lg font-label-lg" href="#">Espace Candidat</a>
+</div>
+<button class="bg-primary text-on-primary px-6 py-2 rounded-full text-label-lg font-label-lg font-bold hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95">
+                Connexion
+            </button>
+</nav>
+</header>
+<main class="flex-grow">
+<!-- Hero Section -->
+<section class="hero-pattern py-20 px-margin-desktop text-on-primary">
+<div class="max-w-container-max-width mx-auto grid md:grid-cols-2 gap-gutter items-center">
+<div class="space-y-6">
+<h1 class="text-display-lg font-display-lg tracking-tight">Candidats éligibles</h1>
+<p class="text-body-lg font-body-lg opacity-90 max-w-lg">
+                        Consultez la liste officielle des personnes autorisées à postuler pour les grands chantiers de l'infrastructure nationale. Votre avenir commence ici.
+                    </p>
+<div class="flex flex-wrap gap-4 pt-4">
+<button class="bg-[#FDD835] text-primary px-8 py-4 rounded-xl font-bold text-title-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2">
+                            POSTULER EN LIGNE
+                            <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="hidden md:block relative h-80">
+<div class="absolute inset-0 bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 p-8 flex flex-col justify-center">
+<div class="space-y-4">
+<div class="h-4 w-3/4 bg-white/20 rounded-full animate-pulse"></div>
+<div class="h-4 w-1/2 bg-white/20 rounded-full animate-pulse"></div>
+<div class="h-4 w-2/3 bg-white/20 rounded-full animate-pulse"></div>
+<div class="grid grid-cols-3 gap-4 pt-6">
+<div class="h-12 bg-white/10 rounded-lg"></div>
+<div class="h-12 bg-white/10 rounded-lg"></div>
+<div class="h-12 bg-white/10 rounded-lg"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Search and Filter Section -->
+<section class="max-w-container-max-width mx-auto px-margin-desktop -mt-10 relative z-10">
+<div class="bg-surface-container-lowest rounded-2xl shadow-xl p-6 border border-outline-variant">
+<div class="flex flex-col md:flex-row gap-4 items-center justify-between">
+<div class="relative w-full md:max-w-md">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-12 pr-4 py-3 rounded-xl border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-body-md font-body-md" id="candidateSearch" placeholder="Rechercher votre nom…" type="text"/>
+</div>
+<div class="flex items-center gap-4 text-secondary">
+<span class="text-label-lg font-label-lg bg-secondary-container text-on-secondary-container px-4 py-2 rounded-full">
+<span class="font-bold">500</span> personnes éligibles
+                        </span>
+<button class="flex items-center gap-2 hover:bg-surface-container-high p-2 rounded-lg transition-colors">
+<span class="material-symbols-outlined">filter_list</span>
+<span class="text-label-lg font-label-lg">Filtres</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Data Table Section -->
+<section class="max-w-container-max-width mx-auto px-margin-desktop py-12">
+<div class="bg-surface rounded-2xl overflow-hidden shadow-sm border border-outline-variant">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high border-b border-outline-variant">
+<th class="px-6 py-4 text-title-md font-bold text-primary">NOM</th>
+<th class="px-6 py-4 text-title-md font-bold text-primary">POST-NOM</th>
+<th class="px-6 py-4 text-title-md font-bold text-primary">PRÉNOM</th>
+<th class="px-6 py-4 text-title-md font-bold text-primary">STATUS</th>
+<th class="px-6 py-4 text-title-md font-bold text-primary text-right">ACTION</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-4 text-body-lg font-medium">KABANGE</td>
+<td class="px-6 py-4 text-body-lg text-secondary">MUKENDI</td>
+<td class="px-6 py-4 text-body-lg text-secondary">Jean-Paul</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-label-sm font-bold uppercase tracking-wider">Éligible</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary font-bold hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Consulter</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group bg-surface-container-lowest/50">
+<td class="px-6 py-4 text-body-lg font-medium">MUTOMBO</td>
+<td class="px-6 py-4 text-body-lg text-secondary">KALALA</td>
+<td class="px-6 py-4 text-body-lg text-secondary">Sarah</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-label-sm font-bold uppercase tracking-wider">Éligible</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary font-bold hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Consulter</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-4 text-body-lg font-medium">LUKUSA</td>
+<td class="px-6 py-4 text-body-lg text-secondary">TSHIMANGA</td>
+<td class="px-6 py-4 text-body-lg text-secondary">Arnaud</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-label-sm font-bold uppercase tracking-wider">Éligible</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary font-bold hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Consulter</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group bg-surface-container-lowest/50">
+<td class="px-6 py-4 text-body-lg font-medium">MPUNGA</td>
+<td class="px-6 py-4 text-body-lg text-secondary">NGALULA</td>
+<td class="px-6 py-4 text-body-lg text-secondary">Marie-Noëlle</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-label-sm font-bold uppercase tracking-wider">Éligible</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary font-bold hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Consulter</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-4 text-body-lg font-medium">ILUNGA</td>
+<td class="px-6 py-4 text-body-lg text-secondary">KABAMBA</td>
+<td class="px-6 py-4 text-body-lg text-secondary">David</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-label-sm font-bold uppercase tracking-wider">Éligible</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary font-bold hover:underline opacity-0 group-hover:opacity-100 transition-opacity">Consulter</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-between">
+<span class="text-label-lg font-label-lg text-secondary">Affichage 1 à 5 sur 500</span>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-surface-container-high transition-colors disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-primary text-on-primary font-bold text-label-lg">1</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors text-label-lg">2</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors text-label-lg">3</button>
+<span class="px-2">...</span>
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors text-label-lg">100</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Informational Section -->
+<section class="bg-surface-container-low py-16">
+<div class="max-w-container-max-width mx-auto px-margin-desktop text-center">
+<h2 class="text-headline-md font-headline-md text-primary mb-4">Vous ne trouvez pas votre nom ?</h2>
+<p class="text-body-lg font-body-lg text-secondary max-w-2xl mx-auto mb-8">
+                    La liste est mise à jour quotidiennement. Si vous pensez qu'il s'agit d'une erreur, veuillez contacter le support technique muni de vos justificatifs d'inscription.
+                </p>
+<div class="flex justify-center gap-4">
+<button class="border border-primary text-primary px-6 py-3 rounded-xl font-bold text-label-lg hover:bg-primary/5 transition-colors">
+                        Consulter l'aide
+                    </button>
+<button class="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold text-label-lg hover:shadow-lg transition-all active:scale-95">
+                        Nous contacter
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-primary text-on-primary">
+<div class="w-full py-12 px-margin-desktop max-w-container-max-width mx-auto grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<div class="space-y-4">
+<span class="text-headline-sm font-headline-sm text-on-primary">ACGT</span>
+<p class="text-body-md font-body-md opacity-80 max-w-xs">
+                    L'Agence Congolaise des Grands Travaux œuvre pour le développement durable des infrastructures en République Démocratique du Congo.
+                </p>
+</div>
+<div class="space-y-4">
+<h3 class="text-title-md font-bold underline decoration-[#FDD835] decoration-2 underline-offset-4">Liens Utiles</h3>
+<nav class="flex flex-col gap-2">
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-label-lg transition-opacity" href="#">Mentions Légales</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-label-lg transition-opacity" href="#">Contact</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-label-lg transition-opacity" href="#">Politique de Confidentialité</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 text-label-lg transition-opacity" href="#">Aide</a>
+</nav>
+</div>
+<div class="space-y-4">
+<h3 class="text-title-md font-bold underline decoration-[#FDD835] decoration-2 underline-offset-4">Newsletter</h3>
+<p class="text-body-md font-body-md opacity-80">Recevez les dernières offres de recrutement directement par email.</p>
+<div class="flex gap-2">
+<input class="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white w-full outline-none focus:ring-1 focus:ring-[#FDD835]" placeholder="votre@email.com" type="email"/>
+<button class="bg-[#FDD835] text-primary px-4 py-2 rounded-lg font-bold">OK</button>
+</div>
+</div>
+</div>
+<div class="border-t border-white/10">
+<div class="max-w-container-max-width mx-auto px-margin-desktop py-6 text-center text-label-sm font-label-sm opacity-60">
+                © 2024 Agence Congolaise des Grands Travaux (ACGT). Tous droits réservés.
+            </div>
+</div>
+</footer>
+<script>
+        // Micro-interaction for search bar
+        const searchInput = document.getElementById('candidateSearch');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-[1.02]');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-[1.02]');
+        });
+
+        // Simple table row hover effect via JS for extra polish
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.querySelector('button')?.classList.remove('opacity-0');
+                row.querySelector('button')?.classList.add('opacity-100');
+            });
+            row.addEventListener('mouseleave', () => {
+                row.querySelector('button')?.classList.add('opacity-0');
+                row.querySelector('button')?.classList.remove('opacity-100');
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ACGT - Mes Dossiers</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-container": "#8690ee",
+                        "surface-container-high": "#eae7ef",
+                        "outline": "#767683",
+                        "tertiary-container": "#5c1800",
+                        "surface-variant": "#e4e1ea",
+                        "inverse-on-surface": "#f2eff8",
+                        "surface-container-highest": "#e4e1ea",
+                        "surface-container-low": "#f5f2fb",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed": "#0f1c2c",
+                        "tertiary-fixed-dim": "#ffb59d",
+                        "background": "#fbf8ff",
+                        "primary-fixed-dim": "#bdc2ff",
+                        "on-tertiary-fixed-variant": "#7b2e12",
+                        "primary-container": "#1a237e",
+                        "secondary-container": "#d3e1f6",
+                        "on-tertiary-container": "#e17c5a",
+                        "error-container": "#ffdad6",
+                        "primary": "#000666",
+                        "on-primary": "#ffffff",
+                        "secondary": "#525f71",
+                        "secondary-fixed-dim": "#bac8dc",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#e0e0ff",
+                        "on-secondary-fixed-variant": "#3a4859",
+                        "on-tertiary-fixed": "#390c00",
+                        "surface-dim": "#dbd9e1",
+                        "on-primary-fixed-variant": "#343d96",
+                        "on-secondary-container": "#566475",
+                        "surface-bright": "#fbf8ff",
+                        "on-surface-variant": "#454652",
+                        "tertiary-fixed": "#ffdbd0",
+                        "surface-tint": "#4c56af",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#1b1b21",
+                        "on-error-container": "#93000a",
+                        "inverse-surface": "#303036",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#d6e4f9",
+                        "surface": "#fbf8ff",
+                        "on-error": "#ffffff",
+                        "on-background": "#1b1b21",
+                        "surface-container": "#efecf5",
+                        "tertiary": "#380b00",
+                        "on-primary-fixed": "#000767",
+                        "inverse-primary": "#bdc2ff",
+                        "outline-variant": "#c6c5d4",
+                        "acgt-yellow": "#FDD835"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "gutter": "16px",
+                        "container-max-width": "1200px",
+                        "base": "8px",
+                        "margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["Inter"],
+                        "label-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "title-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "headline-lg-mobile": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.1px", "fontWeight": "500"}],
+                        "display-lg": ["57px", {"lineHeight": "64px", "letterSpacing": "-0.25px", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                        "title-lg": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "title-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0.15px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.25px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0.5px", "fontWeight": "400"}],
+                        "headline-md": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "label-sm": ["11px", {"lineHeight": "16px", "letterSpacing": "0.5px", "fontWeight": "500"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F5F7FA;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .status-chip {
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .custom-shadow {
+            box-shadow: 0 4px 8px rgba(0, 7, 103, 0.05);
+        }
+        .card-hover:hover {
+            box-shadow: 0 12px 24px rgba(0, 7, 103, 0.1);
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-50 w-full glass-nav border-b border-outline-variant">
+<div class="flex justify-between items-center w-full px-margin-desktop max-w-container-max-width mx-auto h-16">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 bg-primary flex items-center justify-center rounded-lg">
+<span class="text-white font-bold text-xl">A</span>
+</div>
+<span class="text-title-lg font-title-lg font-bold text-primary">ACGT</span>
+</div>
+<nav class="hidden md:flex gap-6">
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200 py-2" href="#">Accueil</a>
+<a class="text-secondary font-medium hover:text-primary transition-colors duration-200 py-2" href="#">Candidats éligibles</a>
+<a class="text-primary border-b-2 border-primary font-bold pb-1 py-2" href="#">Espace Candidat</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-secondary hover:bg-surface-container-low p-2 rounded-full transition-all">notifications</button>
+<div class="flex items-center gap-3 pl-4 border-l border-outline-variant">
+<div class="text-right hidden sm:block">
+<p class="text-label-lg font-bold text-on-surface">Jean-Pierre Mukuna</p>
+<p class="text-label-sm text-secondary">Candidat</p>
+</div>
+<img alt="Profile" class="w-10 h-10 rounded-full object-cover border-2 border-primary-fixed" data-alt="Professional studio portrait of a confident middle-aged Congolese man in a sharp navy blue business suit. The lighting is soft and directional, highlighting his features against a clean, neutral grey studio background. The overall aesthetic is professional, corporate, and trust-inspiring, maintaining a high-key light mode feel consistent with a government recruitment platform." src="https://lh3.googleusercontent.com/aida/AP1WRLv-vu7dLub1k4lavS2_1ZsTLxGs0IcNPBeaJNAfIPOBe54iwT3jpMsXlmiqIK9BGRkDiLFG1ThM-X19P98QmNI8ZVS66whWaAPDkb0MNEVLSZlqCN9M0P-nj1Wc_JRnLOETYs4ttb_Rc4_ks6tyEstxnUSdkl4NzCyDLbepSzSFpzkQVb27ufumNd8zxEIm_ZtLKlmboNSB3-EvALKA0wMhNwCk3gMd9SjyN7G16yXuhPDSGpCAjZXt7LTy"/>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-grow w-full max-w-container-max-width mx-auto px-margin-desktop py-8">
+<!-- Dashboard Header -->
+<div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h1 class="text-headline-lg font-headline-lg text-primary mb-2">Tableau de bord</h1>
+<p class="text-body-lg text-secondary">Gérez vos candidatures et suivez l'évolution de vos dossiers en temps réel.</p>
+</div>
+<div class="flex gap-2">
+<div class="bg-surface-container-low px-4 py-2 rounded-xl border border-outline-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="folder_shared">folder_shared</span>
+<span class="text-label-lg font-bold text-primary">3 Dossiers Actifs</span>
+</div>
+</div>
+</div>
+<!-- Dashboard Content Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+<!-- Sidebar / Stats Column -->
+<div class="md:col-span-3 space-y-6">
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant custom-shadow">
+<h3 class="text-title-md font-bold text-primary mb-4">Statut Global</h3>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="text-body-md text-secondary">En examen</span>
+<span class="text-label-lg font-bold text-tertiary-container bg-tertiary-fixed px-2 py-0.5 rounded">1</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-body-md text-secondary">Déposés</span>
+<span class="text-label-lg font-bold text-primary-container bg-primary-fixed px-2 py-0.5 rounded">2</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full mt-4 overflow-hidden">
+<div class="bg-primary h-full w-[66%]"></div>
+</div>
+<p class="text-label-sm text-secondary italic">Complétion de votre profil : 85%</p>
+</div>
+</div>
+<div class="bg-primary-container p-6 rounded-2xl text-on-primary border border-primary custom-shadow">
+<span class="material-symbols-outlined mb-2 block" data-icon="lightbulb">lightbulb</span>
+<h3 class="text-title-md font-bold mb-2">Conseil Recrutement</h3>
+<p class="text-body-md opacity-90 leading-relaxed">Assurez-vous que vos diplômes sont certifiés conformes pour accélérer le traitement de vos dossiers.</p>
+</div>
+</div>
+<!-- Dossiers List Column -->
+<div class="md:col-span-9">
+<div class="space-y-4">
+<!-- Dossier Card 1 -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant custom-shadow card-hover flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-xl bg-primary-fixed flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="engineering">engineering</span>
+</div>
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-label-sm font-bold text-secondary tracking-wider uppercase">Dossier #ACGT-2024-089</span>
+<span class="status-chip bg-green-100 text-green-800">Déposé</span>
+</div>
+<h3 class="text-title-lg font-bold text-on-surface">Ingénieur Civil Principal</h3>
+<div class="flex items-center gap-4 mt-2 text-secondary">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="text-body-md">15 Octobre 2024</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="text-body-md">Kinshasa, RDC</span>
+</div>
+</div>
+</div>
+</div>
+<button class="bg-surface-container-low text-primary border border-primary px-6 py-2.5 rounded-xl font-bold text-label-lg hover:bg-primary hover:text-white transition-all flex items-center gap-2">
+                            Voir détails
+                            <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<!-- Dossier Card 2 -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant custom-shadow card-hover flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-xl bg-tertiary-fixed flex items-center justify-center text-tertiary-container">
+<span class="material-symbols-outlined" data-icon="architecture">architecture</span>
+</div>
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-label-sm font-bold text-secondary tracking-wider uppercase">Dossier #ACGT-2024-042</span>
+<span class="status-chip bg-orange-100 text-orange-800">En examen</span>
+</div>
+<h3 class="text-title-lg font-bold text-on-surface">Chef de Chantier Infrastructures</h3>
+<div class="flex items-center gap-4 mt-2 text-secondary">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="text-body-md">02 Octobre 2024</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="text-body-md">Lubumbashi, RDC</span>
+</div>
+</div>
+</div>
+</div>
+<button class="bg-surface-container-low text-primary border border-primary px-6 py-2.5 rounded-xl font-bold text-label-lg hover:bg-primary hover:text-white transition-all flex items-center gap-2">
+                            Voir détails
+                            <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<!-- Dossier Card 3 -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant custom-shadow card-hover flex flex-col sm:flex-row sm:items-center justify-between gap-6 opacity-80">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+</div>
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-label-sm font-bold text-secondary tracking-wider uppercase">Dossier #ACGT-2024-012</span>
+<span class="status-chip bg-gray-200 text-gray-600">Clôturé</span>
+</div>
+<h3 class="text-title-lg font-bold text-on-surface">Assistant Technique VRD</h3>
+<div class="flex items-center gap-4 mt-2 text-secondary">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="text-body-md">14 Septembre 2024</span>
+</div>
+</div>
+</div>
+</div>
+<button class="bg-surface-container-low text-secondary border border-outline-variant px-6 py-2.5 rounded-xl font-bold text-label-lg hover:bg-surface-container-high transition-all flex items-center gap-2">
+                            Historique
+                            <span class="material-symbols-outlined text-sm" data-icon="history">history</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-8 right-8 bg-acgt-yellow text-primary px-6 py-4 rounded-full font-bold shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 z-50">
+<span class="material-symbols-outlined font-bold" data-icon="add">add</span>
+<span class="text-title-md">Déposer un nouveau dossier</span>
+</button>
+<!-- Footer -->
+<footer class="bg-primary dark:bg-primary-container text-on-primary">
+<div class="w-full py-12 px-margin-desktop max-w-container-max-width mx-auto grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<div>
+<div class="flex items-center gap-2 mb-4">
+<div class="w-8 h-8 bg-white flex items-center justify-center rounded">
+<span class="text-primary font-bold text-lg">A</span>
+</div>
+<span class="text-headline-sm font-headline-sm">ACGT</span>
+</div>
+<p class="text-body-md opacity-80 max-w-xs">Agence Congolaise des Grands Travaux - Excellence dans la construction et l'innovation des infrastructures nationales.</p>
+</div>
+<div>
+<h4 class="text-title-md font-bold mb-4">Liens Rapides</h4>
+<div class="flex flex-col gap-2">
+<a class="text-on-primary-container opacity-80 hover:opacity-100 transition-opacity text-body-md" href="#">Mentions Légales</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 transition-opacity text-body-md" href="#">Contact</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 transition-opacity text-body-md" href="#">Politique de Confidentialité</a>
+<a class="text-on-primary-container opacity-80 hover:opacity-100 transition-opacity text-body-md" href="#">Aide</a>
+</div>
+</div>
+<div class="flex flex-col justify-between">
+<div>
+<h4 class="text-title-md font-bold mb-4">Newsletter</h4>
+<div class="flex gap-2">
+<input class="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder:text-white/50 w-full focus:ring-2 focus:ring-acgt-yellow focus:border-transparent outline-none" placeholder="votre@email.com" type="email"/>
+<button class="bg-acgt-yellow text-primary px-4 py-2 rounded-lg font-bold">Ok</button>
+</div>
+</div>
+<p class="text-label-sm opacity-60 mt-8">© 2024 Agence Congolaise des Grands Travaux (ACGT). Tous droits réservés.</p>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for buttons and cards
+        document.querySelectorAll('button, .card-hover').forEach(element => {
+            element.addEventListener('mousedown', () => {
+                element.style.transform = 'scale(0.98)';
+            });
+            element.addEventListener('mouseup', () => {
+                element.style.transform = '';
+            });
+        });
+
+        // Simple smooth entrance for cards
+        const cards = document.querySelectorAll('.card-hover');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+                card.style.transition = 'all 0.6s cubic-bezier(0.23, 1, 0.32, 1)';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    </script>
+</body></html>

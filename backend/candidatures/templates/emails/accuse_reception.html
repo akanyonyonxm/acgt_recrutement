@@ -1,0 +1,26 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour,</p>
+  <p>
+    Nous confirmons la bonne réception du dossier de candidature au nom de
+    <strong>{{ nom_candidat }}</strong>.
+  </p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;font-size:14px;">
+    <tr>
+      <td style="padding:4px 12px 4px 0;color:#7b8794;">Numéro de dossier</td>
+      <td style="padding:4px 0;font-weight:bold;">#{{ numero_dossier }}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 12px 4px 0;color:#7b8794;">Appel à candidature</td>
+      <td style="padding:4px 0;">{{ appel }}</td>
+    </tr>
+  </table>
+  <p>
+    Votre dossier est désormais <strong>en attente de validation</strong> par
+    nos services. Vous serez informé(e) par email à chaque évolution de son
+    statut.
+  </p>
+  <p style="font-size:13px;color:#7b8794;">
+    Conservez votre numéro de dossier pour tout suivi.
+  </p>
+{% endblock %}

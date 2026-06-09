@@ -1,0 +1,18 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour{% if prenom %} {{ prenom }}{% endif %},</p>
+  <p>
+    Vous avez demandé la réinitialisation de votre mot de passe sur
+    {{ site_nom }}. Cliquez ci-dessous pour en choisir un nouveau.
+  </p>
+  <p style="text-align:center;margin:28px 0;">
+    <a href="{{ lien_reset }}"
+       style="background:#0b3d2e;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:bold;display:inline-block;">
+      Réinitialiser mon mot de passe
+    </a>
+  </p>
+  <p style="font-size:13px;color:#7b8794;">
+    Ce lien est valable 48 heures. Si vous n'êtes pas à l'origine de cette
+    demande, ignorez cet email : votre mot de passe reste inchangé.
+  </p>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour,</p>
+  <p>
+    Félicitations : à l'issue de l'examen, le dossier
+    <strong>#{{ numero_dossier }}</strong> au nom de
+    <strong>{{ nom_candidat }}</strong> ({{ appel }}) a été
+    <strong>retenu</strong>.
+  </p>
+  <p>
+    Les modalités pour la suite (tests, convocation) vous seront communiquées.
+    Surveillez vos emails et la liste publique des personnes retenues.
+  </p>
+{% endblock %}

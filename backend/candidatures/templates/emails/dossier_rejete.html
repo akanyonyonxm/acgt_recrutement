@@ -1,0 +1,18 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour,</p>
+  <p>
+    Après examen, le dossier <strong>#{{ numero_dossier }}</strong> au nom de
+    <strong>{{ nom_candidat }}</strong> ({{ appel }}) n'a pas été retenu à ce
+    stade.
+  </p>
+  {% if motif %}
+  <p style="background:#f4f5f7;border-left:3px solid #b0bec5;padding:10px 14px;">
+    <strong>Motif :</strong> {{ motif }}
+  </p>
+  {% endif %}
+  <p style="font-size:13px;color:#7b8794;">
+    Si vous pensez qu'il s'agit d'une erreur, vous pouvez contacter le
+    secrétariat de l'ACGT à l'adresse recrutement@acgt.cd.
+  </p>
+{% endblock %}

@@ -1,0 +1,43 @@
+# Base de données PostgreSQL — compose dédié, lancé indépendamment de
+# l'application (cycle de vie distinct : on ne redéploie pas la base à chaque
+# mise à jour applicative).
+#
+#   docker compose -f docker-compose.db.yml up -d
+#
+# Lit ses variables depuis le fichier .env (à créer depuis .env.prod.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: acgt_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-acgt_recrutement}
+      POSTGRES_USER: ${DB_USER:-acgt}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD doit être défini dans .env}
+      # Fuseau cohérent avec Django (Africa/Kinshasa).
+      TZ: Africa/Kinshasa
+    volumes:
+      # Données persistantes : survit à la suppression du conteneur.
+      - pgdata:/var/lib/postgresql/data
+    # Pas de ports exposés sur l'hôte : la base n'est joignable que par
+    # l'application via le réseau Docker partagé. (Décommenter en dev/debug.)
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-acgt} -d ${DB_NAME:-acgt_recrutement}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - acgt_net
+
+volumes:
+  pgdata:
+    name: acgt_pgdata
+
+networks:
+  # Réseau partagé avec l'application (docker-compose.yml). Créé une fois via :
+  #   docker network create acgt_net
+  acgt_net:
+    external: true

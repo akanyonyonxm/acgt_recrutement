@@ -1,0 +1,13 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour,</p>
+  <p>
+    Bonne nouvelle : le dossier <strong>#{{ numero_dossier }}</strong> au nom de
+    <strong>{{ nom_candidat }}</strong> ({{ appel }}) a été <strong>validé</strong>
+    et passe à présent à l'étape d'<strong>examen</strong>.
+  </p>
+  <p>
+    Aucune action n'est requise de votre part pour le moment. Vous serez
+    informé(e) par email de la décision à l'issue de l'examen.
+  </p>
+{% endblock %}
