@@ -142,24 +142,28 @@ async function soumettre() {
 </script>
 
 <template>
-  <v-container class="py-8" style="max-width: 820px">
-    <h1 class="text-h5 font-weight-bold text-primary mb-1">Déposer un dossier</h1>
-    <p class="text-body-2 text-medium-emphasis mb-6">
-      Trois étapes : vos informations, vos pièces justificatives, puis la confirmation.
-    </p>
+  <v-container class="py-8 px-6" style="max-width: 880px">
+    <div class="mb-6">
+      <h1 class="text-h4 font-weight-bold text-primary">Déposer un dossier</h1>
+      <p class="text-body-1 text-medium-emphasis mb-0">
+        Trois étapes : vos informations, vos pièces justificatives, puis la confirmation.
+      </p>
+    </div>
 
-    <v-stepper v-model="etape" alt-labels flat class="bg-transparent mb-2" :elevation="0">
-      <v-stepper-header style="box-shadow:none">
-        <v-stepper-item :value="1" title="Informations" :complete="etape > 1" color="primary" />
-        <v-divider />
-        <v-stepper-item :value="2" title="Pièces" :complete="etape > 2" color="primary" />
-        <v-divider />
-        <v-stepper-item :value="3" title="Confirmation" color="primary" />
-      </v-stepper-header>
-    </v-stepper>
+    <v-card flat border class="mb-6 px-2 py-1">
+      <v-stepper v-model="etape" alt-labels flat class="bg-transparent" :elevation="0">
+        <v-stepper-header style="box-shadow:none">
+          <v-stepper-item :value="1" title="Informations" :complete="etape > 1" color="primary" />
+          <v-divider />
+          <v-stepper-item :value="2" title="Pièces" :complete="etape > 2" color="primary" />
+          <v-divider />
+          <v-stepper-item :value="3" title="Confirmation" color="primary" />
+        </v-stepper-header>
+      </v-stepper>
+    </v-card>
 
     <!-- ÉTAPE 1 -->
-    <v-card v-if="etape === 1" class="pa-2">
+    <v-card v-if="etape === 1" flat border class="pa-2">
       <v-card-text>
         <v-select :model-value="form.appel" @update:modelValue="choisirAppel"
                   :items="appelItems" :item-props="(i) => ({ disabled: i.disabled })"
@@ -188,7 +192,8 @@ async function soumettre() {
       <v-card-actions class="px-4 pb-4">
         <v-btn variant="text" :to="{ name: 'mes-dossiers' }">Annuler</v-btn>
         <v-spacer />
-        <v-btn color="primary" variant="flat" size="large" append-icon="mdi-arrow-right" :loading="enCours"
+        <v-btn color="accent" variant="flat" size="large" rounded="lg" class="text-primary font-weight-bold"
+               append-icon="mdi-arrow-right" :loading="enCours"
                :disabled="!form.appel || !form.poste || !form.nom || !form.prenom || !form.email || appelBloque(appelSelectionne)"
                @click="creerDossier">
           Continuer
@@ -255,7 +260,7 @@ async function soumettre() {
     <!-- ÉTAPE 3 -->
     <div v-else>
       <div v-if="!soumis">
-        <v-card class="pa-6 mb-4" variant="flat">
+        <v-card flat border class="pa-6 mb-4">
           <div class="text-subtitle-1 font-weight-bold text-primary mb-4">
             <v-icon color="primary" class="mr-2">mdi-clipboard-check-outline</v-icon>
             Vérifiez votre candidature
@@ -314,7 +319,7 @@ async function soumettre() {
         </div>
       </div>
 
-      <v-card v-else class="pa-10 text-center">
+      <v-card v-else flat border class="pa-10 text-center">
         <v-icon color="success" size="72" class="mb-3">mdi-check-circle</v-icon>
         <h2 class="text-h5 text-primary mb-2">Dossier soumis !</h2>
         <p class="text-body-1 mb-1">Votre dossier <strong>#{{ dossier.id }}</strong> a bien été enregistré.</p>
