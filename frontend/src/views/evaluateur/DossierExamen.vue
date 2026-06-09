@@ -18,6 +18,14 @@ const snack = ref({ show: false, color: 'success', text: '' })
 
 // Saisie de l'avis
 const monAvis = ref({ avis: '', recommandation: 'reserve' })
+// État de l'avis tel qu'enregistré (null = aucun avis encore). Sert à n'activer
+// le bouton « Enregistrer » que si quelque chose a changé.
+const avisInitial = ref(null)
+const avisModifie = computed(() => {
+  if (!avisInitial.value) return true   // premier enregistrement autorisé
+  return monAvis.value.avis !== avisInitial.value.avis
+    || monAvis.value.recommandation !== avisInitial.value.recommandation
+})
 const enregistrement = ref(false)
 
 // Décision
@@ -68,7 +76,12 @@ async function charger() {
   historique.value = hi.data
   // Pré-remplit le formulaire avec mon avis existant, le cas échéant.
   const mien = ev.data.find((e) => e.evaluateur === auth.utilisateur?.email)
-  if (mien) monAvis.value = { avis: mien.avis || '', recommandation: mien.recommandation }
+  if (mien) {
+    monAvis.value = { avis: mien.avis || '', recommandation: mien.recommandation }
+    avisInitial.value = { ...monAvis.value }
+  } else {
+    avisInitial.value = null
+  }
 }
 
 async function enregistrerAvis() {
@@ -192,10 +205,14 @@ onMounted(charger)
             <v-textarea v-model="monAvis.avis" label="Commentaire (facultatif)" rows="4"
                         variant="outlined" :disabled="!estEnExamen" hide-details />
           </v-card-text>
-          <v-card-actions v-if="estEnExamen" class="px-4 pb-4">
+          <v-card-actions v-if="estEnExamen" class="px-4 pb-4 align-center">
+            <span v-if="!avisModifie && avisInitial" class="text-caption text-success">
+              <v-icon size="16" class="mr-1">mdi-check-circle</v-icon>Avis enregistré
+            </span>
             <v-spacer />
             <v-btn color="primary" variant="flat" prepend-icon="mdi-content-save"
-                   :loading="enregistrement" @click="enregistrerAvis">Enregistrer mon avis</v-btn>
+                   :loading="enregistrement" :disabled="!avisModifie"
+                   @click="enregistrerAvis">Enregistrer mon avis</v-btn>
           </v-card-actions>
           <v-alert v-else type="info" variant="tonal" density="compact" class="ma-4 mt-0">
             Ce dossier n'est plus en examen : l'avis n'est plus modifiable.
