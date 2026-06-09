@@ -131,17 +131,24 @@ onMounted(charger)
     <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-left"
            :to="{ name: 'eval-dossiers' }" class="mb-2">Retour</v-btn>
 
-    <div class="d-flex align-center mb-6 flex-wrap ga-3">
-      <v-avatar color="primary" variant="tonal" rounded="lg" size="44" class="mr-1">
-        <v-icon>mdi-file-account-outline</v-icon>
-      </v-avatar>
-      <div>
-        <h1 class="text-h5 font-weight-bold text-primary" style="line-height:1.2">Dossier #{{ dossier.id }}</h1>
-        <div class="text-body-1">{{ dossier.nom }} {{ dossier.postnom }} {{ dossier.prenom }}</div>
+    <v-card flat class="entete-dossier mb-6">
+      <div class="d-flex align-center flex-wrap ga-4 pa-5">
+        <v-avatar color="white" size="56" class="elevation-3">
+          <v-icon color="primary" size="30">mdi-account</v-icon>
+        </v-avatar>
+        <div class="flex-grow-1" style="min-width: 200px">
+          <div class="ref-dossier">DOSSIER #{{ dossier.id }}</div>
+          <h1 class="nom-candidat">{{ dossier.nom }} {{ dossier.postnom }} {{ dossier.prenom }}</h1>
+          <div class="meta-dossier">
+            <v-icon size="14">mdi-bullhorn-outline</v-icon>{{ dossier.appel_titre }}
+            <template v-if="dossier.poste_libelle">
+              <span class="sep">·</span><v-icon size="14">mdi-briefcase-outline</v-icon>{{ dossier.poste_libelle }}
+            </template>
+          </div>
+        </div>
+        <StatutBadge :statut="dossier.statut" :libelle="dossier.statut_libelle" />
       </div>
-      <v-spacer />
-      <StatutBadge :statut="dossier.statut" :libelle="dossier.statut_libelle" />
-    </div>
+    </v-card>
 
     <v-row>
       <!-- Gauche : infos + pièces -->
@@ -314,6 +321,15 @@ onMounted(charger)
 </template>
 
 <style scoped>
+.entete-dossier {
+  background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%) !important;
+  border-radius: 16px !important;
+}
+.ref-dossier { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; color: #bdc2ff; text-transform: uppercase; }
+.nom-candidat { font-size: 1.5rem; font-weight: 800; color: #fff; line-height: 1.2; }
+.meta-dossier { font-size: 0.85rem; color: #c5cae9; margin-top: 5px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.meta-dossier .sep { opacity: 0.6; }
+
 .info-tuile { display: flex; align-items: flex-start; background: #f7f8fb; border: 1px solid #eceff4; border-radius: 12px; padding: 12px 14px; }
 .info-tuile + .info-tuile { margin-top: 10px; }
 .info-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #6b7785; font-weight: 600; }
