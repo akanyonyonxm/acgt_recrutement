@@ -57,8 +57,23 @@ jobs:
     # Environnement GitHub « production » : permet d'exiger une approbation
     # manuelle et de cloisonner les secrets (facultatif, configurable côté repo).
     environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
     steps:
+      # Tant que les secrets DEPLOY_* ne sont pas renseignés, on saute le
+      # déploiement au lieu de faire échouer la CI (« missing server host »).
+      - name: Vérifier la présence des secrets de déploiement
+        id: gate
+        run: |
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::notice::Secrets DEPLOY_* non configurés — déploiement ignoré."
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pret=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Connexion SSH et déploiement
+        if: steps.gate.outputs.pret == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
