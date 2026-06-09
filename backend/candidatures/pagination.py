@@ -7,3 +7,11 @@ class PaginationPublique(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 100
+
+
+class PaginationStandard(PageNumberPagination):
+    """Pagination des listes back-office : 25 par page, taille ajustable."""
+
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 200

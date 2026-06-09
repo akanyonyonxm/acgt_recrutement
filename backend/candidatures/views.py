@@ -28,7 +28,7 @@ from .models import (
     Poste,
     TypePiece,
 )
-from .pagination import PaginationPublique
+from .pagination import PaginationPublique, PaginationStandard
 from .permissions import EstAdminOuLectureSeule
 from .serializers import (
     AffectationSerializer,
@@ -228,6 +228,10 @@ class RetenusViewSet(viewsets.ReadOnlyModelViewSet):
 
 class DossierViewSet(viewsets.ModelViewSet):
     serializer_class = DossierSerializer
+    pagination_class = PaginationStandard
+
+    # Champs autorisés au tri (allowlist : évite l'injection de champs arbitraires).
+    TRI_AUTORISE = {'id', 'nom', 'statut', 'cree_le', 'poste__libelle', 'appel__titre'}
 
     def get_serializer_class(self):
         # Liste = vue allégée (pas de N+1 sur pièces/complétude) ; détail et
@@ -265,6 +269,17 @@ class DossierViewSet(viewsets.ModelViewSet):
             qs = qs.filter(statut=statut)
         if appel:
             qs = qs.filter(appel_id=appel)
+
+        # Recherche tolérante par nom de candidat (accents/casse/ordre indifférents).
+        for token in tokens_recherche(self.request.query_params.get('q', '')):
+            qs = qs.filter(texte_recherche__contains=token)
+
+        # Tri demandé par le tableau (sinon : plus récents d'abord).
+        ordering = self.request.query_params.get('ordering', '')
+        if ordering.lstrip('-') in self.TRI_AUTORISE:
+            qs = qs.order_by(ordering)
+        else:
+            qs = qs.order_by('-cree_le')
         return qs
 
     # --- Cycle de vie du dépôt (candidat) -------------------------------

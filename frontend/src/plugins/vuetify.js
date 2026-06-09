@@ -3,11 +3,14 @@ import '@mdi/font/css/materialdesignicons.css'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+import { fr } from 'vuetify/locale'
 
 // Thème corporate ACGT (aligné sur profilis) : bleu nuit + accent jaune.
 export default createVuetify({
   components,
   directives,
+  // Interface en français (pieds de tableaux, pagination, etc.).
+  locale: { locale: 'fr', fallback: 'en', messages: { fr } },
   theme: {
     defaultTheme: 'light',
     themes: {
