@@ -146,7 +146,8 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
             cell.font = Font(bold=True)
         # Ligne-guide SANS nom : ignorée à l'import (« nom » obligatoire), mais
         # montre le format attendu sans risquer d'importer une fausse personne.
-        ws.append(['', 'Mukendi', 'Jean', 'stage', 2021, 'optionnel'])
+        # type et reference laissés vides (facultatifs).
+        ws.append(['', 'Mukendi', 'Jean', '', 2021, ''])
         for i, largeur in enumerate([18, 18, 18, 16, 8, 16], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
 
