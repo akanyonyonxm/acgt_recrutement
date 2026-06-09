@@ -34,6 +34,17 @@ function notifier(text, color = 'success') {
   snack.value = { show: true, color, text }
 }
 
+// Confirmation réutilisable pour les actions sensibles (approuver, retenir...).
+const confirmation = ref({ show: false, titre: '', message: '', couleur: 'primary', action: null })
+function demanderConfirmation(titre, message, action, couleur = 'primary') {
+  confirmation.value = { show: true, titre, message, couleur, action }
+}
+function confirmer() {
+  const a = confirmation.value.action
+  confirmation.value.show = false
+  if (a) a()
+}
+
 async function charger() {
   const { data } = await api.get(`/dossiers/${id}/`)
   dossier.value = data
@@ -210,7 +221,8 @@ onMounted(charger)
           </v-card-text>
           <v-divider />
           <v-card-actions class="pa-4">
-            <v-btn color="success" variant="flat" prepend-icon="mdi-check" @click="approuver">
+            <v-btn color="success" variant="flat" prepend-icon="mdi-check"
+                   @click="demanderConfirmation('Approuver le dossier', 'Le dossier passera en examen et le candidat sera notifié par email.', approuver, 'success')">
               Approuver → examen
             </v-btn>
             <v-spacer />
@@ -263,7 +275,8 @@ onMounted(charger)
             consultation des avis ci-dessous.
           </v-card-text>
           <v-card-actions class="px-4 pb-4">
-            <v-btn color="success" variant="flat" prepend-icon="mdi-check-bold" @click="retenir">
+            <v-btn color="success" variant="flat" prepend-icon="mdi-check-bold"
+                   @click="demanderConfirmation('Retenir le candidat', 'Décision définitive : le candidat passera en « retenu » et sera notifié par email.', retenir, 'success')">
               Retenir
             </v-btn>
             <v-spacer />
@@ -319,7 +332,8 @@ onMounted(charger)
           <v-icon class="mr-2">mdi-close-circle</v-icon>Rejeter le dossier
         </v-card-title>
         <v-card-text class="pt-4">
-          <v-textarea v-model="motifRejet" label="Motif du rejet (obligatoire)" rows="3" autofocus />
+          <v-textarea v-model="motifRejet" label="Commentaire de rejet (obligatoire)" rows="3"
+                      hint="Visible dans l'historique et envoyé au candidat" persistent-hint autofocus />
         </v-card-text>
         <v-card-actions class="pa-4 pt-0">
           <v-spacer />
@@ -342,6 +356,22 @@ onMounted(charger)
           <v-spacer />
           <v-btn variant="outlined" @click="dialogNonRetenir = false">Annuler</v-btn>
           <v-btn color="error" variant="flat" @click="nonRetenir">Confirmer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Confirmation générique (approuver, retenir) -->
+    <v-dialog v-model="confirmation.show" max-width="440">
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon :color="confirmation.couleur" class="mr-2">mdi-help-circle-outline</v-icon>
+          {{ confirmation.titre }}
+        </v-card-title>
+        <v-card-text>{{ confirmation.message }}</v-card-text>
+        <v-card-actions class="pa-4 pt-0">
+          <v-spacer />
+          <v-btn variant="text" @click="confirmation.show = false">Annuler</v-btn>
+          <v-btn :color="confirmation.couleur" variant="flat" @click="confirmer">Confirmer</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
