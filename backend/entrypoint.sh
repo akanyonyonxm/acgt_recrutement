@@ -14,6 +14,8 @@ echo "PostgreSQL est prêt."
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 python manage.py init_roles
+# Crée le compte admin depuis ADMIN_EMAIL/ADMIN_PASSWORD (.env), si définis.
+python manage.py creer_admin
 
 # 3. Lancer Gunicorn (3 workers ; ajuster selon les cœurs du VPS : 2*cpu+1).
 exec gunicorn config.wsgi:application \
