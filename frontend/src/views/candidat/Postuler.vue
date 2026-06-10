@@ -15,7 +15,7 @@ const appels = ref([])
 const postes = ref([])
 const mesAppels = ref(new Set())   // appels où le candidat a déjà un dossier
 const appelSelectionne = ref(null)
-const form = ref({ appel: null, poste: null, nom: '', postnom: '', prenom: '', email: '' })
+const form = ref({ code: '', appel: null, poste: null, nom: '', postnom: '', prenom: '', email: '' })
 const dossier = ref(null)
 const erreur = ref('')
 const snack = ref({ show: false, color: 'success', text: '' })
@@ -57,12 +57,17 @@ onMounted(async () => {
     appelSelectionne.value = (await api.get(`/appels/${d.appel}/`)).data
     // Pré-remplit le formulaire pour permettre le retour à l'étape 1.
     form.value = {
-      appel: d.appel, poste: d.poste, nom: d.nom,
+      code: d.code, appel: d.appel, poste: d.poste, nom: d.nom,
       postnom: d.postnom, prenom: d.prenom, email: d.email,
     }
     etape.value = 2
   } else {
     form.value.email = auth.utilisateur?.email || ''
+    // Pré-remplissage depuis la liste des éligibles (lien « Postuler »).
+    if (route.query.code) form.value.code = route.query.code
+    if (route.query.nom) form.value.nom = route.query.nom
+    if (route.query.postnom) form.value.postnom = route.query.postnom
+    if (route.query.prenom) form.value.prenom = route.query.prenom
   }
 })
 
@@ -165,6 +170,10 @@ async function soumettre() {
     <!-- ÉTAPE 1 -->
     <v-card v-if="etape === 1" flat border class="pa-2">
       <v-card-text>
+        <v-text-field v-model="form.code" label="Code du dossier"
+                      prepend-inner-icon="mdi-identifier" class="mb-2 champ-code"
+                      hint="Renseignez votre code figurant sur la liste des éligibles."
+                      persistent-hint />
         <v-select :model-value="form.appel" @update:modelValue="choisirAppel"
                   :items="appelItems" :item-props="(i) => ({ disabled: i.disabled })"
                   label="Appel à candidature" prepend-inner-icon="mdi-bullhorn" class="mb-2" />
@@ -174,12 +183,6 @@ async function soumettre() {
         </v-alert>
         <v-select v-model="form.poste" :items="postes"
                   label="Poste / fonction visé(e)" prepend-inner-icon="mdi-briefcase" class="mb-2" />
-        <v-expand-transition>
-          <v-alert v-if="appelSelectionne" type="info" variant="tonal" density="compact" class="mb-4">
-            Pièces à fournir :
-            {{ piecesExigees.map((p) => p.type_piece.libelle + (p.obligatoire ? '' : ' (facultatif)')).join(', ') }}
-          </v-alert>
-        </v-expand-transition>
         <v-row dense>
           <v-col cols="12" sm="4"><v-text-field v-model="form.nom" label="Nom" /></v-col>
           <v-col cols="12" sm="4"><v-text-field v-model="form.postnom" label="Postnom" /></v-col>
@@ -194,7 +197,7 @@ async function soumettre() {
         <v-spacer />
         <v-btn color="accent" variant="flat" size="large" rounded="lg" class="text-primary font-weight-bold"
                append-icon="mdi-arrow-right" :loading="enCours"
-               :disabled="!form.appel || !form.poste || !form.nom || !form.prenom || !form.email || appelBloque(appelSelectionne)"
+               :disabled="!form.code || !form.appel || !form.poste || !form.nom || !form.prenom || !form.email || appelBloque(appelSelectionne)"
                @click="creerDossier">
           Continuer
         </v-btn>
@@ -297,6 +300,13 @@ async function soumettre() {
                   <div class="recap-valeur">{{ dossier.email }}</div></div>
               </div>
             </v-col>
+            <v-col cols="12" sm="6">
+              <div class="recap-tuile">
+                <v-icon color="primary" class="mr-3">mdi-identifier</v-icon>
+                <div><div class="recap-label">Code du dossier</div>
+                  <div class="recap-valeur">{{ dossier.code || '—' }}</div></div>
+              </div>
+            </v-col>
           </v-row>
 
           <div class="recap-label mt-5 mb-2">Pièces jointes ({{ dossier.pieces.length }})</div>
@@ -387,4 +397,6 @@ async function soumettre() {
   background: #f5f2fb; border: 1px solid #e4e1ea; border-radius: 10px;
   padding: 10px 14px; font-size: 0.9rem; color: #1f2933;
 }
+/* Indice du champ « Code du dossier » en bleu. */
+.champ-code :deep(.v-messages__message) { color: #1a237e; opacity: 1; font-weight: 600; }
 </style>

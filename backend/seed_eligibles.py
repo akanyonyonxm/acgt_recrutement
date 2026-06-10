@@ -4,6 +4,7 @@
 """
 import os
 import random
+import string
 import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
@@ -12,6 +13,18 @@ from candidatures.models import ListeEligibilite
 from candidatures.utils import normaliser_texte
 
 random.seed(2026)  # reproductible
+
+# Génère des codes publics uniques de 4 caractères (lettres majuscules + chiffres).
+_ALPHABET = string.ascii_uppercase + string.digits
+_codes = set()
+
+
+def generer_code():
+    while True:
+        c = ''.join(random.choice(_ALPHABET) for _ in range(4))
+        if c not in _codes:
+            _codes.add(c)
+            return c
 
 NOMS = [
     'KABAMBA', 'MUKENDI', 'NSIMBA', 'TSHILOMBO', 'ILUNGA', 'MWAMBA', 'KALALA',
@@ -50,6 +63,7 @@ for i in range(500):
     prefixe = 'STG' if type_e == 'stage' else 'CAND'
     objets.append(ListeEligibilite(
         nom=nom, postnom=postnom, prenom=prenom,
+        code=generer_code(),
         type_eligibilite=type_e, annee=annee,
         reference=f'{prefixe}-{annee}-{i + 1:04d}',
         est_publie=True,

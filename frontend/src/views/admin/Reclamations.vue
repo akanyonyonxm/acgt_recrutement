@@ -47,6 +47,17 @@ const lienDoc = (recId, docId) => `/api/reclamations/${recId}/documents/${docId}
 const ICONE_DOC = { accuse: 'mdi-file-certificate-outline', cv: 'mdi-file-account-outline', identite: 'mdi-card-account-details-outline', diplome: 'mdi-school-outline' }
 const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(o / 1024) + ' Ko')
 
+// Aperçu des justificatifs (PDF/image) avec navigation.
+const apercu = ref({ show: false, index: 0 })
+const docCourant = computed(() => detail.value?.documents?.[apercu.value.index] || null)
+const estImage = (d) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(d?.nom_original || '')
+const urlDocInline = (d) => `${lienDoc(detail.value.id, d.id)}?inline=1`
+function ouvrirApercu(i) { apercu.value = { show: true, index: i } }
+function naviguerApercu(pas) {
+  const n = detail.value.documents.length
+  apercu.value.index = (apercu.value.index + pas + n) % n
+}
+
 async function chargerStats() {
   const { data } = await api.get('/reclamations/stats/')
   stats.value = data
@@ -172,15 +183,18 @@ onMounted(async () => {
           <div class="text-caption text-medium-emphasis mt-3 mb-1">
             Justificatifs ({{ detail.documents?.length || 0 }})
           </div>
-          <a v-for="doc in detail.documents" :key="doc.id" class="doc-l"
-             :href="lienDoc(detail.id, doc.id)" target="_blank">
+          <div v-for="(doc, i) in detail.documents" :key="doc.id" class="doc-l"
+               @click="ouvrirApercu(i)" style="cursor:pointer">
             <v-icon size="20" color="primary" class="mr-2">{{ ICONE_DOC[doc.type] || 'mdi-file' }}</v-icon>
             <span class="flex-grow-1">
               <strong>{{ doc.type_libelle }}</strong>
               <span class="text-medium-emphasis"> — {{ doc.nom_original }} · {{ kos(doc.taille) }}</span>
             </span>
-            <v-icon size="18" color="primary">mdi-download</v-icon>
-          </a>
+            <v-btn icon="mdi-eye-outline" variant="text" size="x-small" color="primary" @click.stop="ouvrirApercu(i)" />
+            <a :href="lienDoc(detail.id, doc.id)" target="_blank" @click.stop>
+              <v-btn icon="mdi-download" variant="text" size="x-small" color="primary" />
+            </a>
+          </div>
 
           <template v-if="detail.statut === 'en_attente'">
             <v-divider class="my-4" />
@@ -220,6 +234,33 @@ onMounted(async () => {
       </v-card>
     </v-dialog>
 
+    <!-- Aperçu des justificatifs (PDF / image) avec navigation -->
+    <v-dialog v-model="apercu.show" max-width="980" scrollable>
+      <v-card v-if="docCourant" flat>
+        <v-card-title class="d-flex align-center ga-2 py-3">
+          <v-icon color="primary">{{ ICONE_DOC[docCourant.type] || 'mdi-file' }}</v-icon>
+          <div class="flex-grow-1" style="min-width:0">
+            <div class="font-weight-bold">{{ docCourant.type_libelle }}</div>
+            <div class="text-caption text-medium-emphasis text-truncate">{{ docCourant.nom_original }}</div>
+          </div>
+          <v-chip size="small" variant="tonal">{{ apercu.index + 1 }} / {{ detail.documents.length }}</v-chip>
+          <a :href="lienDoc(detail.id, docCourant.id)" target="_blank">
+            <v-btn icon="mdi-download" variant="text" size="small" />
+          </a>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="apercu.show = false" />
+        </v-card-title>
+        <v-divider />
+        <div class="apercu-zone">
+          <v-btn icon="mdi-chevron-left" variant="elevated" class="nav-btn nav-gauche"
+                 :disabled="detail.documents.length < 2" @click="naviguerApercu(-1)" />
+          <img v-if="estImage(docCourant)" :src="urlDocInline(docCourant)" class="apercu-img" alt="" />
+          <iframe v-else :src="urlDocInline(docCourant)" class="apercu-iframe" title="aperçu" />
+          <v-btn icon="mdi-chevron-right" variant="elevated" class="nav-btn nav-droite"
+                 :disabled="detail.documents.length < 2" @click="naviguerApercu(1)" />
+        </div>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="snack.show" :color="snack.color" timeout="3500">{{ snack.text }}</v-snackbar>
   </div>
 </template>
@@ -231,4 +272,10 @@ onMounted(async () => {
 .info-l strong { color: #1f2933; text-align: right; }
 .doc-l { display: flex; align-items: center; gap: 4px; padding: 9px 12px; margin-bottom: 6px; border: 1px solid #e4e1ea; border-radius: 10px; text-decoration: none; color: inherit; font-size: 0.85rem; transition: background 0.15s, border-color 0.15s; }
 .doc-l:hover { background: #f0f3fb; border-color: #c9d4ee; }
+.apercu-zone { position: relative; background: #2b2b2b; display: flex; align-items: center; justify-content: center; height: 72vh; overflow: auto; }
+.apercu-iframe { width: 100%; height: 100%; border: none; background: #fff; }
+.apercu-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.nav-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; opacity: 0.92; }
+.nav-gauche { left: 12px; }
+.nav-droite { right: 12px; }
 </style>

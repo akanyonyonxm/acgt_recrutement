@@ -15,7 +15,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
@@ -149,15 +149,15 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         wb = Workbook()
         ws = wb.active
         ws.title = 'Éligibles'
-        entetes = ['nom', 'postnom', 'prenom', 'type', 'annee', 'reference']
+        entetes = ['code', 'nom', 'postnom', 'prenom', 'type', 'annee', 'reference']
         ws.append(entetes)
         for cell in ws[1]:
             cell.font = Font(bold=True)
         # Ligne-guide SANS nom : ignorée à l'import (« nom » obligatoire), mais
         # montre le format attendu sans risquer d'importer une fausse personne.
         # type et reference laissés vides (facultatifs).
-        ws.append(['', 'Mukendi', 'Jean', '', 2021, ''])
-        for i, largeur in enumerate([18, 18, 18, 16, 8, 16], start=1):
+        ws.append(['ACGT-001', '', 'Mukendi', 'Jean', '', 2021, ''])
+        for i, largeur in enumerate([14, 18, 18, 18, 16, 8, 16], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
 
         reponse = HttpResponse(
@@ -240,7 +240,7 @@ class DossierViewSet(viewsets.ModelViewSet):
     pagination_class = PaginationStandard
 
     # Champs autorisés au tri (allowlist : évite l'injection de champs arbitraires).
-    TRI_AUTORISE = {'id', 'nom', 'statut', 'cree_le', 'poste__libelle', 'appel__titre'}
+    TRI_AUTORISE = {'id', 'code', 'nom', 'statut', 'cree_le', 'poste__libelle', 'appel__titre'}
 
     def get_serializer_class(self):
         # Liste = vue allégée (pas de N+1 sur pièces/complétude) ; détail et
@@ -279,9 +279,17 @@ class DossierViewSet(viewsets.ModelViewSet):
         if appel:
             qs = qs.filter(appel_id=appel)
 
-        # Recherche tolérante par nom de candidat (accents/casse/ordre indifférents).
-        for token in tokens_recherche(self.request.query_params.get('q', '')):
-            qs = qs.filter(texte_recherche__contains=token)
+        # Recherche tolérante par nom (accents/casse/ordre indifférents) OU par code.
+        q = self.request.query_params.get('q', '').strip()
+        if q:
+            tokens = tokens_recherche(q)
+            if tokens:
+                nom_q = Q()
+                for token in tokens:
+                    nom_q &= Q(texte_recherche__contains=token)
+                qs = qs.filter(nom_q | Q(code__icontains=q))
+            else:
+                qs = qs.filter(code__icontains=q)
 
         # Tri demandé par le tableau (sinon : plus récents d'abord).
         ordering = self.request.query_params.get('ordering', '')
@@ -395,15 +403,23 @@ class DossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'],
             url_path=r'pieces/(?P<piece_id>[^/.]+)/telecharger')
     def telecharger_piece(self, request, pk=None, piece_id=None):
-        """Téléchargement protégé d'une pièce (jamais d'URL publique)."""
+        """Téléchargement protégé d'une pièce (jamais d'URL publique).
+
+        `?inline=1` sert le fichier en ligne (aperçu PDF/image dans l'app) au
+        lieu de forcer le téléchargement.
+        """
         dossier = self.get_object()  # déjà scopé par rôle/propriété
         piece = get_object_or_404(PieceJointe, pk=piece_id, dossier=dossier)
         try:
             fichier = piece.fichier.open('rb')
         except FileNotFoundError as exc:
             raise Http404("Fichier introuvable.") from exc
-        reponse = FileResponse(fichier, as_attachment=True,
+        inline = request.query_params.get('inline') in ('1', 'true', 'oui')
+        reponse = FileResponse(fichier, as_attachment=not inline,
                                filename=piece.nom_original or 'piece')
+        if inline:
+            # Autorise l'affichage dans une iframe même origine (aperçu in-app).
+            reponse['X-Frame-Options'] = 'SAMEORIGIN'
         return reponse
 
     @action(detail=True, methods=['post'])
@@ -432,16 +448,22 @@ class DossierViewSet(viewsets.ModelViewSet):
         self._envoyer_accuse(dossier)
         return Response(self.get_serializer(dossier).data)
 
+    @staticmethod
+    def _code_dossier(dossier):
+        """Code du dossier pour l'affichage (emails, sujets) ; repli sur #id."""
+        return dossier.code or f'#{dossier.pk}'
+
     def _envoyer_accuse(self, dossier):
         """Accusé de réception au candidat (best-effort : n'annule pas le dépôt)."""
+        code = self._code_dossier(dossier)
         try:
             envoyer_email(
                 destinataire=dossier.email,
-                sujet=f'Accusé de réception — dossier #{dossier.pk}',
+                sujet=f'Accusé de réception — dossier {code}',
                 template='accuse_reception.html',
                 contexte={
                     'nom_candidat': f'{dossier.nom} {dossier.postnom} {dossier.prenom}'.strip(),
-                    'numero_dossier': dossier.pk,
+                    'code_dossier': code,
                     'appel': dossier.appel.titre,
                 },
             )
@@ -502,7 +524,7 @@ class DossierViewSet(viewsets.ModelViewSet):
                 template=template,
                 contexte={
                     'nom_candidat': f'{dossier.nom} {dossier.postnom} {dossier.prenom}'.strip(),
-                    'numero_dossier': dossier.pk,
+                    'code_dossier': self._code_dossier(dossier),
                     'appel': dossier.appel.titre,
                     'motif': motif,
                 },
@@ -671,7 +693,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
     `Dossier.changer_statut()` (l'audit et l'invariant de statut sont préservés).
     """
 
-    parser_classes = [MultiPartParser, FormParser]
+    # Multipart pour la création (fichiers) ; JSON pour valider/rejeter.
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -788,7 +811,12 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             fichier = doc.fichier.open('rb')
         except FileNotFoundError as exc:
             raise Http404("Fichier introuvable.") from exc
-        return FileResponse(fichier, as_attachment=True, filename=doc.nom_original or 'document')
+        inline = request.query_params.get('inline') in ('1', 'true', 'oui')
+        reponse = FileResponse(fichier, as_attachment=not inline,
+                               filename=doc.nom_original or 'document')
+        if inline:
+            reponse['X-Frame-Options'] = 'SAMEORIGIN'
+        return reponse
 
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):

@@ -129,11 +129,11 @@ class EvaluationInline(admin.TabularInline):
 
 @admin.register(Dossier)
 class DossierAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nom', 'postnom', 'prenom', 'appel', 'statut',
+    list_display = ('id', 'code', 'nom', 'postnom', 'prenom', 'appel', 'statut',
                     'deposant', 'cree_le')
     list_filter = ('statut', 'appel')
-    search_fields = ('nom', 'postnom', 'prenom', 'email')
-    readonly_fields = ('appel', 'deposant', 'nom', 'postnom', 'prenom', 'email',
+    search_fields = ('code', 'nom', 'postnom', 'prenom', 'email')
+    readonly_fields = ('code', 'appel', 'deposant', 'nom', 'postnom', 'prenom', 'email',
                        'statut', 'ligne_eligibilite', 'cree_le', 'modifie_le')
     inlines = [PieceJointeInline, AffectationInline, EvaluationInline,
                HistoriqueStatutInline]

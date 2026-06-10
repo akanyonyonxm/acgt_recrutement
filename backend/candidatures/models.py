@@ -129,6 +129,10 @@ class Dossier(models.Model):
         verbose_name='déposant',
     )
 
+    # Code du dossier = code public de la liste d'éligibilité (4 caractères).
+    # Récupéré au clic sur « Postuler » depuis la liste, ou saisi à la main.
+    code = models.CharField('code du dossier', max_length=50, blank=True, db_index=True)
+
     # Identité saisie librement par le déposant.
     nom = models.CharField('nom', max_length=100)
     postnom = models.CharField('postnom', max_length=100, blank=True)
@@ -411,6 +415,8 @@ class ListeEligibilite(models.Model):
         blank=True,
     )
     annee = models.PositiveIntegerField('année', null=True, blank=True)
+    # Code/numéro public de la personne (importé du fichier, affiché sur la liste).
+    code = models.CharField('code', max_length=50, blank=True, db_index=True)
     reference = models.CharField('référence interne', max_length=100, blank=True)
 
     # Forme normalisée (sans accents, minuscules) de « nom postnom prénom »,

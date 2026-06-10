@@ -34,7 +34,7 @@ async function soumettre() {
     <v-card class="pa-2 glass" max-width="460" width="100%">
       <div class="text-center pt-6 px-6">
         <div class="logo-box mb-3"><img :src="logo" alt="ACGT" width="64" /></div>
-        <h1 class="text-h6 font-weight-bold text-primary">Créer un compte candidat</h1>
+        <h1 class="text-h6 font-weight-bold" style="color:#00838F">Créer un compte candidat</h1>
         <p class="text-body-2 text-medium-emphasis">Rejoignez la plateforme de recrutement ACGT</p>
       </div>
 

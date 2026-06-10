@@ -17,8 +17,8 @@ const arr = (v) => (Array.isArray(v) ? v : v ? [v] : [])
 
 const valide = () =>
   form.value.appel && form.value.nom.trim() && form.value.prenom.trim() &&
-  form.value.email.trim() && f(docs.value.accuse) && f(docs.value.cv) &&
-  f(docs.value.identite) && arr(diplomes.value).length
+  form.value.email.trim() && form.value.message.trim() && f(docs.value.accuse) &&
+  f(docs.value.cv) && f(docs.value.identite) && arr(diplomes.value).length
 
 onMounted(async () => {
   await initCsrf()
@@ -56,9 +56,10 @@ async function envoyer() {
         <h1 class="hero-titre">Faire une réclamation</h1>
         <p class="hero-sous">
           Vous avez déposé un dossier à l'ACGT mais votre nom n'apparaît pas dans la liste ?
-          Soumettez une réclamation en joignant votre <strong>accusé de réception</strong>,
-          votre <strong>CV</strong>, la copie de votre <strong>pièce d'identité</strong> et
-          la copie de vos <strong>diplômes</strong> (ou équivalent).
+          Soumettez une réclamation en joignant l'<strong>accusé de réception</strong> de votre
+          lettre de demande de stage, de demande d'emploi, ou de votre lettre de stage
+          <span class="oblig">(OBLIGATOIRE)</span>, votre <strong>CV</strong>, la copie de votre
+          <strong>pièce d'identité</strong> et la copie de vos <strong>diplômes</strong> (ou équivalent).
         </p>
       </div>
     </section>
@@ -94,12 +95,19 @@ async function envoyer() {
               <v-text-field v-model="form.telephone" label="Téléphone" prepend-inner-icon="mdi-phone-outline" />
             </v-col>
           </v-row>
+          <v-textarea v-model="form.message" label="Message *" rows="3"
+                      hint="Expliquez brièvement votre situation (dépôt à l'ACGT, etc.)" persistent-hint />
 
           <v-divider class="my-4" />
           <div class="text-subtitle-1 font-weight-bold text-primary mb-1">Pièces justificatives</div>
           <p class="text-caption text-medium-emphasis mb-3">PDF, image ou Word — 5 Mo max par fichier.</p>
 
-          <v-file-input v-model="docs.accuse" label="Accusé de réception (ACGT) *"
+          <v-alert type="error" variant="tonal" density="comfortable" class="mb-3" icon="mdi-alert">
+            <strong>Important :</strong> insérez impérativement la copie de l'<strong>accusé de réception</strong>
+            de votre lettre de demande de stage, de demande d'emploi, ou de votre lettre de stage.
+            <strong>Sans ce document, le dossier sera automatiquement invalidé.</strong>
+          </v-alert>
+          <v-file-input v-model="docs.accuse" label="Accusé de réception (ACGT) ou lettre de stage *"
                         prepend-icon="" prepend-inner-icon="mdi-file-certificate-outline"
                         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" show-size />
           <v-file-input v-model="docs.cv" label="CV *"
@@ -111,8 +119,6 @@ async function envoyer() {
           <v-file-input v-model="diplomes" label="Copie des diplômes (un ou plusieurs) *"
                         prepend-icon="" prepend-inner-icon="mdi-school-outline" multiple counter
                         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" show-size />
-
-          <v-textarea v-model="form.message" label="Message (facultatif)" rows="3" class="mt-2" />
 
           <input v-model="siteWeb" type="text" name="site_web" tabindex="-1" autocomplete="off"
                  class="hp" aria-hidden="true" />
@@ -135,10 +141,11 @@ async function envoyer() {
 </template>
 
 <style scoped>
-.hero { background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%); padding: 48px 24px 56px; }
+.hero { background: linear-gradient(135deg, #00838F 0%, #053236 100%); padding: 48px 24px 56px; }
 .hero-inner { max-width: 760px; margin: 0 auto; text-align: center; }
 .hero-titre { color: #fff; font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; letter-spacing: -0.5px; }
-.hero-sous { color: #fff; opacity: 0.9; font-size: 1.02rem; line-height: 1.6; max-width: 640px; margin: 14px auto 0; }
+.hero-sous { color: #fff; opacity: 0.9; font-size: 1.02rem; line-height: 1.6; max-width: 680px; margin: 14px auto 0; }
+.oblig { color: #FFD54F; font-weight: 800; letter-spacing: 0.03em; }
 .wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 56px; }
 .carte { margin-top: -32px; position: relative; z-index: 2; box-shadow: 0 12px 30px rgba(26,35,126,0.10); }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }

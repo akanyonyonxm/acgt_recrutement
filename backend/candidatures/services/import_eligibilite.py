@@ -4,8 +4,9 @@ Logique partagée entre la commande CLI `import_eligibilite` et l'endpoint
 d'upload du back-office (EligibiliteViewSet.importer). Renvoie un récapitulatif.
 
 Colonnes attendues (1re ligne = en-têtes, insensible à la casse/aux accents) :
-    nom | postnom | prenom | type | annee | reference
+    code | nom | postnom | prenom | type | annee | reference
 Seul « nom » est obligatoire. « type » accepte « stage » ou « candidature ».
+Le « code » est un numéro public affiché sur la liste en ligne.
 """
 
 from openpyxl import load_workbook
@@ -15,6 +16,8 @@ from candidatures.utils import normaliser_texte
 
 # En-têtes reconnus (forme normalisée) -> champ du modèle.
 COLONNES = {
+    'code': 'code',
+    'numero': 'code',
     'nom': 'nom',
     'postnom': 'postnom',
     'post nom': 'postnom',
@@ -74,7 +77,7 @@ def importer_eligibles(fichier, remplacer=False, publier=False):
         classeur.close()
         raise ImportEligibiliteErreur(
             "Colonne « nom » introuvable. En-têtes attendus : "
-            "nom, postnom, prenom, type, annee, reference."
+            "code, nom, postnom, prenom, type, annee, reference."
         )
 
     objets, ignorees = [], 0
@@ -90,6 +93,7 @@ def importer_eligibles(fichier, remplacer=False, publier=False):
         postnom, prenom = valeur('postnom'), valeur('prenom')
         objets.append(ListeEligibilite(
             nom=nom, postnom=postnom, prenom=prenom,
+            code=valeur('code'),
             type_eligibilite=_type(valeur('type_eligibilite')),
             annee=_annee(valeur('annee')),
             reference=valeur('reference'),

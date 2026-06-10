@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sauvegarde — Plateforme ACGT (base de données + documents)</title>
+<style>
+  :root { --bleu:#1a237e; --bleu2:#0d1b2a; --jaune:#FDD835; --gris:#525f71; --bord:#e2e6ea; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color:#1f2933; margin:0; background:#f5f7fa; line-height:1.6; }
+  header { background:linear-gradient(135deg,var(--bleu) 0%,var(--bleu2) 100%); color:#fff; padding:32px 24px; }
+  header h1 { margin:0 0 6px; font-size:1.8rem; }
+  header p { margin:0; opacity:.9; }
+  main { max-width:900px; margin:0 auto; padding:24px; }
+  h2 { color:var(--bleu); margin-top:36px; border-bottom:2px solid var(--jaune); padding-bottom:6px; }
+  h3 { color:var(--bleu); margin-top:24px; }
+  code, pre { font-family:"SFMono-Regular", Consolas, monospace; }
+  pre { background:#0d1b2a; color:#e6e9f2; padding:14px 16px; border-radius:10px; overflow-x:auto; font-size:.88rem; }
+  code:not(pre code){ background:#eceff4; padding:1px 6px; border-radius:5px; font-size:.9em; }
+  table { border-collapse:collapse; width:100%; margin:14px 0; background:#fff; }
+  th,td { border:1px solid var(--bord); padding:10px 12px; text-align:left; font-size:.92rem; vertical-align:top; }
+  th { background:#f4f5f9; color:var(--bleu); }
+  .encart { border-radius:10px; padding:14px 16px; margin:16px 0; }
+  .info { background:#e7f3fb; border-left:4px solid #0288D1; }
+  .warn { background:#fff4e5; border-left:4px solid #EF6C00; }
+  .ok { background:#e7f5ef; border-left:4px solid #2E7D32; }
+  .danger { background:#fdecea; border-left:4px solid #D32F2F; }
+  .pill { display:inline-block; background:var(--jaune); color:var(--bleu); font-weight:700; padding:2px 10px; border-radius:9999px; font-size:.8rem; }
+  footer { text-align:center; color:var(--gris); font-size:.8rem; padding:24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sauvegarde de la plateforme ACGT</h1>
+  <p>Base de données PostgreSQL <strong>+</strong> documents (pièces jointes) — procédure et bonnes pratiques.</p>
+</header>
+
+<main>
+
+  <div class="encart danger">
+    <strong>Règle d'or.</strong> La sauvegarde est une opération <strong>en lecture seule</strong> :
+    elle ne modifie ni ne supprime jamais les données. Elle se lance
+    <strong>manuellement</strong> sur le serveur ou via <strong>cron</strong> — <u>jamais</u> dans le pipeline
+    de déploiement (qui, lui, ne touche pas non plus à la base).
+  </div>
+
+  <h2>1. Où vivent les données sur le serveur</h2>
+  <p>
+    En production (VPS Linux), tout est dans des <strong>volumes Docker persistants</strong> qui
+    survivent aux redéploiements. Ils ne sont pas dans le dossier du projet.
+  </p>
+  <table>
+    <tr><th>Élément</th><th>Volume Docker</th><th>Emplacement sur le serveur</th></tr>
+    <tr>
+      <td>Base de données PostgreSQL</td>
+      <td><code>acgt_pgdata</code></td>
+      <td><code>/var/lib/docker/volumes/acgt_pgdata/_data</code></td>
+    </tr>
+    <tr>
+      <td><strong>Documents</strong> (pièces jointes des dossiers et réclamations)</td>
+      <td><code>acgt_media_data</code></td>
+      <td><code>/var/lib/docker/volumes/acgt_media_data/_data</code></td>
+    </tr>
+  </table>
+  <div class="encart info">
+    Dans le conteneur applicatif, les documents sont montés sur <code>/app/fichiers_prives</code>
+    (<code>MEDIA_ROOT</code>). Ils restent <strong>privés</strong> : jamais servis directement par Nginx,
+    seulement via un téléchargement authentifié. Ne jamais éditer ces fichiers à la main.
+  </div>
+
+  <h2>2. Où seront stockées les sauvegardes <span class="pill">bonne pratique</span></h2>
+  <p>
+    Les sauvegardes sont écrites dans un dossier <strong>dédié, hors du projet et hors des volumes Docker</strong> :
+  </p>
+  <pre>/srv/acgt_backups/
+├── db_2026-06-10_020000.sql.gz      ← dump compressé de la base
+└── media_2026-06-10_020000.tgz      ← archive des documents</pre>
+  <ul>
+    <li>Fichiers <strong>horodatés</strong> et <strong>compressés</strong>.</li>
+    <li><strong>Rotation automatique</strong> : les sauvegardes de plus de 30 jours sont supprimées (réglable).</li>
+    <li><span class="pill">recommandé</span> Copier régulièrement ce dossier <strong>hors du serveur</strong>
+        (autre machine, stockage objet, disque externe) — une sauvegarde sur la même machine ne protège pas
+        d'une panne disque.</li>
+  </ul>
+
+  <h2>3. Lancer la sauvegarde</h2>
+  <p>Sur le serveur, à la racine du projet :</p>
+  <pre>chmod +x scripts/sauvegarde.sh
+./scripts/sauvegarde.sh</pre>
+  <p>Le script effectue, dans l'ordre :</p>
+  <ol>
+    <li><strong>Base</strong> → <code>pg_dump</code> compressé : <code>db_&lt;date&gt;.sql.gz</code></li>
+    <li><strong>Documents</strong> → archive du volume : <code>media_&lt;date&gt;.tgz</code></li>
+    <li><strong>Rotation</strong> → suppression des sauvegardes trop anciennes</li>
+  </ol>
+  <p>Options (facultatives) :</p>
+  <pre># Changer le dossier de destination et la rétention
+BACKUP_DIR=/mnt/backups RETENTION_JOURS=60 ./scripts/sauvegarde.sh</pre>
+
+  <h2>4. Automatiser (cron) <span class="pill">recommandé</span></h2>
+  <p>Pour une sauvegarde quotidienne à 02h00, éditer la crontab du serveur :</p>
+  <pre>crontab -e</pre>
+  <p>puis ajouter (adapter le chemin du projet) :</p>
+  <pre>0 2 * * * cd /srv/acgt_recrutement &amp;&amp; ./scripts/sauvegarde.sh >> /var/log/acgt_sauvegarde.log 2>&amp;1</pre>
+  <div class="encart info">
+    Vérifier ensuite régulièrement le journal <code>/var/log/acgt_sauvegarde.log</code> et la présence
+    des fichiers récents dans <code>/srv/acgt_backups/</code>.
+  </div>
+
+  <h2>5. Restaurer une sauvegarde</h2>
+  <div class="encart warn">
+    La restauration <strong>écrase</strong> les données actuelles. À faire en connaissance de cause,
+    idéalement après avoir arrêté l'application.
+  </div>
+
+  <h3>5.1 Base de données</h3>
+  <pre># Décompresser puis réinjecter dans la base
+gunzip -c /srv/acgt_backups/db_2026-06-10_020000.sql.gz | \
+  docker compose -f docker-compose.db.yml exec -T db psql -U acgt acgt_recrutement</pre>
+
+  <h3>5.2 Documents</h3>
+  <pre># Restaure les fichiers dans le volume des documents
+docker run --rm -v acgt_media_data:/data -v /srv/acgt_backups:/backup alpine \
+  sh -c "tar xzf /backup/media_2026-06-10_020000.tgz -C /data"</pre>
+
+  <h2>6. Vérifier une sauvegarde</h2>
+  <pre># La base : doit contenir du SQL lisible
+gunzip -c /srv/acgt_backups/db_*.sql.gz | head -n 20
+
+# Les documents : lister le contenu de l'archive
+tar tzf /srv/acgt_backups/media_*.tgz | head</pre>
+
+  <div class="encart ok">
+    <strong>En résumé.</strong> <code>./scripts/sauvegarde.sh</code> sauvegarde <strong>à la fois</strong>
+    la base (<code>acgt_pgdata</code>) et les documents (<code>acgt_media_data</code>) dans
+    <code>/srv/acgt_backups/</code>, avec rotation. Planifiez-le en cron et copiez les sauvegardes
+    hors du serveur.
+  </div>
+
+</main>
+
+<footer>
+  ACGT — Plateforme de traitement des candidatures · Document interne (procédure de sauvegarde).
+</footer>
+</body>
+</html>

@@ -47,7 +47,7 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
       <div>
         <h1 class="text-h4 font-weight-bold text-primary">{{ dossier.poste_libelle || (dossier.nom + ' ' + dossier.prenom) }}</h1>
         <div class="text-body-2 text-medium-emphasis">
-          Dossier #{{ dossier.id }} · {{ dossier.appel_titre }} · déposé le {{ dateFr(dossier.cree_le) }}
+          Dossier {{ dossier.code || ('#' + dossier.id) }} · {{ dossier.appel_titre }} · déposé le {{ dateFr(dossier.cree_le) }}
         </div>
       </div>
       <v-spacer />
