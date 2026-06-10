@@ -4,8 +4,9 @@
 Jamais dans la CI, le déploiement ou l'entrypoint (cf. CLAUDE.md).
 
 Supprime : dossiers (et, par cascade, pièces jointes, historique, affectations,
-évaluations), fichiers physiques des pièces, liste d'éligibilité, file d'emails,
-jetons email, et les comptes candidats (non-staff).
+évaluations), fichiers physiques des pièces, réclamations d'éligibilité (et leurs
+documents + fichiers), liste d'éligibilité, file d'emails, jetons email, et les
+comptes candidats (non-staff).
 
 Conserve : les comptes staff (superusers, membres des groupes Administrateurs /
 Évaluateurs, comptes `is_staff`), les groupes/rôles, et les référentiels de
@@ -26,10 +27,12 @@ from django.db.models import Q
 from candidatures import roles
 from candidatures.models import (
     AppelCandidature,
+    DocumentReclamation,
     Dossier,
     EmailQueue,
     ListeEligibilite,
     PieceJointe,
+    ReclamationEligibilite,
 )
 
 User = get_user_model()
@@ -72,6 +75,8 @@ class Command(BaseCommand):
         plan = {
             'Dossiers (-> pieces, historique, affectations, evaluations)': Dossier.objects.count(),
             'Fichiers de pièces jointes': PieceJointe.objects.count(),
+            'Réclamations d\'éligibilité': ReclamationEligibilite.objects.count(),
+            'Documents de réclamation (fichiers)': DocumentReclamation.objects.count(),
             'File d\'emails en attente': EmailQueue.objects.count(),
             'Comptes candidats (non-staff)': candidats.count(),
         }
@@ -102,6 +107,14 @@ class Command(BaseCommand):
 
             # 2) Dossiers — cascade : pièces, historique, affectations, évaluations.
             Dossier.objects.all().delete()
+
+            # 2bis) Réclamations : fichiers des documents AVANT les lignes, puis
+            #       suppression (cascade des DocumentReclamation). À faire avant
+            #       les appels (Reclamation.appel est en PROTECT).
+            for doc in DocumentReclamation.objects.all().iterator():
+                if doc.fichier:
+                    doc.fichier.delete(save=False)
+            ReclamationEligibilite.objects.all().delete()
 
             # 3) File d'emails + jetons (import tardif : JetonEmail vit dans comptes).
             EmailQueue.objects.all().delete()

@@ -15,7 +15,8 @@ service) **en conservant les comptes du personnel** (administrateurs / évaluate
 | Dossiers de candidature | Comptes **staff** : superusers, groupes **Administrateurs** et **Évaluateurs**, comptes `is_staff` |
 | Pièces jointes (lignes **et fichiers** sur le disque) | Groupes / rôles |
 | Historique de statuts, affectations, évaluations *(cascade des dossiers)* | Référentiels : **appels** à candidature, **postes**, **types de pièce** |
-| Liste d'éligibilité *(sauf `--garder-eligibilite`)* | *(mots de passe du staff inchangés)* |
+| **Réclamations d'éligibilité** (lignes **et** documents joints + fichiers) | *(mots de passe du staff inchangés)* |
+| Liste d'éligibilité *(sauf `--garder-eligibilite`)* | |
 | File d'emails en attente, jetons email | |
 | Comptes **candidats** (non-staff) | |
 
