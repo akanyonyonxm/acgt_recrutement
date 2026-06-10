@@ -50,6 +50,21 @@ Le déploiement automatique (CI/CD GitHub Actions → `scripts/deploy.sh`, lui-m
 
 Avant d'ajouter une étape au déploiement, vérifier qu'elle est non destructrice ; en cas de doute, en faire un script manuel.
 
+### Vérification avant CHAQUE déploiement (obligatoire)
+
+À refaire systématiquement avant tout push sur `main` (qui déclenche le déploiement) :
+
+1. **Pipeline DB-safe** — aucune commande destructive dans `.github/`, `scripts/`, `backend/entrypoint.sh`, `backend/Dockerfile`, `docker-compose*.yml`. Contrôle rapide (doit ne **rien** renvoyer) :
+   ```bash
+   grep -rniE "down -v|flush|seed|--vider|ADMIN_RESET_PASSWORD|loaddata|delete\(\)|drop|truncate" \
+     .github/ scripts/ backend/entrypoint.sh backend/Dockerfile docker-compose*.yml
+   ```
+   `deploy.sh` ne fait que `git reset --hard origin/main`, `docker compose ... up -d` (jamais `down -v`), build et `image prune`. `entrypoint.sh` ne fait que `migrate` / `collectstatic` / `init_roles` / `creer_admin` (ce dernier **ne réécrase pas** le mot de passe). Les volumes `acgt_pgdata` et `acgt_media_data` ne sont jamais recréés/supprimés.
+2. **Mêmes vérifs que la CI, en local** : `manage.py check`, `manage.py makemigrations --check --dry-run` (aucune migration en attente), `npm run build` (front).
+3. **Migrations additives uniquement** — relire toute nouvelle migration : pas de `RunPython` qui supprime/écrase des données, pas de suppression de champ porteur de données en prod.
+
+Tant que ces trois points sont verts, le déploiement ne peut pas toucher aux données.
+
 ## Architecture
 
 Le système repose sur **une machine à états** : le dossier de candidature et son cycle de vie sont le cœur de tout. Comprendre `candidatures/models.py` + `views.py` + `roles.py` ensemble est nécessaire pour être productif.

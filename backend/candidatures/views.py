@@ -7,25 +7,32 @@ contrôlent le rôle de l'utilisateur.
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import AllowAny
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 
 from . import roles
 from .models import (
+    EXTENSIONS_AUTORISEES,
+    TAILLE_MAX_PIECE,
     AffectationEvaluateur,
     AppelCandidature,
+    DocumentReclamation,
     Dossier,
     Evaluation,
     ListeEligibilite,
     PieceJointe,
     Poste,
+    ReclamationEligibilite,
     TypePiece,
 )
 from .pagination import PaginationPublique, PaginationStandard
@@ -43,6 +50,8 @@ from .serializers import (
     PieceJointeSerializer,
     PieceJointeUploadSerializer,
     PosteSerializer,
+    ReclamationAdminSerializer,
+    ReclamationCreationSerializer,
     RetenuPubliqueSerializer,
     TypePieceSerializer,
 )
@@ -140,15 +149,15 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         wb = Workbook()
         ws = wb.active
         ws.title = 'Éligibles'
-        entetes = ['nom', 'postnom', 'prenom', 'type', 'annee', 'reference']
+        entetes = ['code', 'nom', 'postnom', 'prenom', 'type', 'annee', 'reference']
         ws.append(entetes)
         for cell in ws[1]:
             cell.font = Font(bold=True)
         # Ligne-guide SANS nom : ignorée à l'import (« nom » obligatoire), mais
         # montre le format attendu sans risquer d'importer une fausse personne.
         # type et reference laissés vides (facultatifs).
-        ws.append(['', 'Mukendi', 'Jean', '', 2021, ''])
-        for i, largeur in enumerate([18, 18, 18, 16, 8, 16], start=1):
+        ws.append(['ACGT-001', '', 'Mukendi', 'Jean', '', 2021, ''])
+        for i, largeur in enumerate([14, 18, 18, 18, 16, 8, 16], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
 
         reponse = HttpResponse(
@@ -231,7 +240,7 @@ class DossierViewSet(viewsets.ModelViewSet):
     pagination_class = PaginationStandard
 
     # Champs autorisés au tri (allowlist : évite l'injection de champs arbitraires).
-    TRI_AUTORISE = {'id', 'nom', 'statut', 'cree_le', 'poste__libelle', 'appel__titre'}
+    TRI_AUTORISE = {'id', 'code', 'nom', 'statut', 'cree_le', 'poste__libelle', 'appel__titre'}
 
     def get_serializer_class(self):
         # Liste = vue allégée (pas de N+1 sur pièces/complétude) ; détail et
@@ -270,9 +279,17 @@ class DossierViewSet(viewsets.ModelViewSet):
         if appel:
             qs = qs.filter(appel_id=appel)
 
-        # Recherche tolérante par nom de candidat (accents/casse/ordre indifférents).
-        for token in tokens_recherche(self.request.query_params.get('q', '')):
-            qs = qs.filter(texte_recherche__contains=token)
+        # Recherche tolérante par nom (accents/casse/ordre indifférents) OU par code.
+        q = self.request.query_params.get('q', '').strip()
+        if q:
+            tokens = tokens_recherche(q)
+            if tokens:
+                nom_q = Q()
+                for token in tokens:
+                    nom_q &= Q(texte_recherche__contains=token)
+                qs = qs.filter(nom_q | Q(code__icontains=q))
+            else:
+                qs = qs.filter(code__icontains=q)
 
         # Tri demandé par le tableau (sinon : plus récents d'abord).
         ordering = self.request.query_params.get('ordering', '')
@@ -386,15 +403,23 @@ class DossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'],
             url_path=r'pieces/(?P<piece_id>[^/.]+)/telecharger')
     def telecharger_piece(self, request, pk=None, piece_id=None):
-        """Téléchargement protégé d'une pièce (jamais d'URL publique)."""
+        """Téléchargement protégé d'une pièce (jamais d'URL publique).
+
+        `?inline=1` sert le fichier en ligne (aperçu PDF/image dans l'app) au
+        lieu de forcer le téléchargement.
+        """
         dossier = self.get_object()  # déjà scopé par rôle/propriété
         piece = get_object_or_404(PieceJointe, pk=piece_id, dossier=dossier)
         try:
             fichier = piece.fichier.open('rb')
         except FileNotFoundError as exc:
             raise Http404("Fichier introuvable.") from exc
-        reponse = FileResponse(fichier, as_attachment=True,
+        inline = request.query_params.get('inline') in ('1', 'true', 'oui')
+        reponse = FileResponse(fichier, as_attachment=not inline,
                                filename=piece.nom_original or 'piece')
+        if inline:
+            # Autorise l'affichage dans une iframe même origine (aperçu in-app).
+            reponse['X-Frame-Options'] = 'SAMEORIGIN'
         return reponse
 
     @action(detail=True, methods=['post'])
@@ -423,16 +448,22 @@ class DossierViewSet(viewsets.ModelViewSet):
         self._envoyer_accuse(dossier)
         return Response(self.get_serializer(dossier).data)
 
+    @staticmethod
+    def _code_dossier(dossier):
+        """Code du dossier pour l'affichage (emails, sujets) ; repli sur #id."""
+        return dossier.code or f'#{dossier.pk}'
+
     def _envoyer_accuse(self, dossier):
         """Accusé de réception au candidat (best-effort : n'annule pas le dépôt)."""
+        code = self._code_dossier(dossier)
         try:
             envoyer_email(
                 destinataire=dossier.email,
-                sujet=f'Accusé de réception — dossier #{dossier.pk}',
+                sujet=f'Accusé de réception — dossier {code}',
                 template='accuse_reception.html',
                 contexte={
                     'nom_candidat': f'{dossier.nom} {dossier.postnom} {dossier.prenom}'.strip(),
-                    'numero_dossier': dossier.pk,
+                    'code_dossier': code,
                     'appel': dossier.appel.titre,
                 },
             )
@@ -493,7 +524,7 @@ class DossierViewSet(viewsets.ModelViewSet):
                 template=template,
                 contexte={
                     'nom_candidat': f'{dossier.nom} {dossier.postnom} {dossier.prenom}'.strip(),
-                    'numero_dossier': dossier.pk,
+                    'code_dossier': self._code_dossier(dossier),
                     'appel': dossier.appel.titre,
                     'motif': motif,
                 },
@@ -644,3 +675,237 @@ class DossierViewSet(viewsets.ModelViewSet):
             dossier.historique.all(), many=True,
         ).data
         return Response(data)
+
+
+class ReclamationThrottle(AnonRateThrottle):
+    """Limite le formulaire public de réclamation (anti-spam)."""
+
+    scope = 'reclamation'
+
+
+class ReclamationViewSet(viewsets.ModelViewSet):
+    """Réclamations d'éligibilité (personne absente de la liste).
+
+    - **création** : publique (sans compte), throttlée + honeypot ;
+    - **liste / détail / actions / téléchargement** : réservés aux administrateurs.
+
+    À la validation, un `Dossier` est créé et conduit jusqu'à RETENU via
+    `Dossier.changer_statut()` (l'audit et l'invariant de statut sont préservés).
+    """
+
+    # Multipart pour la création (fichiers) ; JSON pour valider/rejeter.
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ReclamationCreationSerializer
+        return ReclamationAdminSerializer
+
+    def get_permissions(self):
+        return [AllowAny()] if self.action == 'create' else [IsAuthenticated()]
+
+    def get_throttles(self):
+        return [ReclamationThrottle()] if self.action == 'create' else []
+
+    def get_queryset(self):
+        # Hors création, l'accès est strictement réservé aux admins.
+        if not roles.est_admin(self.request.user):
+            return ReclamationEligibilite.objects.none()
+        qs = ReclamationEligibilite.objects.select_related(
+            'appel', 'traite_par', 'dossier_cree',
+        ).prefetch_related('documents')
+        statut = self.request.query_params.get('statut')
+        if statut:
+            qs = qs.filter(statut=statut)
+        appel = self.request.query_params.get('appel')
+        if appel:
+            qs = qs.filter(appel_id=appel)
+        q = self.request.query_params.get('q')
+        if q:
+            for token in tokens_recherche(q):
+                qs = qs.filter(texte_recherche__contains=token)
+        return qs
+
+    # Documents attendus : accusé, CV, pièce d'identité (un chacun) + diplôme(s).
+    DOCS_SIMPLES = [
+        ('accuse', DocumentReclamation.Type.ACCUSE, "l'accusé de réception"),
+        ('cv', DocumentReclamation.Type.CV, 'le CV'),
+        ('identite', DocumentReclamation.Type.IDENTITE, "la pièce d'identité"),
+    ]
+
+    def _valider_fichier(self, fichier, libelle):
+        ext = fichier.name.rsplit('.', 1)[-1].lower() if '.' in fichier.name else ''
+        if ext not in EXTENSIONS_AUTORISEES:
+            raise ValidationError(
+                {'detail': f"Format non autorisé pour {libelle} (acceptés : "
+                           f"{', '.join(EXTENSIONS_AUTORISEES)})."}
+            )
+        if fichier.size > TAILLE_MAX_PIECE:
+            limite = TAILLE_MAX_PIECE // (1024 * 1024)
+            raise ValidationError({'detail': f"Fichier trop volumineux pour {libelle} (max {limite} Mo)."})
+
+    def create(self, request, *args, **kwargs):
+        """Dépôt public : valide texte + justificatifs, réponse neutre.
+
+        Justificatifs requis : accusé de réception, CV, pièce d'identité (un
+        chacun) et au moins un diplôme (plusieurs possibles).
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Collecte et validation des fichiers.
+        simples = {}
+        for champ, type_doc, libelle in self.DOCS_SIMPLES:
+            fichier = request.FILES.get(champ)
+            if not fichier:
+                raise ValidationError({'detail': f"Veuillez joindre {libelle}."})
+            self._valider_fichier(fichier, libelle)
+            simples[type_doc] = fichier
+
+        diplomes = request.FILES.getlist('diplomes')
+        if not diplomes:
+            raise ValidationError({'detail': "Veuillez joindre au moins un diplôme (ou équivalent)."})
+        for d in diplomes:
+            self._valider_fichier(d, 'un diplôme')
+
+        with transaction.atomic():
+            reclamation = serializer.save()
+            for type_doc, fichier in simples.items():
+                DocumentReclamation.objects.create(
+                    reclamation=reclamation, type=type_doc, fichier=fichier,
+                    nom_original=fichier.name[:255], taille=fichier.size,
+                )
+            for fichier in diplomes:
+                DocumentReclamation.objects.create(
+                    reclamation=reclamation, type=DocumentReclamation.Type.DIPLOME,
+                    fichier=fichier, nom_original=fichier.name[:255], taille=fichier.size,
+                )
+
+        self._accuse_reception(reclamation)
+        return Response(
+            {'detail': "Votre réclamation a bien été enregistrée. "
+                       "Vous recevrez une réponse par email."},
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Comptes de réclamations par statut (admin), pour les KPI."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        par_statut = {
+            row['statut']: row['n']
+            for row in ReclamationEligibilite.objects.values('statut').annotate(n=Count('id'))
+        }
+        return Response({'total': sum(par_statut.values()), 'par_statut': par_statut})
+
+    @action(detail=True, methods=['get'],
+            url_path=r'documents/(?P<doc_id>[^/.]+)')
+    def telecharger_document(self, request, pk=None, doc_id=None):
+        """Téléchargement protégé d'un justificatif (admin ; jamais public)."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        reclamation = self.get_object()
+        doc = get_object_or_404(DocumentReclamation, pk=doc_id, reclamation=reclamation)
+        try:
+            fichier = doc.fichier.open('rb')
+        except FileNotFoundError as exc:
+            raise Http404("Fichier introuvable.") from exc
+        inline = request.query_params.get('inline') in ('1', 'true', 'oui')
+        reponse = FileResponse(fichier, as_attachment=not inline,
+                               filename=doc.nom_original or 'document')
+        if inline:
+            reponse['X-Frame-Options'] = 'SAMEORIGIN'
+        return reponse
+
+    @action(detail=True, methods=['post'])
+    def valider(self, request, pk=None):
+        """Valide la réclamation : crée un dossier et le conduit jusqu'à RETENU."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        reclamation = self.get_object()
+        if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
+            raise ValidationError("Cette réclamation a déjà été traitée.")
+
+        poste_id = request.data.get('poste_id')
+        poste = get_object_or_404(Poste, pk=poste_id) if poste_id else None
+
+        with transaction.atomic():
+            dossier = Dossier.objects.create(
+                appel=reclamation.appel, poste=poste, deposant=None,
+                nom=reclamation.nom, postnom=reclamation.postnom,
+                prenom=reclamation.prenom, email=reclamation.email,
+                statut=Dossier.Statut.BROUILLON,
+            )
+            # Dossier issu d'une réclamation : exempté des pièces obligatoires
+            # (l'accusé de réception tient lieu de justificatif). On enchaîne les
+            # transitions pour conserver l'audit et respecter la machine à états.
+            dossier.changer_statut(Dossier.Statut.DEPOSE, par=request.user,
+                                   motif='Validé via réclamation (accusé de réception ACGT)')
+            dossier.changer_statut(Dossier.Statut.EN_EXAMEN, par=request.user,
+                                   motif='Validé via réclamation')
+            dossier.changer_statut(Dossier.Statut.RETENU, par=request.user,
+                                   motif='Validé via réclamation')
+            reclamation.statut = ReclamationEligibilite.Statut.VALIDEE
+            reclamation.traite_par = request.user
+            reclamation.traite_le = timezone.now()
+            reclamation.dossier_cree = dossier
+            reclamation.save(update_fields=['statut', 'traite_par', 'traite_le', 'dossier_cree'])
+
+        self._notifier(reclamation, validee=True)
+        return Response(ReclamationAdminSerializer(reclamation).data)
+
+    @action(detail=True, methods=['post'])
+    def rejeter(self, request, pk=None):
+        """Rejette la réclamation (motif obligatoire)."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        reclamation = self.get_object()
+        if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
+            raise ValidationError("Cette réclamation a déjà été traitée.")
+        motif = (request.data.get('motif') or '').strip()
+        if not motif:
+            raise ValidationError({'motif': "Un motif est obligatoire."})
+
+        reclamation.statut = ReclamationEligibilite.Statut.REJETEE
+        reclamation.motif = motif
+        reclamation.traite_par = request.user
+        reclamation.traite_le = timezone.now()
+        reclamation.save(update_fields=['statut', 'motif', 'traite_par', 'traite_le'])
+
+        self._notifier(reclamation, validee=False)
+        return Response(ReclamationAdminSerializer(reclamation).data)
+
+    # --- Emails (best-effort : n'annulent jamais l'opération) ----------
+
+    def _accuse_reception(self, reclamation):
+        try:
+            envoyer_email(
+                destinataire=reclamation.email,
+                sujet='Accusé de réception de votre réclamation',
+                template='reclamation_accuse.html',
+                contexte={
+                    'nom': f'{reclamation.nom} {reclamation.postnom} {reclamation.prenom}'.strip(),
+                    'appel': reclamation.appel.titre,
+                },
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _notifier(self, reclamation, validee):
+        sujet = ('Votre réclamation a été acceptée' if validee
+                 else 'Décision concernant votre réclamation')
+        template = 'reclamation_validee.html' if validee else 'reclamation_rejetee.html'
+        try:
+            envoyer_email(
+                destinataire=reclamation.email,
+                sujet=sujet,
+                template=template,
+                contexte={
+                    'nom': f'{reclamation.nom} {reclamation.postnom} {reclamation.prenom}'.strip(),
+                    'appel': reclamation.appel.titre,
+                    'motif': reclamation.motif,
+                },
+            )
+        except Exception:  # noqa: BLE001
+            pass

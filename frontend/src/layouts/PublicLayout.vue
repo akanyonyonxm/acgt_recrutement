@@ -46,7 +46,10 @@ async function deconnexion() {
               <v-list-item prepend-icon="mdi-logout" title="Déconnexion" @click="deconnexion" />
             </v-list>
           </v-menu>
-          <RouterLink v-else :to="{ name: 'candidat-connexion' }" class="btn-connexion">Connexion</RouterLink>
+          <template v-else>
+            <RouterLink :to="{ name: 'reclamation' }" class="btn-reclamation">Réclamation</RouterLink>
+            <RouterLink :to="{ name: 'candidat-connexion' }" class="btn-connexion">Connexion</RouterLink>
+          </template>
 
           <button class="burger" @click="drawer = !drawer">☰</button>
         </div>
@@ -57,6 +60,7 @@ async function deconnexion() {
           <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" @click="drawer = false">Mes dossiers</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" @click="drawer = false">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" @click="drawer = false">Candidats retenus</RouterLink>
+          <RouterLink v-if="!auth.estConnecte" :to="{ name: 'reclamation' }" @click="drawer = false">Réclamation</RouterLink>
           <RouterLink v-if="!auth.estConnecte" :to="{ name: 'candidat-connexion' }" @click="drawer = false">Connexion</RouterLink>
           <a v-else @click="deconnexion(); drawer = false">Déconnexion</a>
         </nav>
@@ -88,6 +92,11 @@ async function deconnexion() {
   font-weight: 700; font-size: 0.9rem; text-decoration: none; transition: all 0.2s;
 }
 .btn-connexion:hover { background: #283593; }
+.btn-reclamation {
+  background: #FDD835; color: #1a237e; padding: 8px 20px; border-radius: 9999px;
+  font-weight: 700; font-size: 0.9rem; text-decoration: none; transition: all 0.2s;
+}
+.btn-reclamation:hover { background: #fbc02d; box-shadow: 0 6px 16px rgba(253,216,53,0.45); }
 .compte { display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 9999px; transition: background 0.2s; }
 .compte:hover { background: #f5f2fb; }
 .compte-mail { font-size: 0.85rem; font-weight: 600; color: #1f2933; }

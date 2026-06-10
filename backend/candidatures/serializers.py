@@ -7,10 +7,12 @@ from .models import (
     Dossier,
     Evaluation,
     HistoriqueStatut,
+    DocumentReclamation,
     ListeEligibilite,
     PieceExigee,
     PieceJointe,
     Poste,
+    ReclamationEligibilite,
     TypePiece,
 )
 
@@ -28,11 +30,11 @@ class PosteSerializer(serializers.ModelSerializer):
 
 
 class EligibilitePubliqueSerializer(serializers.ModelSerializer):
-    """Vue publique : strictement NOM · POSTNOM · PRÉNOM (rien de sensible)."""
+    """Vue publique : CODE · NOM · POSTNOM · PRÉNOM (rien de sensible)."""
 
     class Meta:
         model = ListeEligibilite
-        fields = ['id', 'nom', 'postnom', 'prenom']
+        fields = ['id', 'code', 'nom', 'postnom', 'prenom']
 
 
 class RetenuPubliqueSerializer(serializers.ModelSerializer):
@@ -53,7 +55,7 @@ class EligibiliteAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = ListeEligibilite
         fields = [
-            'id', 'nom', 'postnom', 'prenom', 'type_eligibilite',
+            'id', 'code', 'nom', 'postnom', 'prenom', 'type_eligibilite',
             'type_libelle', 'annee', 'reference', 'est_publie',
         ]
 
@@ -135,7 +137,7 @@ class DossierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dossier
         fields = [
-            'id', 'appel', 'appel_titre', 'poste', 'poste_libelle', 'deposant',
+            'id', 'code', 'appel', 'appel_titre', 'poste', 'poste_libelle', 'deposant',
             'nom', 'postnom', 'prenom', 'email', 'statut', 'statut_libelle',
             'transitions_possibles', 'ligne_eligibilite', 'pieces',
             'pieces_manquantes', 'est_complet', 'modifiable', 'cree_le', 'modifie_le',
@@ -173,7 +175,7 @@ class DossierListeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dossier
         fields = [
-            'id', 'appel', 'appel_titre', 'poste_libelle', 'nom', 'postnom', 'prenom',
+            'id', 'code', 'appel', 'appel_titre', 'poste_libelle', 'nom', 'postnom', 'prenom',
             'statut', 'statut_libelle', 'cree_le',
         ]
 
@@ -223,4 +225,64 @@ class AppelCandidatureSerializer(serializers.ModelSerializer):
             'date_ouverture', 'date_cloture', 'liste_retenus_publiee',
             'candidature_unique', 'pieces_exigees', 'nb_dossiers',
             'cree_le', 'modifie_le',
+        ]
+
+
+class ReclamationCreationSerializer(serializers.ModelSerializer):
+    """Champs texte d'une réclamation publique. Les fichiers (accusé, CV, pièce
+    d'identité, diplômes) sont validés et créés par la vue (multi-fichiers)."""
+
+    # Champ honeypot anti-spam : doit rester vide (les bots le remplissent).
+    site_web = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    # Message obligatoire (le modèle l'autorise vide, on l'exige à la saisie).
+    message = serializers.CharField(required=True, allow_blank=False)
+
+    class Meta:
+        model = ReclamationEligibilite
+        fields = [
+            'id', 'appel', 'nom', 'postnom', 'prenom', 'email', 'telephone',
+            'message', 'site_web',
+        ]
+
+    def validate_appel(self, appel):
+        if appel.statut != AppelCandidature.Statut.PUBLIE:
+            raise serializers.ValidationError(
+                "Cet appel à candidature n'est pas ouvert."
+            )
+        return appel
+
+    def validate_site_web(self, valeur):
+        if valeur:
+            raise serializers.ValidationError("Requête invalide.")
+        return valeur
+
+    def create(self, validated_data):
+        # Le honeypot n'est pas un champ du modèle : on le retire avant création.
+        validated_data.pop('site_web', None)
+        return super().create(validated_data)
+
+
+class DocumentReclamationSerializer(serializers.ModelSerializer):
+    type_libelle = serializers.CharField(source='get_type_display', read_only=True)
+
+    class Meta:
+        model = DocumentReclamation
+        fields = ['id', 'type', 'type_libelle', 'nom_original', 'taille']
+
+
+class ReclamationAdminSerializer(serializers.ModelSerializer):
+    """Vue back-office d'une réclamation (sans exposer les URL fichier)."""
+
+    statut_libelle = serializers.CharField(source='get_statut_display', read_only=True)
+    appel_titre = serializers.CharField(source='appel.titre', read_only=True)
+    traite_par = serializers.StringRelatedField(read_only=True)
+    dossier_cree_id = serializers.IntegerField(source='dossier_cree.id', read_only=True, default=None)
+    documents = DocumentReclamationSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ReclamationEligibilite
+        fields = [
+            'id', 'appel', 'appel_titre', 'nom', 'postnom', 'prenom', 'email',
+            'telephone', 'message', 'documents', 'statut', 'statut_libelle',
+            'motif', 'traite_par', 'traite_le', 'dossier_cree_id', 'cree_le',
         ]

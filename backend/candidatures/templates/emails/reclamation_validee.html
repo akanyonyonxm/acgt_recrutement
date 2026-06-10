@@ -1,0 +1,14 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour {{ nom }},</p>
+  <p>
+    Après vérification de l'accusé de réception que vous avez fourni, votre
+    <strong>réclamation a été acceptée</strong> pour l'appel à candidature
+    <strong>{{ appel }}</strong>.
+  </p>
+  <p>
+    Vous figurez désormais parmi les personnes <strong>retenues</strong>. Les
+    modalités pour la suite (tests, convocation) vous seront communiquées ;
+    surveillez vos emails et la liste publique des personnes retenues.
+  </p>
+{% endblock %}

@@ -72,7 +72,7 @@ onMounted(charger)
           </v-avatar>
           <div class="flex-grow-1" style="min-width: 200px">
             <div class="d-flex align-center ga-3 mb-1">
-              <span class="ref">DOSSIER #{{ reference(d) }}</span>
+              <span class="ref">DOSSIER {{ d.code || ('#' + reference(d)) }}</span>
               <StatutBadge :statut="d.statut" :libelle="d.statut_libelle" />
             </div>
             <div class="text-h6 font-weight-bold" style="line-height:1.2">

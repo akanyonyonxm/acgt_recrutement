@@ -1,0 +1,15 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour {{ nom }},</p>
+  <p>
+    Après examen, votre <strong>réclamation</strong> concernant l'appel à
+    candidature <strong>{{ appel }}</strong> n'a pas pu être retenue.
+  </p>
+  {% if motif %}
+    <p><strong>Motif :</strong> {{ motif }}</p>
+  {% endif %}
+  <p>
+    Si vous estimez qu'il s'agit d'une erreur, vous pouvez vous rapprocher des
+    services de l'ACGT muni de vos justificatifs.
+  </p>
+{% endblock %}

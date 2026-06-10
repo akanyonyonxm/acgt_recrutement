@@ -186,6 +186,10 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 25,
+    # Limite anti-abus du formulaire public de réclamation (ouvert sans compte).
+    'DEFAULT_THROTTLE_RATES': {
+        'reclamation': '5/hour',
+    },
 }
 
 # CORS : autorise le front Vue (Vite) en développement.

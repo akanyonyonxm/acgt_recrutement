@@ -11,6 +11,7 @@ const q = ref('')
 const page = ref(1)
 
 const ENTETES = [
+  { title: 'Code', key: 'code' },
   { title: 'Nom', key: 'nom' },
   { title: 'Postnom', key: 'postnom' },
   { title: 'Prénom', key: 'prenom' },

@@ -107,6 +107,18 @@ const ICONE_PIECE = {
   diplome: 'mdi-school', attestation_stage: 'mdi-certificate',
 }
 const iconePiece = (code) => ICONE_PIECE[code] || 'mdi-file-document'
+
+// Aperçu des pièces (PDF/image) avec navigation.
+const apercu = ref({ show: false, index: 0 })
+const pieceCourante = computed(() => dossier.value?.pieces?.[apercu.value.index] || null)
+const estImage = (p) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(p?.nom_original || '')
+const urlPiece = (p, inline) =>
+  `/api/dossiers/${id}/pieces/${p.id}/telecharger/${inline ? '?inline=1' : ''}`
+function ouvrirApercu(i) { apercu.value = { show: true, index: i } }
+function naviguer(d) {
+  const n = dossier.value.pieces.length
+  apercu.value.index = (apercu.value.index + d + n) % n
+}
 const dateFr = (d) => new Date(d).toLocaleString('fr-FR')
 const kos = (o) => `${Math.round(o / 1024)} Ko`
 onMounted(charger)
@@ -123,7 +135,7 @@ onMounted(charger)
           <v-icon color="primary" size="30">mdi-account</v-icon>
         </v-avatar>
         <div class="flex-grow-1" style="min-width: 200px">
-          <div class="ref-dossier">DOSSIER #{{ dossier.id }}</div>
+          <div class="ref-dossier">DOSSIER {{ dossier.code || ('#' + dossier.id) }}</div>
           <h1 class="nom-candidat">{{ dossier.nom }} {{ dossier.postnom }} {{ dossier.prenom }}</h1>
           <div class="meta-dossier">
             <v-icon size="14">mdi-bullhorn-outline</v-icon>{{ dossier.appel_titre }}
@@ -143,6 +155,10 @@ onMounted(charger)
           <v-card-title class="text-subtitle-1 font-weight-bold">Informations</v-card-title>
           <v-divider />
           <div class="pa-4">
+            <div class="info-tuile">
+              <v-icon color="primary" class="mr-3">mdi-identifier</v-icon>
+              <div><div class="info-label">Code du dossier</div><div class="info-valeur">{{ dossier.code || '—' }}</div></div>
+            </div>
             <div class="info-tuile">
               <v-icon color="primary" class="mr-3">mdi-bullhorn-outline</v-icon>
               <div><div class="info-label">Appel</div><div class="info-valeur">{{ dossier.appel_titre }}</div></div>
@@ -174,17 +190,20 @@ onMounted(charger)
           </v-card-title>
           <v-divider />
           <v-list>
-            <v-list-item v-for="p in dossier.pieces" :key="p.id"
+            <v-list-item v-for="(p, i) in dossier.pieces" :key="p.id"
                          :title="p.type_piece.libelle"
-                         :subtitle="`${kos(p.taille)} · ${p.nom_original}`">
+                         :subtitle="`${kos(p.taille)} · ${p.nom_original}`"
+                         @click="ouvrirApercu(i)" style="cursor:pointer">
               <template #prepend>
                 <v-avatar color="primary" variant="tonal" rounded="lg" size="40">
                   <v-icon>{{ iconePiece(p.type_piece.code) }}</v-icon>
                 </v-avatar>
               </template>
               <template #append>
-                <v-btn icon="mdi-download" variant="tonal" color="primary" size="small"
-                       :href="`/api/dossiers/${dossier.id}/pieces/${p.id}/telecharger/`" target="_blank" />
+                <v-btn icon="mdi-eye-outline" variant="text" color="primary" size="small"
+                       @click.stop="ouvrirApercu(i)" />
+                <v-btn icon="mdi-download" variant="text" color="primary" size="small"
+                       :href="`/api/dossiers/${dossier.id}/pieces/${p.id}/telecharger/`" target="_blank" @click.stop />
               </template>
             </v-list-item>
             <v-list-item v-if="!dossier.pieces.length" class="text-medium-emphasis">Aucune pièce.</v-list-item>
@@ -212,7 +231,7 @@ onMounted(charger)
                   <strong>{{ r.nom }}</strong> {{ r.postnom }} {{ r.prenom }}
                 </v-list-item-title>
                 <v-list-item-subtitle>
-                  {{ r.type_libelle }} {{ r.annee || '' }} · réf {{ r.reference || '—' }}
+                  Code : {{ r.code || '—' }}
                 </v-list-item-subtitle>
               </v-list-item>
               <v-list-item v-if="!resultats.length" class="text-medium-emphasis">
@@ -385,6 +404,32 @@ onMounted(charger)
       </v-card>
     </v-dialog>
 
+    <!-- Aperçu des pièces (PDF / image) avec navigation -->
+    <v-dialog v-model="apercu.show" max-width="980" scrollable>
+      <v-card v-if="pieceCourante" flat>
+        <v-card-title class="d-flex align-center ga-2 py-3">
+          <v-icon color="primary">{{ iconePiece(pieceCourante.type_piece.code) }}</v-icon>
+          <div class="flex-grow-1" style="min-width:0">
+            <div class="font-weight-bold">{{ pieceCourante.type_piece.libelle }}</div>
+            <div class="text-caption text-medium-emphasis text-truncate">{{ pieceCourante.nom_original }}</div>
+          </div>
+          <v-chip size="small" variant="tonal">{{ apercu.index + 1 }} / {{ dossier.pieces.length }}</v-chip>
+          <v-btn icon="mdi-download" variant="text" size="small"
+                 :href="urlPiece(pieceCourante, false)" target="_blank" />
+          <v-btn icon="mdi-close" variant="text" size="small" @click="apercu.show = false" />
+        </v-card-title>
+        <v-divider />
+        <div class="apercu-zone">
+          <v-btn icon="mdi-chevron-left" variant="elevated" class="nav-btn nav-gauche"
+                 :disabled="dossier.pieces.length < 2" @click="naviguer(-1)" />
+          <img v-if="estImage(pieceCourante)" :src="urlPiece(pieceCourante, true)" class="apercu-img" alt="" />
+          <iframe v-else :src="urlPiece(pieceCourante, true)" class="apercu-iframe" title="aperçu" />
+          <v-btn icon="mdi-chevron-right" variant="elevated" class="nav-btn nav-droite"
+                 :disabled="dossier.pieces.length < 2" @click="naviguer(1)" />
+        </div>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="snack.show" :color="snack.color" timeout="3000">{{ snack.text }}</v-snackbar>
   </div>
 </template>
@@ -413,4 +458,12 @@ onMounted(charger)
   color: #6b7785; font-weight: 600;
 }
 .info-valeur { font-size: 14px; font-weight: 600; color: #1f2933; }
+
+/* Aperçu des pièces */
+.apercu-zone { position: relative; background: #2b2b2b; display: flex; align-items: center; justify-content: center; height: 72vh; overflow: auto; }
+.apercu-iframe { width: 100%; height: 100%; border: none; background: #fff; }
+.apercu-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.nav-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; opacity: 0.92; }
+.nav-gauche { left: 12px; }
+.nav-droite { right: 12px; }
 </style>

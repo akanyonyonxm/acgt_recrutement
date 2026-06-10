@@ -5,6 +5,7 @@ from .views import (
     DossierViewSet,
     EligibiliteViewSet,
     PosteViewSet,
+    ReclamationViewSet,
     RetenusViewSet,
     TypePieceViewSet,
 )
@@ -16,5 +17,6 @@ router.register('eligibilite', EligibiliteViewSet, basename='eligibilite')
 router.register('retenus', RetenusViewSet, basename='retenu')
 router.register('appels', AppelCandidatureViewSet, basename='appel')
 router.register('dossiers', DossierViewSet, basename='dossier')
+router.register('reclamations', ReclamationViewSet, basename='reclamation')
 
 urlpatterns = router.urls

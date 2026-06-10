@@ -45,6 +45,14 @@ function aller(p) {
   page.value = p
   charger()
 }
+
+// Calendrier du processus (campagne en cours).
+const CALENDRIER = [
+  { label: 'Date limite de soumission', date: '14 juin 2026 à 12h00 (TU+1)', icon: 'mdi-clock-alert-outline', fort: true },
+  { label: 'Publication de la liste provisoire', date: '18 juin 2026', icon: 'mdi-format-list-checks' },
+  { label: 'Délai de recours', date: 'Du 18 au 20 juin 2026', icon: 'mdi-gavel' },
+  { label: 'Liste définitive des retenus (concours d\'embauche)', date: '24 juin 2026', icon: 'mdi-trophy-outline' },
+]
 </script>
 
 <template>
@@ -70,8 +78,10 @@ function aller(p) {
       <div class="hero-inner">
         <h1 class="hero-titre">Candidats éligibles</h1>
         <p class="hero-sous">
-          Consultez la liste officielle des personnes autorisées à postuler pour les
-          grands chantiers de l'infrastructure nationale. Votre avenir commence ici.
+          Consultez la liste officielle des personnes autorisées à postuler.
+          <strong>Seuls les candidats dont les noms apparaissent sur la liste publiée
+          en ligne sont autorisés à soumettre leur dossier
+          <mark class="surbrillance">au plus tard le 14 juin 2026 à 12h00 (TU+1)</mark>.</strong>
         </p>
         <RouterLink :to="{ name: 'mes-dossiers' }" class="hero-cta">
           POSTULER EN LIGNE <span class="fleche">→</span>
@@ -90,21 +100,25 @@ function aller(p) {
       </div>
 
       <!-- Tableau -->
+      <h2 class="liste-titre">Liste des candidats éligibles</h2>
       <div class="tableau-carte">
         <div class="tableau-scroll">
           <table class="tableau">
             <thead>
               <tr>
-                <th class="num">#</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>STATUT</th>
+                <th>CODE</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th class="ar"></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(e, i) in items" :key="e.id" :class="{ zebra: i % 2 }">
-                <td class="num">{{ debut + i }}</td>
+                <td class="code">{{ e.code || '—' }}</td>
                 <td class="nom">{{ e.nom }}</td>
                 <td class="muted">{{ e.postnom }}</td>
                 <td class="muted">{{ e.prenom }}</td>
-                <td><span class="chip-elig">Éligible</span></td>
+                <td class="ar">
+                  <RouterLink :to="{ name: 'postuler', query: { code: e.code, nom: e.nom, postnom: e.postnom, prenom: e.prenom } }"
+                              class="btn-postuler">Postuler</RouterLink>
+                </td>
               </tr>
               <tr v-if="!loading && !items.length">
                 <td colspan="5" class="vide">Aucune personne ne correspond à cette recherche.</td>
@@ -125,6 +139,28 @@ function aller(p) {
         </div>
       </div>
 
+      <!-- Calendrier du processus -->
+      <section class="calendrier">
+        <h2 class="cal-titre">Calendrier du processus</h2>
+        <div class="cal-grid">
+          <div v-for="(e, i) in CALENDRIER" :key="i" class="cal-item" :class="{ fort: e.fort }">
+            <v-icon :icon="e.icon" size="26" class="cal-ic" />
+            <div class="cal-label">{{ e.label }}</div>
+            <div class="cal-date">{{ e.date }}</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Réclamation : personne absente de la liste -->
+      <div class="aide">
+        <h2>Vous ne trouvez pas votre nom ?</h2>
+        <p>
+          Si vous avez déposé un dossier à l'ACGT et que votre nom n'apparaît pas,
+          vous pouvez faire une réclamation en joignant votre accusé de réception.
+        </p>
+        <RouterLink :to="{ name: 'reclamation' }" class="aide-btn">Faire une réclamation</RouterLink>
+      </div>
+
     </div>
   </div>
 </template>
@@ -135,7 +171,8 @@ function aller(p) {
 .hero-courbes { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
 .hero-inner { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; text-align: center; }
 .hero-titre { color: #fff; font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
-.hero-sous { color: #fff; opacity: 0.9; font-size: 1.05rem; line-height: 1.6; max-width: 560px; margin: 16px auto 24px; }
+.hero-sous { color: #fff; opacity: 0.9; font-size: 1.05rem; line-height: 1.6; max-width: 660px; margin: 16px auto 24px; }
+.surbrillance { background: #E53935; color: #fff; padding: 1px 8px; border-radius: 6px; font-weight: 800; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .hero-cta { display: inline-flex; align-items: center; gap: 8px; background: #FDD835; color: #1a237e;
   padding: 15px 34px; border-radius: 12px; font-weight: 700; text-decoration: none; transition: all 0.2s; }
 .hero-cta:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.25); transform: translateY(-1px); }
@@ -154,6 +191,7 @@ function aller(p) {
 .pastille { background: #d3e1f6; color: #566475; padding: 8px 18px; border-radius: 9999px; font-size: 0.9rem; }
 
 /* Tableau */
+.liste-titre { color: #1a237e; font-size: 1.4rem; font-weight: 700; margin: 28px 0 12px; }
 .tableau-carte { background: #fff; border: 2px solid #29b6f6; border-radius: 18px; overflow: hidden; margin-top: 24px; box-shadow: 0 6px 20px rgba(41,182,246,0.12); }
 .tableau-scroll { overflow-x: auto; }
 .tableau { width: 100%; border-collapse: collapse; }
@@ -163,9 +201,12 @@ function aller(p) {
 .tableau tbody tr:hover { background: #f5f2fb; }
 .tableau tr.zebra { background: #fcfbff; }
 .num { width: 64px; color: #767683; font-weight: 600; }
+.code { font-weight: 700; color: #1a237e; white-space: nowrap; }
 .nom { font-weight: 600; color: #1b1b21; }
 .muted { color: #525f71; }
-.chip-elig { background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 9999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.ar { text-align: right; }
+.btn-postuler { display: inline-flex; align-items: center; background: #FDD835; color: #1a237e; padding: 7px 18px; border-radius: 9999px; font-size: 0.8rem; font-weight: 700; text-decoration: none; transition: background 0.15s, box-shadow 0.15s; }
+.btn-postuler:hover { background: #fbc02d; box-shadow: 0 4px 12px rgba(253,216,53,0.5); }
 .vide { text-align: center; color: #767683; padding: 32px; }
 
 /* Pagination */
@@ -177,4 +218,26 @@ function aller(p) {
 .rond.courant { background: #1a237e; color: #fff; border-color: #1a237e; font-weight: 700; }
 .rond.ellipse { border: none; background: none; cursor: default; }
 .rond:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Calendrier du processus */
+.calendrier { padding: 48px 0 8px; }
+.cal-titre { text-align: center; color: #1a237e; font-size: 1.5rem; font-weight: 700; margin-bottom: 24px; }
+.cal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+@media (max-width: 900px) { .cal-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 540px) { .cal-grid { grid-template-columns: 1fr; } }
+.cal-item { background: #fff; border: 1px solid #e2e6ea; border-top: 4px solid #1a237e; border-radius: 14px; padding: 20px 18px; text-align: center; transition: box-shadow 0.2s, transform 0.2s; }
+.cal-item:hover { box-shadow: 0 8px 22px rgba(26,35,126,0.10); transform: translateY(-2px); }
+.cal-item.fort { border-top-color: #D32F2F; background: #fff7f7; }
+.cal-ic { color: #1a237e; margin-bottom: 8px; }
+.cal-item.fort .cal-ic { color: #D32F2F; }
+.cal-label { font-size: 0.82rem; color: #525f71; line-height: 1.3; min-height: 34px; }
+.cal-date { font-size: 1rem; font-weight: 800; color: #1b1b21; margin-top: 8px; }
+.cal-item.fort .cal-date { color: #D32F2F; }
+
+/* Réclamation */
+.aide { text-align: center; padding: 48px 24px 8px; }
+.aide h2 { color: #1a237e; font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; }
+.aide p { color: #525f71; max-width: 600px; margin: 0 auto 22px; line-height: 1.6; }
+.aide-btn { display: inline-block; background: #1a237e; color: #fff; padding: 12px 26px; border-radius: 12px; font-weight: 700; text-decoration: none; transition: box-shadow 0.2s, background 0.2s; }
+.aide-btn:hover { background: #283593; box-shadow: 0 8px 20px rgba(26,35,126,0.3); }
 </style>

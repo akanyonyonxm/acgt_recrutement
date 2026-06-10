@@ -31,6 +31,12 @@ def chemin_piece_jointe(instance, nom_fichier):
     return f'dossiers/{instance.dossier_id}/{uuid.uuid4().hex}{ext}'
 
 
+def chemin_doc_reclamation(instance, nom_fichier):
+    """Range un document de réclamation sous reclamations/<uuid>.<ext> (nom non devinable)."""
+    ext = Path(nom_fichier).suffix.lower()
+    return f'reclamations/{uuid.uuid4().hex}{ext}'
+
+
 class AppelCandidature(models.Model):
     """Une campagne de recrutement (AAC)."""
 
@@ -122,6 +128,10 @@ class Dossier(models.Model):
         null=True, blank=True,
         verbose_name='déposant',
     )
+
+    # Code du dossier = code public de la liste d'éligibilité (4 caractères).
+    # Récupéré au clic sur « Postuler » depuis la liste, ou saisi à la main.
+    code = models.CharField('code du dossier', max_length=50, blank=True, db_index=True)
 
     # Identité saisie librement par le déposant.
     nom = models.CharField('nom', max_length=100)
@@ -405,6 +415,8 @@ class ListeEligibilite(models.Model):
         blank=True,
     )
     annee = models.PositiveIntegerField('année', null=True, blank=True)
+    # Code/numéro public de la personne (importé du fichier, affiché sur la liste).
+    code = models.CharField('code', max_length=50, blank=True, db_index=True)
     reference = models.CharField('référence interne', max_length=100, blank=True)
 
     # Forme normalisée (sans accents, minuscules) de « nom postnom prénom »,
@@ -565,3 +577,113 @@ class EmailQueue(models.Model):
 
     def __str__(self):
         return f'{self.destinataire} — {self.get_statut_display()}'
+
+
+class ReclamationEligibilite(models.Model):
+    """Réclamation d'une personne absente de la liste d'éligibilité.
+
+    Flux : une personne qui ne trouve pas son nom dépose une réclamation via un
+    formulaire public, en joignant l'accusé de réception remis par l'ACGT lors du
+    dépôt physique de son dossier. L'admin consulte l'accusé puis VALIDE ou
+    REJETTE. À la validation, un `Dossier` est créé et conduit jusqu'à RETENU via
+    `Dossier.changer_statut()` (l'invariant de la machine à états est respecté).
+
+    L'accusé est stocké dans MEDIA_ROOT privé (nom UUID) ; jamais d'URL publique.
+    """
+
+    class Statut(models.TextChoices):
+        EN_ATTENTE = 'en_attente', 'En attente'
+        VALIDEE = 'validee', 'Validée'
+        REJETEE = 'rejetee', 'Rejetée'
+
+    appel = models.ForeignKey(
+        AppelCandidature,
+        on_delete=models.PROTECT,
+        related_name='reclamations',
+        verbose_name='appel à candidature',
+    )
+    # Identité revendiquée (saisie libre, comme pour un dossier).
+    nom = models.CharField('nom', max_length=100)
+    postnom = models.CharField('postnom', max_length=100, blank=True)
+    prenom = models.CharField('prénom', max_length=100)
+    email = models.EmailField('email de contact')
+    telephone = models.CharField('téléphone', max_length=40, blank=True)
+    message = models.TextField('message', blank=True)
+
+    statut = models.CharField(
+        'statut', max_length=20,
+        choices=Statut.choices, default=Statut.EN_ATTENTE, db_index=True,
+    )
+    motif = models.TextField('motif de la décision', blank=True)
+    traite_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reclamations_traitees',
+        verbose_name='traité par',
+    )
+    traite_le = models.DateTimeField('traité le', null=True, blank=True)
+    # Dossier créé à la validation (traçabilité du lien réclamation -> retenu).
+    dossier_cree = models.ForeignKey(
+        Dossier,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reclamation_origine',
+        verbose_name='dossier créé',
+    )
+
+    texte_recherche = models.CharField(
+        'texte de recherche', max_length=320, editable=False, db_index=True, default='',
+    )
+    cree_le = models.DateTimeField('reçue le', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'réclamation d\'éligibilité'
+        verbose_name_plural = 'réclamations d\'éligibilité'
+        ordering = ['-cree_le']
+
+    def save(self, *args, **kwargs):
+        from .utils import normaliser_texte
+        self.texte_recherche = normaliser_texte(f'{self.nom} {self.postnom} {self.prenom}')
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Réclamation #{self.pk} — {self.nom} {self.prenom} ({self.get_statut_display()})'
+
+
+class DocumentReclamation(models.Model):
+    """Justificatif joint à une réclamation (accusé, CV, identité, diplôme…).
+
+    Stocké dans MEDIA_ROOT privé (nom UUID) ; jamais d'URL publique. Le diplôme
+    peut être fourni en plusieurs exemplaires.
+    """
+
+    class Type(models.TextChoices):
+        ACCUSE = 'accuse', 'Accusé de réception'
+        CV = 'cv', 'CV'
+        IDENTITE = 'identite', "Pièce d'identité"
+        DIPLOME = 'diplome', 'Diplôme'
+
+    reclamation = models.ForeignKey(
+        ReclamationEligibilite,
+        on_delete=models.CASCADE,
+        related_name='documents',
+        verbose_name='réclamation',
+    )
+    type = models.CharField('type', max_length=20, choices=Type.choices)
+    fichier = models.FileField(
+        'fichier',
+        upload_to=chemin_doc_reclamation,
+        validators=[FileExtensionValidator(EXTENSIONS_AUTORISEES)],
+    )
+    nom_original = models.CharField("nom d'origine", max_length=255, blank=True)
+    taille = models.PositiveIntegerField('taille (octets)', default=0)
+    cree_le = models.DateTimeField('déposé le', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'document de réclamation'
+        verbose_name_plural = 'documents de réclamation'
+        ordering = ['type', 'cree_le']
+
+    def __str__(self):
+        return f'{self.get_type_display()} — réclamation #{self.reclamation_id}'

@@ -22,6 +22,11 @@ const routes = [
         name: 'retenus-public',
         component: () => import('../views/public/RetenusPublic.vue'),
       },
+      {
+        path: 'reclamation',
+        name: 'reclamation',
+        component: () => import('../views/public/Reclamation.vue'),
+      },
     ],
   },
   {
@@ -81,6 +86,11 @@ const routes = [
         path: 'eligibilite',
         name: 'eligibilite',
         component: () => import('../views/admin/Eligibilite.vue'),
+      },
+      {
+        path: 'reclamations',
+        name: 'reclamations',
+        component: () => import('../views/admin/Reclamations.vue'),
       },
       {
         path: 'appels',

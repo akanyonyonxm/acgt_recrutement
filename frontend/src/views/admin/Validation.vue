@@ -26,7 +26,7 @@ const KPIS = [
 const compte = (key) => (key === '' ? stats.value.total : stats.value.par_statut[key] || 0)
 
 const ENTETES = [
-  { title: '#', key: 'id', width: 70 },
+  { title: 'Code', key: 'code', width: 110 },
   { title: 'Candidat', key: 'candidat', sortable: true },
   { title: 'Poste', key: 'poste_libelle' },
   { title: 'Appel', key: 'appel_titre' },
@@ -37,7 +37,7 @@ const ENTETES = [
 
 // Mappe la clé de colonne triée -> champ de tri côté API (allowlist backend).
 const TRI = {
-  id: 'id', candidat: 'nom', poste_libelle: 'poste__libelle',
+  code: 'code', candidat: 'nom', poste_libelle: 'poste__libelle',
   appel_titre: 'appel__titre', statut: 'statut', cree_le: 'cree_le',
 }
 
@@ -129,6 +129,9 @@ onMounted(async () => {
         loading-text="Chargement…"
         class="tableau-admin"
       >
+        <template #item.code="{ item }">
+          <span class="font-weight-bold text-primary">{{ item.code || ('#' + item.id) }}</span>
+        </template>
         <template #item.candidat="{ item }">
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
         </template>
