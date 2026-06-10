@@ -1,0 +1,13 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Bonjour {{ nom }},</p>
+  <p>
+    Nous avons bien reçu votre <strong>réclamation</strong> concernant l'appel
+    à candidature <strong>{{ appel }}</strong>, accompagnée de votre accusé de
+    réception déposé à l'ACGT.
+  </p>
+  <p>
+    Nos services vont l'examiner. Vous recevrez une réponse par email dès qu'une
+    décision aura été prise. Inutile de soumettre une nouvelle réclamation.
+  </p>
+{% endblock %}

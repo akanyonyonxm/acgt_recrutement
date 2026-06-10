@@ -125,6 +125,16 @@ function aller(p) {
         </div>
       </div>
 
+      <!-- Réclamation : personne absente de la liste -->
+      <div class="aide">
+        <h2>Vous ne trouvez pas votre nom ?</h2>
+        <p>
+          Si vous avez déposé un dossier à l'ACGT et que votre nom n'apparaît pas,
+          vous pouvez faire une réclamation en joignant votre accusé de réception.
+        </p>
+        <RouterLink :to="{ name: 'reclamation' }" class="aide-btn">Faire une réclamation</RouterLink>
+      </div>
+
     </div>
   </div>
 </template>
@@ -177,4 +187,11 @@ function aller(p) {
 .rond.courant { background: #1a237e; color: #fff; border-color: #1a237e; font-weight: 700; }
 .rond.ellipse { border: none; background: none; cursor: default; }
 .rond:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Réclamation */
+.aide { text-align: center; padding: 48px 24px 8px; }
+.aide h2 { color: #1a237e; font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; }
+.aide p { color: #525f71; max-width: 600px; margin: 0 auto 22px; line-height: 1.6; }
+.aide-btn { display: inline-block; background: #1a237e; color: #fff; padding: 12px 26px; border-radius: 12px; font-weight: 700; text-decoration: none; transition: box-shadow 0.2s, background 0.2s; }
+.aide-btn:hover { background: #283593; box-shadow: 0 8px 20px rgba(26,35,126,0.3); }
 </style>
