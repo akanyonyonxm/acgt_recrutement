@@ -23,6 +23,11 @@ const routes = [
         component: () => import('../views/public/RetenusPublic.vue'),
       },
       {
+        path: 'guide',
+        name: 'guide',
+        component: () => import('../views/public/Guide.vue'),
+      },
+      {
         path: 'reclamation',
         name: 'reclamation',
         component: () => import('../views/public/Reclamation.vue'),

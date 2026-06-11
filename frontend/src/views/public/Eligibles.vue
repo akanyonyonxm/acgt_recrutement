@@ -78,14 +78,20 @@ const CALENDRIER = [
       <div class="hero-inner">
         <h1 class="hero-titre">Candidats éligibles</h1>
         <p class="hero-sous">
-          Consultez la liste officielle des personnes autorisées à postuler.
-          <strong>Seuls les candidats dont les noms apparaissent sur la liste publiée
-          en ligne sont autorisés à soumettre leur dossier
+          Consultez la liste officielle des personnes autorisées à postuler
+          <mark class="surbrillance-profils">(Ingénieur civil, Ingénieur électromécanicien, Ingénieur BTP,
+          Ingénieur géomètre-topographe, Architecte, Urbaniste, Environnementaliste)</mark>.
+          <strong>Seuls les candidats dont les noms apparaissent sur la liste publiée sont autorisés à soumettre leur dossier
           <mark class="surbrillance">au plus tard le 14 juin 2026 à 12h00 (TU+1)</mark>.</strong>
         </p>
-        <RouterLink :to="{ name: 'mes-dossiers' }" class="hero-cta">
-          POSTULER EN LIGNE <span class="fleche">→</span>
-        </RouterLink>
+        <div class="hero-actions">
+          <RouterLink :to="{ name: 'mes-dossiers' }" class="hero-cta">
+            POSTULER EN LIGNE <span class="fleche">→</span>
+          </RouterLink>
+          <RouterLink :to="{ name: 'guide' }" class="hero-guide">
+            <span class="hero-guide-ic">📖</span> Besoin d'aide ? Voir le guide « Comment postuler ? »
+          </RouterLink>
+        </div>
       </div>
     </section>
 
@@ -121,7 +127,15 @@ const CALENDRIER = [
                 </td>
               </tr>
               <tr v-if="!loading && !items.length">
-                <td colspan="5" class="vide">Aucune personne ne correspond à cette recherche.</td>
+                <td colspan="5" class="vide">
+                  Aucune personne ne correspond à cette recherche.
+                  <strong class="vide-aide">
+                    Essayez votre nom de famille seul, ou votre postnom, ou votre prénom. <br/>
+                    Si vous ne vous trouvez toujours pas et que vous avez déposé un dossier ou vous avez effectué un stage à l'ACGT, vous pouvez faire une réclamation en joignant
+                    votre accusé de réception ou la lettre de stage.
+                  </strong>
+                  <RouterLink :to="{ name: 'reclamation' }" class="vide-btn">Faire une réclamation</RouterLink>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -151,16 +165,6 @@ const CALENDRIER = [
         </div>
       </section>
 
-      <!-- Réclamation : personne absente de la liste -->
-      <div class="aide">
-        <h2>Vous ne trouvez pas votre nom ?</h2>
-        <p>
-          Si vous avez déposé un dossier à l'ACGT et que votre nom n'apparaît pas,
-          vous pouvez faire une réclamation en joignant votre accusé de réception.
-        </p>
-        <RouterLink :to="{ name: 'reclamation' }" class="aide-btn">Faire une réclamation</RouterLink>
-      </div>
-
     </div>
   </div>
 </template>
@@ -173,6 +177,13 @@ const CALENDRIER = [
 .hero-titre { color: #fff; font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
 .hero-sous { color: #fff; opacity: 0.9; font-size: 1.05rem; line-height: 1.6; max-width: 660px; margin: 16px auto 24px; }
 .surbrillance { background: #E53935; color: #fff; padding: 1px 8px; border-radius: 6px; font-weight: 800; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.surbrillance-profils { background: #fff; color: #1a237e; padding: 1px 7px; border-radius: 6px; font-weight: 700; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.hero-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.hero-guide { display: inline-flex; align-items: center; gap: 8px; padding: 9px 20px;
+  border-radius: 9999px; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.30);
+  color: #fff; font-size: 0.9rem; font-weight: 600; text-decoration: none; transition: background 0.2s, border-color 0.2s; }
+.hero-guide:hover { background: rgba(253,216,53,0.18); border-color: #FDD835; }
+.hero-guide-ic { font-size: 1.05rem; }
 .hero-cta { display: inline-flex; align-items: center; gap: 8px; background: #FDD835; color: #1a237e;
   padding: 15px 34px; border-radius: 12px; font-weight: 700; text-decoration: none; transition: all 0.2s; }
 .hero-cta:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.25); transform: translateY(-1px); }
@@ -208,6 +219,9 @@ const CALENDRIER = [
 .btn-postuler { display: inline-flex; align-items: center; background: #FDD835; color: #1a237e; padding: 7px 18px; border-radius: 9999px; font-size: 0.8rem; font-weight: 700; text-decoration: none; transition: background 0.15s, box-shadow 0.15s; }
 .btn-postuler:hover { background: #fbc02d; box-shadow: 0 4px 12px rgba(253,216,53,0.5); }
 .vide { text-align: center; color: #767683; padding: 32px; }
+.vide-aide { display: block; max-width: 920px; margin: 8px auto 0; color: #1a237e; font-weight: 700; }
+.vide-btn { display: inline-block; margin-top: 16px; background: #1a237e; color: #fff; padding: 11px 24px; border-radius: 12px; font-weight: 700; text-decoration: none; transition: box-shadow 0.2s, background 0.2s; }
+.vide-btn:hover { background: #283593; box-shadow: 0 8px 20px rgba(26,35,126,0.3); }
 
 /* Pagination */
 .pagination { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; background: #f5f2fb; border-top: 1px solid #e4e1ea; flex-wrap: wrap; gap: 12px; }
@@ -233,11 +247,4 @@ const CALENDRIER = [
 .cal-label { font-size: 0.82rem; color: #525f71; line-height: 1.3; min-height: 34px; }
 .cal-date { font-size: 1rem; font-weight: 800; color: #1b1b21; margin-top: 8px; }
 .cal-item.fort .cal-date { color: #D32F2F; }
-
-/* Réclamation */
-.aide { text-align: center; padding: 48px 24px 8px; }
-.aide h2 { color: #1a237e; font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; }
-.aide p { color: #525f71; max-width: 600px; margin: 0 auto 22px; line-height: 1.6; }
-.aide-btn { display: inline-block; background: #1a237e; color: #fff; padding: 12px 26px; border-radius: 12px; font-weight: 700; text-decoration: none; transition: box-shadow 0.2s, background 0.2s; }
-.aide-btn:hover { background: #283593; box-shadow: 0 8px 20px rgba(26,35,126,0.3); }
 </style>

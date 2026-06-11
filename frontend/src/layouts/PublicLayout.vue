@@ -23,6 +23,7 @@ async function deconnexion() {
 
         <nav class="liens">
           <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" class="lien">Mes dossiers</RouterLink>
+          <RouterLink :to="{ name: 'guide' }" class="lien">Comment postuler ?</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" class="lien">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" class="lien">Candidats retenus</RouterLink>
         </nav>
@@ -58,6 +59,7 @@ async function deconnexion() {
       <transition name="fade">
         <nav v-if="drawer" class="liens-mobile">
           <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" @click="drawer = false">Mes dossiers</RouterLink>
+          <RouterLink :to="{ name: 'guide' }" @click="drawer = false">Comment postuler ?</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" @click="drawer = false">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" @click="drawer = false">Candidats retenus</RouterLink>
           <RouterLink v-if="!auth.estConnecte" :to="{ name: 'reclamation' }" @click="drawer = false">Réclamation</RouterLink>
