@@ -15,11 +15,18 @@ set -euo pipefail
 # Racine du projet, quel que soit le répertoire d'appel.
 cd "$(dirname "$0")/.."
 
-# Charge .env (DB_USER, DB_NAME, …) sans l'exposer dans les logs.
-if [ -f .env ]; then set -a; . ./.env; set +a; fi
+# Lit UNE variable du .env sans exécuter le fichier. On ne « source » pas le
+# .env : c'est un fichier clé=valeur (style Django), où des valeurs peuvent
+# contenir des espaces (ex. « ACGT Recrutement ») que bash interpréterait comme
+# des commandes. On extrait donc seulement les clés utiles, en retirant les
+# guillemets éventuels et le retour chariot Windows (\r).
+val_env() {
+  grep -E "^$1=" .env 2>/dev/null | tail -n1 | cut -d'=' -f2- \
+    | sed -e 's/\r$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
 
-DB_USER="${DB_USER:-acgt}"
-DB_NAME="${DB_NAME:-acgt_recrutement}"
+DB_USER="${DB_USER:-$(val_env DB_USER)}"; DB_USER="${DB_USER:-acgt}"
+DB_NAME="${DB_NAME:-$(val_env DB_NAME)}"; DB_NAME="${DB_NAME:-acgt_recrutement}"
 BACKUP_DIR="${BACKUP_DIR:-/srv/acgt_backups}"
 RETENTION_JOURS="${RETENTION_JOURS:-30}"
 MEDIA_VOLUME="acgt_media_data"
