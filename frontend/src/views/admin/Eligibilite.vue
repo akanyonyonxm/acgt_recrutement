@@ -1,7 +1,13 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../../api'
 import StatCard from '../../components/StatCard.vue'
+import { useAuthStore } from '../../stores/auth'
+
+const auth = useAuthStore()
+const peutModifier = computed(() => auth.estAdmin || auth.estCorrecteur)
+const snack = ref({ show: false, color: 'success', text: '' })
+const notifier = (text, color = 'success') => (snack.value = { show: true, color, text })
 
 // --- Liste courante ---
 const items = ref([])
@@ -19,7 +25,33 @@ const ENTETES = [
   { title: 'Année', key: 'annee' },
   { title: 'Référence', key: 'reference' },
   { title: 'Publié', key: 'est_publie', align: 'center' },
+  { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
+
+// --- Édition du nom (pas le code) ---
+const dialogEdit = ref(false)
+const ligneEdit = ref(null)
+const formEdit = ref({ nom: '', postnom: '', prenom: '' })
+const enEdit = ref(false)
+function ouvrirEdition(item) {
+  ligneEdit.value = item
+  formEdit.value = { nom: item.nom || '', postnom: item.postnom || '', prenom: item.prenom || '' }
+  dialogEdit.value = true
+}
+async function enregistrerNom() {
+  if (!formEdit.value.nom.trim()) return notifier('Le nom est obligatoire.', 'error')
+  enEdit.value = true
+  try {
+    await api.patch(`/eligibilite/${ligneEdit.value.id}/nom/`, formEdit.value)
+    dialogEdit.value = false
+    notifier('Nom corrigé.')
+    await charger()
+  } catch (e) {
+    notifier(e.response?.data?.detail || e.response?.data?.nom?.[0] || 'Modification impossible.', 'error')
+  } finally {
+    enEdit.value = false
+  }
+}
 
 async function charger({ page: p } = {}) {
   if (p) page.value = p
@@ -197,10 +229,42 @@ onMounted(() => charger())
                 {{ item.est_publie ? 'mdi-check-circle' : 'mdi-minus-circle-outline' }}
               </v-icon>
             </template>
+            <template #item.actions="{ item }">
+              <v-btn v-if="peutModifier" icon="mdi-pencil" variant="text" size="small" color="primary"
+                     @click="ouvrirEdition(item)" />
+            </template>
           </v-data-table-server>
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- Dialog correction du nom (le code n'est pas modifiable) -->
+    <v-dialog v-model="dialogEdit" max-width="520">
+      <v-card v-if="ligneEdit">
+        <v-card-title class="d-flex align-center bg-primary text-white">
+          <v-icon class="mr-2">mdi-account-edit</v-icon>Corriger le nom — code {{ ligneEdit.code || '—' }}
+        </v-card-title>
+        <v-card-text class="pt-4">
+          <v-row dense>
+            <v-col cols="12" sm="4"><v-text-field v-model="formEdit.nom" label="Nom *" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="formEdit.postnom" label="Postnom" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="formEdit.prenom" label="Prénom *" /></v-col>
+          </v-row>
+          <v-alert type="info" variant="tonal" density="compact" class="mt-2">
+            Le <strong>code</strong> n'est pas modifiable (identifiant stable). Après correction,
+            relancez <code>corriger_rattachements</code> pour mettre à jour les dossiers concernés.
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="pa-4 pt-0">
+          <span class="text-caption text-medium-emphasis">* obligatoire</span>
+          <v-spacer />
+          <v-btn variant="text" @click="dialogEdit = false">Annuler</v-btn>
+          <v-btn color="primary" variant="flat" :loading="enEdit" @click="enregistrerNom">Enregistrer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-snackbar v-model="snack.show" :color="snack.color" timeout="3000">{{ snack.text }}</v-snackbar>
   </div>
 </template>
 

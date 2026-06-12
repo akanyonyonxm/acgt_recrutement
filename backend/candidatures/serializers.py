@@ -346,6 +346,22 @@ class ModificationIdentiteSerializer(serializers.ModelSerializer):
         return v
 
 
+class ModificationNomEligibiliteSerializer(serializers.ModelSerializer):
+    """Correction du nom d'une personne de la liste d'éligibilité.
+
+    Le code n'est volontairement PAS modifiable (identifiant stable). `save()`
+    recalcule `texte_recherche` (les correspondances restent cohérentes)."""
+
+    class Meta:
+        model = ListeEligibilite
+        fields = ['nom', 'postnom', 'prenom']
+
+    def validate_nom(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le nom est obligatoire.")
+        return v
+
+
 class ChangementStatutSerializer(serializers.Serializer):
     """Corps des actions de transition : motif optionnel (obligatoire au rejet)."""
 

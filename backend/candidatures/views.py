@@ -48,6 +48,7 @@ from .serializers import (
     EvaluationSerializer,
     HistoriqueStatutSerializer,
     ModificationIdentiteSerializer,
+    ModificationNomEligibiliteSerializer,
     PieceJointeSerializer,
     PieceJointeUploadSerializer,
     PosteSerializer,
@@ -92,20 +93,42 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
     pagination_class = PaginationPublique
 
+    def _staff(self):
+        u = self.request.user
+        return roles.est_admin(u) or roles.est_correcteur(u)
+
     def get_serializer_class(self):
-        if roles.est_admin(self.request.user):
+        if self._staff():
             return EligibiliteAdminSerializer
         return EligibilitePubliqueSerializer
 
     def get_queryset(self):
         qs = ListeEligibilite.objects.all()
-        if not roles.est_admin(self.request.user):
+        if not self._staff():
             qs = qs.filter(est_publie=True)
         # Recherche tolérante : chaque mot de la requête doit être contenu dans
         # le texte normalisé (ordre indifférent, insensible aux accents/casse).
         for token in tokens_recherche(self.request.query_params.get('q', '')):
             qs = qs.filter(texte_recherche__contains=token)
         return qs
+
+    @action(detail=True, methods=['patch'], url_path='nom')
+    def modifier_nom(self, request, pk=None):
+        """Corrige le NOM (nom/postnom/prénom) d'une personne de la liste.
+
+        Réservé aux administrateurs et correcteurs. Le **code n'est pas
+        modifiable** ici (identifiant stable). `texte_recherche` est recalculé
+        (les correspondances avec les dossiers restent cohérentes).
+        """
+        if not self._staff():
+            raise PermissionDenied(
+                "Seuls les administrateurs et correcteurs peuvent corriger un nom."
+            )
+        ligne = self.get_object()
+        serializer = ModificationNomEligibiliteSerializer(ligne, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(EligibiliteAdminSerializer(ligne).data)
 
     @action(detail=False, methods=['get'], url_path='verifier-code')
     def verifier_code(self, request):
