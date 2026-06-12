@@ -140,6 +140,9 @@ class DossierSerializer(serializers.ModelSerializer):
     # ou par nom), avec comparaison champ par champ — affiché automatiquement à
     # l'ouverture pour décider vite. Détail uniquement (une seule requête).
     candidats_eligibilite = serializers.SerializerMethodField()
+    # Autres dossiers du même appel = même personne probable (même email ou même
+    # nom complet normalisé) — pour repérer et traiter les doublons.
+    doublons = serializers.SerializerMethodField()
 
     class Meta:
         model = Dossier
@@ -147,8 +150,8 @@ class DossierSerializer(serializers.ModelSerializer):
             'id', 'code', 'appel', 'appel_titre', 'poste', 'poste_libelle', 'deposant',
             'nom', 'postnom', 'prenom', 'email', 'statut', 'statut_libelle',
             'transitions_possibles', 'ligne_eligibilite', 'suggestion_eligibilite',
-            'candidats_eligibilite', 'pieces', 'pieces_manquantes', 'est_complet',
-            'modifiable', 'cree_le', 'modifie_le',
+            'candidats_eligibilite', 'doublons', 'pieces', 'pieces_manquantes',
+            'est_complet', 'modifiable', 'cree_le', 'modifie_le',
         ]
         # Le statut ne se change jamais par PATCH direct : il passe par les
         # actions dédiées (soumettre / approuver / rejeter / retenir / …).
@@ -218,6 +221,29 @@ class DossierSerializer(serializers.ModelSerializer):
         resultats.sort(key=lambda r: r['score'], reverse=True)
         return resultats[:6]
 
+    def get_doublons(self, obj):
+        """Autres dossiers du même appel = même personne probable (même email
+        OU même nom complet normalisé). Pour repérer et traiter les doublons."""
+        from django.db.models import Q
+
+        autres = (
+            Dossier.objects
+            .filter(appel_id=obj.appel_id)
+            .filter(Q(email__iexact=obj.email) | Q(texte_recherche=obj.texte_recherche))
+            .exclude(pk=obj.pk)
+            .order_by('cree_le')[:10]
+        )
+        return [
+            {
+                'id': d.id, 'code': d.code, 'nom': d.nom, 'postnom': d.postnom,
+                'prenom': d.prenom, 'email': d.email, 'statut': d.statut,
+                'statut_libelle': d.get_statut_display(),
+                'meme_email': (d.email or '').strip().lower() == (obj.email or '').strip().lower(),
+                'meme_nom': d.texte_recherche == obj.texte_recherche,
+            }
+            for d in autres
+        ]
+
     def validate_appel(self, appel):
         # On ne dépose que sur un appel à candidature ouvert (publié).
         if appel.statut != AppelCandidature.Statut.PUBLIE:
@@ -243,12 +269,14 @@ class DossierListeSerializer(serializers.ModelSerializer):
     #   etat='aucune'       rien ne correspond.
     # S'appuie sur les annotations du queryset.
     correspondance = serializers.SerializerMethodField()
+    # Doublon probable (autre dossier du même appel, même email ou même nom).
+    a_doublon = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
         model = Dossier
         fields = [
             'id', 'code', 'appel', 'appel_titre', 'poste_libelle', 'nom', 'postnom', 'prenom',
-            'statut', 'statut_libelle', 'correspondance', 'cree_le',
+            'statut', 'statut_libelle', 'correspondance', 'a_doublon', 'cree_le',
         ]
 
     def get_correspondance(self, obj):

@@ -11,6 +11,7 @@ const appels = ref([])
 const statut = ref('depose')
 const appel = ref(null)
 const eligibilite = ref(null)
+const doublons = ref(false)
 const q = ref('')
 
 // Options du filtre « Éligibilité » (alignées sur les badges de la colonne).
@@ -55,7 +56,7 @@ const TRI = {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
   chargement.value = true
@@ -64,6 +65,7 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
     if (eligibilite.value) params.correspondance = eligibilite.value
+    if (doublons.value) params.doublons = 1
     if (q.value) params.q = q.value
     if (sortBy.length && TRI[sortBy[0].key]) {
       params.ordering = (sortBy[0].order === 'desc' ? '-' : '') + TRI[sortBy[0].key]
@@ -119,6 +121,10 @@ onMounted(async () => {
       <v-select v-model="appel" :items="appels" label="Filtrer par appel" clearable hide-details
                 density="compact" variant="outlined" style="max-width: 240px"
                 @update:modelValue="changerAppel" />
+      <v-btn :variant="doublons ? 'flat' : 'outlined'" :color="doublons ? 'warning' : 'grey'"
+             prepend-icon="mdi-content-duplicate" @click="doublons = !doublons">
+        Doublons
+      </v-btn>
     </div>
 
     <!-- KPI -->
@@ -151,6 +157,8 @@ onMounted(async () => {
         </template>
         <template #item.candidat="{ item }">
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
+          <v-chip v-if="item.a_doublon" color="warning" size="x-small" label variant="tonal"
+                  prepend-icon="mdi-content-duplicate" class="ml-1">Doublon</v-chip>
         </template>
         <template #item.correspondance="{ item }">
           <!-- Déjà rattaché à une personne de la liste -->

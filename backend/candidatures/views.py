@@ -321,6 +321,18 @@ class DossierViewSet(viewsets.ModelViewSet):
                     ListeEligibilite.objects.exclude(prenom='')
                     .filter(prenom__iexact=OuterRef('prenom'))
                 ),
+                # Doublon probable : un AUTRE dossier du même appel partage le
+                # même email OU le même nom complet (normalisé). Indicatif :
+                # l'admin tranche (jamais de suppression/fusion automatique).
+                a_doublon=Exists(
+                    Dossier.objects
+                    .filter(appel_id=OuterRef('appel_id'))
+                    .filter(
+                        Q(email__iexact=OuterRef('email'))
+                        | Q(texte_recherche=OuterRef('texte_recherche'))
+                    )
+                    .exclude(pk=OuterRef('pk'))
+                ),
             )
         )
         user = self.request.user
@@ -361,6 +373,10 @@ class DossierViewSet(viewsets.ModelViewSet):
                 corresp_code=False, corresp_f_nom=False,
                 corresp_f_postnom=False, corresp_f_prenom=False,
             )
+
+        # Filtre « doublons uniquement » : dossiers ayant au moins un jumeau.
+        if self.request.query_params.get('doublons') in ('1', 'true', 'oui'):
+            qs = qs.filter(a_doublon=True)
 
         # Recherche tolérante par nom (accents/casse/ordre indifférents) OU par code.
         q = self.request.query_params.get('q', '').strip()

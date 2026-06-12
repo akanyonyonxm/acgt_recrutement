@@ -1,12 +1,13 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../api'
 import StatutBadge from '../../components/StatutBadge.vue'
 import { couleurStatut } from '../../statuts'
 
 const route = useRoute()
-const id = route.params.id
+// id réactif : permet de naviguer entre dossiers (doublons) sans recharger la page.
+const id = computed(() => route.params.id)
 
 const dossier = ref(null)
 const historique = ref([])
@@ -58,10 +59,10 @@ function confirmer() {
 }
 
 async function charger() {
-  const { data } = await api.get(`/dossiers/${id}/`)
+  const { data } = await api.get(`/dossiers/${id.value}/`)
   dossier.value = data
   q.value = data.nom
-  historique.value = (await api.get(`/dossiers/${id}/historique/`)).data
+  historique.value = (await api.get(`/dossiers/${id.value}/historique/`)).data
   if (['en_examen', 'retenu', 'non_retenu'].includes(data.statut)) await chargerExamen()
 }
 
@@ -72,8 +73,8 @@ async function chercherEligibilite() {
 
 async function chargerExamen() {
   const [a, e, ev] = await Promise.all([
-    api.get(`/dossiers/${id}/affectations/`),
-    api.get(`/dossiers/${id}/evaluations/`),
+    api.get(`/dossiers/${id.value}/affectations/`),
+    api.get(`/dossiers/${id.value}/evaluations/`),
     api.get('/auth/evaluateurs/'),
   ])
   affectations.value = a.data
@@ -83,7 +84,7 @@ async function chargerExamen() {
 
 async function action(verbe, corps) {
   try {
-    await api.post(`/dossiers/${id}/${verbe}/`, corps || {})
+    await api.post(`/dossiers/${id.value}/${verbe}/`, corps || {})
     notifier('Action effectuée.')
     dialogRejet.value = false
     await charger()
@@ -105,12 +106,12 @@ function nonRetenir() {
 
 async function affecter() {
   if (!evalChoisi.value) return
-  await api.post(`/dossiers/${id}/affectations/`, { evaluateur_id: evalChoisi.value, peut_valider: peutValider.value })
+  await api.post(`/dossiers/${id.value}/affectations/`, { evaluateur_id: evalChoisi.value, peut_valider: peutValider.value })
   evalChoisi.value = null
   await chargerExamen()
 }
 async function retirerAffectation(evId) {
-  await api.delete(`/dossiers/${id}/affectations/${evId}/`)
+  await api.delete(`/dossiers/${id.value}/affectations/${evId}/`)
   await chargerExamen()
 }
 
@@ -125,7 +126,7 @@ const apercu = ref({ show: false, index: 0 })
 const pieceCourante = computed(() => dossier.value?.pieces?.[apercu.value.index] || null)
 const estImage = (p) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(p?.nom_original || '')
 const urlPiece = (p, inline) =>
-  `/api/dossiers/${id}/pieces/${p.id}/telecharger/${inline ? '?inline=1' : ''}`
+  `/api/dossiers/${id.value}/pieces/${p.id}/telecharger/${inline ? '?inline=1' : ''}`
 function ouvrirApercu(i) { apercu.value = { show: true, index: i } }
 function naviguer(d) {
   const n = dossier.value.pieces.length
@@ -134,6 +135,15 @@ function naviguer(d) {
 const dateFr = (d) => new Date(d).toLocaleString('fr-FR')
 const kos = (o) => `${Math.round(o / 1024)} Ko`
 onMounted(charger)
+
+// Naviguer vers un doublon change l'id de route sans recréer le composant :
+// on réinitialise et on recharge le nouveau dossier.
+watch(() => route.params.id, (nouvel, ancien) => {
+  if (!nouvel || nouvel === ancien) return
+  ligneChoisie.value = null
+  resultats.value = []
+  charger()
+})
 </script>
 
 <template>
@@ -159,6 +169,35 @@ onMounted(charger)
         <StatutBadge :statut="dossier.statut" :libelle="dossier.statut_libelle" />
       </div>
     </v-card>
+
+    <!-- Doublons probables : autres dossiers de la même personne (même appel) -->
+    <v-alert v-if="dossier.doublons?.length" type="warning" variant="tonal"
+             class="mb-6" icon="mdi-content-duplicate" border="start">
+      <div class="font-weight-bold mb-1">
+        Doublon probable : {{ dossier.doublons.length }} autre(s) dossier(s) de cette personne
+        sur le même appel.
+      </div>
+      <div class="text-caption mb-2">
+        Même email ou même nom. Traitez-en un seul et rejetez les autres (motif « Dossier en double »).
+      </div>
+      <div class="d-flex flex-wrap ga-2">
+        <v-card v-for="d in dossier.doublons" :key="d.id" flat border class="pa-2 px-3 doublon-carte"
+                :to="{ name: 'dossier', params: { id: d.id } }">
+          <div class="d-flex align-center ga-2">
+            <span class="font-weight-bold">{{ d.code || ('#' + d.id) }}</span>
+            <StatutBadge :statut="d.statut" :libelle="d.statut_libelle" />
+          </div>
+          <div class="text-caption">{{ d.nom }} {{ d.postnom }} {{ d.prenom }}</div>
+          <div class="text-caption text-medium-emphasis">
+            <v-icon v-if="d.meme_email" size="12" color="warning">mdi-email</v-icon>
+            <span v-if="d.meme_email">même email</span>
+            <span v-if="d.meme_email && d.meme_nom"> · </span>
+            <v-icon v-if="d.meme_nom" size="12" color="warning">mdi-account</v-icon>
+            <span v-if="d.meme_nom">même nom</span>
+          </div>
+        </v-card>
+      </div>
+    </v-alert>
 
     <v-row>
       <!-- Colonne gauche : infos + pièces -->
@@ -527,6 +566,10 @@ onMounted(charger)
 .candidat-elig { border-radius: 12px !important; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .candidat-elig:hover { border-color: #aeb6e8; background: #fafaff; }
 .candidat-elig.choisi { border-color: #2e7d32 !important; background: #f3faf4; box-shadow: 0 2px 10px rgba(46,125,50,0.12); }
+
+/* Carte d'un dossier en doublon (cliquable) */
+.doublon-carte { border-radius: 10px !important; text-decoration: none; transition: box-shadow 0.15s, border-color 0.15s; min-width: 180px; }
+.doublon-carte:hover { border-color: #f9a825 !important; box-shadow: 0 3px 12px rgba(249,168,37,0.2); }
 
 /* Aperçu des pièces */
 .apercu-zone { position: relative; background: #2b2b2b; display: flex; align-items: center; justify-content: center; height: 72vh; overflow: auto; }
