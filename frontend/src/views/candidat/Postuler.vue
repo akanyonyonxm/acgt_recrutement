@@ -250,9 +250,9 @@ async function soumettre() {
         </v-alert>
         <v-alert v-else-if="verifCode.etat === 'inconnu'" type="error" variant="tonal"
                  density="compact" class="mb-3" icon="mdi-alert">
-          Ce code ne figure pas sur la liste des éligibles publiée. Vérifiez
-          attentivement votre saisie : <strong>un dossier dont le code n'est pas
-          reconnu sera automatiquement rejeté.</strong>
+          Ce code ne figure pas sur la liste des éligibles publiée.
+          <strong>Vous devez saisir un code valide pour pouvoir continuer.</strong>
+          Vérifiez attentivement votre saisie (par exemple « 0152 » et non « 152 »).
         </v-alert>
         <v-select :model-value="form.appel" @update:modelValue="choisirAppel"
                   :items="appelItems" :item-props="(i) => ({ disabled: i.disabled })"
@@ -294,7 +294,7 @@ async function soumettre() {
         <v-spacer />
         <v-btn color="accent" variant="flat" size="large" rounded="lg" class="text-primary font-weight-bold"
                append-icon="mdi-arrow-right" :loading="enCours"
-               :disabled="!form.code || !form.appel || !form.poste || !form.nom || !form.prenom || !form.email || appelBloque(appelSelectionne) || bloqueParNom"
+               :disabled="verifCode.etat !== 'ok' || !form.appel || !form.poste || !form.nom || !form.prenom || !form.email || appelBloque(appelSelectionne) || bloqueParNom"
                @click="creerDossier">
           Continuer
         </v-btn>
