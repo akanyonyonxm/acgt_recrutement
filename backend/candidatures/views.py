@@ -547,7 +547,7 @@ class DossierViewSet(viewsets.ModelViewSet):
                 'pieces_manquantes': [tp.libelle for tp in manquantes],
                 'detail': "Des pièces obligatoires sont manquantes.",
             })
-        self._rattacher_par_code(dossier)
+        self._rattacher_par_nom(dossier)
         try:
             dossier.changer_statut(
                 Dossier.Statut.DEPOSE, par=request.user,
@@ -560,18 +560,19 @@ class DossierViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(dossier).data)
 
     @staticmethod
-    def _rattacher_par_code(dossier):
-        """Rattache la ligne d'éligibilité dont le code correspond exactement.
+    def _rattacher_par_nom(dossier):
+        """Rattache la ligne d'éligibilité dont le NOM COMPLET correspond.
 
-        Le code seul fait foi (jamais de comparaison de noms : la liste peut
-        contenir des coquilles). Best-effort : ne se fait que si le dossier
-        n'est pas déjà rattaché et que le code identifie UNE seule ligne ;
-        l'admin garde la main (il peut re-rattacher manuellement).
+        Le rattachement se fait sur nom+postnom+prénom (texte normalisé), JAMAIS
+        sur le code seul : des candidats saisissent le code d'autrui (triche).
+        Best-effort : seulement si le dossier n'est pas déjà rattaché et si le
+        nom complet identifie UNE seule personne (homonymes → l'admin tranche).
         """
-        code = (dossier.code or '').strip()
-        if dossier.ligne_eligibilite_id or not code:
+        if dossier.ligne_eligibilite_id or not dossier.texte_recherche:
             return
-        lignes = list(ListeEligibilite.objects.filter(code__iexact=code)[:2])
+        lignes = list(
+            ListeEligibilite.objects.filter(texte_recherche=dossier.texte_recherche)[:2]
+        )
         if len(lignes) == 1:
             dossier.ligne_eligibilite = lignes[0]
             dossier.save(update_fields=['ligne_eligibilite'])
