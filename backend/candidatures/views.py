@@ -330,6 +330,20 @@ class DossierViewSet(viewsets.ModelViewSet):
             return DossierListeSerializer
         return DossierSerializer
 
+    @staticmethod
+    def _doublon_exists():
+        """Sous-requête : ce dossier a-t-il un jumeau SOUMIS (hors brouillon et
+        rejeté) du même appel et même nom complet ? Réutilisée par l'annotation
+        de liste et par la navigation « doublon suivant »."""
+        return Exists(
+            Dossier.objects
+            .filter(appel_id=OuterRef('appel_id'))
+            .exclude(statut__in=[Dossier.Statut.BROUILLON, Dossier.Statut.REJETE])
+            .exclude(texte_recherche='')
+            .filter(texte_recherche=OuterRef('texte_recherche'))
+            .exclude(pk=OuterRef('pk'))
+        )
+
     def get_queryset(self):
         """Scoping par rôle :
 
@@ -377,14 +391,7 @@ class DossierViewSet(viewsets.ModelViewSet):
                 # On n'utilise PAS l'email : un proche peut déposer plusieurs
                 # dossiers (personnes différentes) depuis la même adresse. On
                 # ignore les brouillons (non traités). Indicatif : l'admin tranche.
-                a_doublon=Exists(
-                    Dossier.objects
-                    .filter(appel_id=OuterRef('appel_id'))
-                    .exclude(statut__in=[Dossier.Statut.BROUILLON, Dossier.Statut.REJETE])
-                    .exclude(texte_recherche='')
-                    .filter(texte_recherche=OuterRef('texte_recherche'))
-                    .exclude(pk=OuterRef('pk'))
-                ),
+                a_doublon=self._doublon_exists(),
             )
         )
         user = self.request.user
@@ -535,6 +542,32 @@ class DossierViewSet(viewsets.ModelViewSet):
 
         par_statut = {row['statut']: row['n'] for row in qs.values('statut').annotate(n=Count('id'))}
         return Response({'total': sum(par_statut.values()), 'par_statut': par_statut})
+
+    @action(detail=False, methods=['get'], url_path='doublon-suivant')
+    def doublon_suivant(self, request):
+        """Prochain dossier DÉPOSÉ ayant un doublon, pour balayer les doublons.
+
+        `?apres=<id>` : renvoie le suivant (id croissant) ; boucle au début sinon.
+        `?appel=<id>` : restreint à un appel. Renvoie {id, total}.
+        """
+        if not (roles.est_admin(request.user) or roles.est_correcteur(request.user)):
+            raise PermissionDenied("Réservé au back-office.")
+        base = (
+            Dossier.objects
+            .filter(statut=Dossier.Statut.DEPOSE)
+            .annotate(a_doublon=self._doublon_exists())
+            .filter(a_doublon=True)
+            .order_by('id')
+        )
+        appel = request.query_params.get('appel')
+        if appel:
+            base = base.filter(appel_id=appel)
+        total = base.count()
+        apres = request.query_params.get('apres')
+        suivant = base.filter(id__gt=apres).first() if apres else None
+        if suivant is None:
+            suivant = base.first()   # boucle au début
+        return Response({'id': suivant.id if suivant else None, 'total': total})
 
     @action(detail=True, methods=['get', 'post'])
     def pieces(self, request, pk=None):
@@ -1054,6 +1087,39 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             }
             for r in autres
         ])
+
+    @action(detail=False, methods=['get'], url_path='doublon-suivant')
+    def doublon_suivant(self, request):
+        """Prochaine réclamation EN ATTENTE ayant un doublon (pour les balayer).
+
+        `?apres=<id>` renvoie la suivante ; boucle au début sinon. {id, total}.
+        """
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        sous_req = (
+            ReclamationEligibilite.objects
+            .filter(appel_id=OuterRef('appel_id'))
+            .exclude(statut=ReclamationEligibilite.Statut.REJETEE)
+            .exclude(texte_recherche='')
+            .filter(texte_recherche=OuterRef('texte_recherche'))
+            .exclude(pk=OuterRef('pk'))
+        )
+        base = (
+            ReclamationEligibilite.objects
+            .filter(statut=ReclamationEligibilite.Statut.EN_ATTENTE)
+            .annotate(a_doublon=Exists(sous_req))
+            .filter(a_doublon=True)
+            .order_by('id')
+        )
+        appel = request.query_params.get('appel')
+        if appel:
+            base = base.filter(appel_id=appel)
+        total = base.count()
+        apres = request.query_params.get('apres')
+        suivant = base.filter(id__gt=apres).first() if apres else None
+        if suivant is None:
+            suivant = base.first()
+        return Response({'id': suivant.id if suivant else None, 'total': total})
 
     @action(detail=True, methods=['get'],
             url_path=r'documents/(?P<doc_id>[^/.]+)')

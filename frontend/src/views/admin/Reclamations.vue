@@ -101,6 +101,23 @@ async function ouvrir(rec) {
   }
 }
 
+// Navigation : passer à la prochaine réclamation en attente ayant un doublon.
+const enNavRec = ref(false)
+async function doublonSuivantRec() {
+  enNavRec.value = true
+  try {
+    const { data } = await api.get('/reclamations/doublon-suivant/', { params: { apres: detail.value.id } })
+    if (data.id && data.id !== detail.value.id) {
+      const { data: rec } = await api.get(`/reclamations/${data.id}/`)
+      await ouvrir(rec)
+    } else {
+      notifier('Aucune autre réclamation en doublon à traiter.', 'info')
+    }
+  } finally {
+    enNavRec.value = false
+  }
+}
+
 // Rejet d'un doublon de réclamation en un clic (motif « Réclamation en double »).
 async function rejeterDoublonRec(r) {
   if (!confirm(`Rejeter la réclamation de ${r.nom} ${r.prenom} comme doublon ?`)) return
@@ -276,6 +293,9 @@ onMounted(async () => {
         </v-card-text>
         <v-card-actions class="px-4 pb-4">
           <v-btn variant="text" @click="dialog = false">Fermer</v-btn>
+          <v-btn v-if="detail.a_doublon" variant="tonal" color="warning" size="small"
+                 prepend-icon="mdi-content-duplicate" append-icon="mdi-arrow-right"
+                 :loading="enNavRec" @click="doublonSuivantRec">Doublon suivant</v-btn>
           <v-spacer />
           <v-btn v-if="action === 'valider'" color="success" variant="flat" :loading="enCours" @click="confirmer">
             Confirmer la validation

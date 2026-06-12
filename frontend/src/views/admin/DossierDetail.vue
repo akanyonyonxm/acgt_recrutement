@@ -1,12 +1,13 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import api from '../../api'
 import StatutBadge from '../../components/StatutBadge.vue'
 import { couleurStatut } from '../../statuts'
 import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 // Administrateurs et correcteurs peuvent corriger l'identité du dossier.
 const peutModifier = computed(() => auth.estAdmin || auth.estCorrecteur)
@@ -71,6 +72,19 @@ async function rejeterDoublon(d) {
     notifier(e.response?.data?.detail || 'Rejet impossible.', 'error')
   } finally {
     doublonEnCours.value = null
+  }
+}
+
+// Navigation : passer au prochain dossier déposé ayant un doublon.
+const enNav = ref(false)
+async function doublonSuivant() {
+  enNav.value = true
+  try {
+    const { data } = await api.get('/dossiers/doublon-suivant/', { params: { apres: id.value } })
+    if (data.id && data.id !== Number(id.value)) router.push({ name: 'dossier', params: { id: data.id } })
+    else notifier('Aucun autre dossier en doublon à traiter.', 'info')
+  } finally {
+    enNav.value = false
   }
 }
 
@@ -197,8 +211,14 @@ watch(() => route.params.id, (nouvel, ancien) => {
 
 <template>
   <div v-if="dossier">
-    <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-left"
-           :to="{ name: 'validation' }" class="mb-2">Retour</v-btn>
+    <div class="d-flex align-center mb-2">
+      <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-left"
+             :to="{ name: 'validation' }">Retour</v-btn>
+      <v-spacer />
+      <v-btn v-if="peutModifier && dossier.statut === 'depose'" variant="tonal" color="warning"
+             prepend-icon="mdi-content-duplicate" append-icon="mdi-arrow-right"
+             :loading="enNav" @click="doublonSuivant">Doublon suivant</v-btn>
+    </div>
 
     <v-card flat class="entete-dossier mb-6">
       <div class="d-flex align-center flex-wrap ga-4 pa-5">
