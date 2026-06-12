@@ -1,24 +1,26 @@
-"""Corrige les rattachements d'éligibilité erronés (triche par code).
+"""Réconcilie les rattachements d'éligibilité de tous les dossiers soumis.
 
-Contexte : un ancien comportement rattachait automatiquement un dossier à la
-ligne d'éligibilité dont le CODE correspondait. Or des candidats saisissent le
-code d'autrui : le dossier se retrouvait rattaché à une personne qui n'est pas
-la sienne (nom totalement différent). Le rattachement doit se faire sur le NOM
-COMPLET (nom+postnom+prénom), jamais sur le code seul.
+Contexte : un ancien comportement rattachait un dossier à la ligne d'éligibilité
+dont le CODE correspondait. Or des candidats saisissent le code d'autrui : le
+dossier se retrouvait rattaché à une autre personne (triche), et des dossiers
+légitimes n'étaient pas rattachés. Le rattachement doit se faire sur le NOM
+(nom+postnom+prénom), jamais sur le code seul.
 
-Cette commande, pour chaque dossier rattaché, recalcule la bonne correspondance
-par le nom (au moins 2 des 3 champs nom/postnom/prénom — tolère une coquille ou
-un champ manquant ; cf. `Dossier.ligne_eligibilite_correspondante`) et :
-  - conserve le rattachement s'il est correct ;
-  - le remplace (détache, ou rerattache à la bonne personne) sinon — ce qui
-    retire les rattachements faits par code à une personne qui n'est pas la
-    sienne (triche).
+Cette commande parcourt **tous les dossiers soumis** (hors brouillons) et, pour
+chacun, calcule la bonne correspondance par le nom — au moins 2 des 3 champs
+nom/postnom/prénom coïncident, meilleure correspondance unique ; tolère une
+coquille ou un champ manquant sur la liste (cf.
+`Dossier.ligne_eligibilite_correspondante`). Puis :
+  - **rattache** ceux qui ne le sont pas encore mais dont le nom correspond ;
+  - **conserve** les rattachements déjà corrects ;
+  - **détache / rerattache** les rattachements erronés (faits par code à une
+    personne qui n'est pas la sienne — triche).
 
-Opération NON destructive (on ne supprime aucune donnée ; on corrige seulement
-le champ `ligne_eligibilite`). À lancer MANUELLEMENT sur le serveur — jamais
-dans le pipeline de déploiement.
+Opération NON destructive (on ne supprime aucune donnée ; on ne change que le
+champ `ligne_eligibilite`). À lancer MANUELLEMENT sur le serveur — jamais dans
+le pipeline de déploiement.
 
-  python manage.py corriger_rattachements            # applique la correction
+  python manage.py corriger_rattachements            # applique
   python manage.py corriger_rattachements --simuler  # montre sans rien changer
 """
 
@@ -28,49 +30,56 @@ from candidatures.models import Dossier
 
 
 class Command(BaseCommand):
-    help = "Corrige les rattachements d'éligibilité faits par code (au lieu du nom)."
+    help = "Réconcilie les rattachements d'éligibilité par le nom (tous les dossiers soumis)."
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--simuler', action='store_true',
-            help="N'applique rien ; affiche seulement ce qui serait corrigé.",
+            help="N'applique rien ; affiche seulement ce qui serait changé.",
         )
 
     def handle(self, *args, **options):
         simuler = options['simuler']
-        detaches = 0
-        rerattaches = 0
-        conserves = 0
+        rattaches = 0   # non rattaché → rattaché
+        rerattaches = 0  # rattaché à la mauvaise personne → bonne personne
+        detaches = 0    # rattaché à tort → détaché (aucun nom correspondant)
+        conserves = 0   # déjà correct
 
         qs = (
             Dossier.objects
-            .filter(ligne_eligibilite__isnull=False)
+            .exclude(statut=Dossier.Statut.BROUILLON)
             .select_related('ligne_eligibilite')
         )
         for dossier in qs:
             ancienne = dossier.ligne_eligibilite
-            # La bonne correspondance par le nom (≥2 champs sur 3), ou None.
             correcte = dossier.ligne_eligibilite_correspondante()
+            anc_id = ancienne.id if ancienne else None
+            cor_id = correcte.id if correcte else None
 
-            # Rattachement déjà correct → on n'y touche pas.
-            if correcte is not None and correcte.id == ancienne.id:
-                conserves += 1
+            if anc_id == cor_id:
+                if ancienne is not None:
+                    conserves += 1
                 continue
 
-            self.stdout.write(
-                f"#{dossier.pk} {dossier.nom} {dossier.postnom} {dossier.prenom} "
-                f"(code {dossier.code or '-'}) : detache de « {ancienne} »"
-                + (f" -> rerattache a « {correcte} »" if correcte else " -> aucun nom correspondant")
-            )
+            qui = (f"#{dossier.pk} {dossier.nom} {dossier.postnom} {dossier.prenom} "
+                   f"(code {dossier.code or '-'})")
+            if ancienne is None:
+                self.stdout.write(f"{qui} : rattache a « {correcte} »")
+                rattaches += 1
+            elif correcte is None:
+                self.stdout.write(f"{qui} : detache de « {ancienne} » (aucun nom correspondant)")
+                detaches += 1
+            else:
+                self.stdout.write(f"{qui} : « {ancienne} » -> « {correcte} »")
+                rerattaches += 1
+
             if not simuler:
                 dossier.ligne_eligibilite = correcte
                 dossier.save(update_fields=['ligne_eligibilite'])
-            detaches += 1
-            if correcte:
-                rerattaches += 1
 
         prefixe = '[SIMULATION] ' if simuler else ''
         self.stdout.write(self.style.SUCCESS(
-            f"{prefixe}Termine : {conserves} rattachements corrects conserves, "
-            f"{detaches} errones detaches (dont {rerattaches} rerattaches par nom)."
+            f"{prefixe}Termine : {rattaches} nouveaux rattachements, "
+            f"{rerattaches} rerattaches, {detaches} detaches, "
+            f"{conserves} corrects conserves."
         ))
