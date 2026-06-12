@@ -41,7 +41,8 @@ const ENTETES = [
 const CORRESPONDANCE = {
   rattache: { libelle: 'Rattaché', color: 'success', icon: 'mdi-link-variant', variant: 'flat' },
   code: { libelle: 'Code reconnu', color: 'success', icon: 'mdi-check', variant: 'tonal' },
-  nom: { libelle: 'Nom trouvé', color: 'warning', icon: 'mdi-account-search', variant: 'tonal' },
+  nom: { libelle: 'Nom reconnu', color: 'warning', icon: 'mdi-account-check', variant: 'tonal' },
+  nom_partiel: { libelle: 'Nom partiel', color: 'blue-grey', icon: 'mdi-account-search', variant: 'tonal' },
   aucune: { libelle: 'Aucune', color: 'error', icon: 'mdi-help-circle-outline', variant: 'tonal' },
 }
 

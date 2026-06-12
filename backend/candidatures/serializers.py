@@ -192,8 +192,9 @@ class DossierListeSerializer(serializers.ModelSerializer):
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
     # Correspondance avec la liste d'éligibilité (badge indicatif, jamais
-    # bloquant) : 'rattache' > 'code' (code reconnu) > 'nom' (homonyme exact
-    # normalisé) > 'aucune'. S'appuie sur les annotations du queryset.
+    # bloquant) : 'rattache' > 'code' (code reconnu) > 'nom' (≥2 champs du nom
+    # coïncident) > 'nom_partiel' (1 champ coïncide) > 'aucune'. S'appuie sur
+    # les annotations du queryset.
     correspondance = serializers.SerializerMethodField()
 
     class Meta:
@@ -210,6 +211,8 @@ class DossierListeSerializer(serializers.ModelSerializer):
             return 'code'
         if getattr(obj, 'corresp_nom', False):
             return 'nom'
+        if getattr(obj, 'corresp_nom_partiel', False):
+            return 'nom_partiel'
         return 'aucune'
 
 
