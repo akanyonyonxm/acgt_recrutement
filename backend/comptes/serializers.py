@@ -23,10 +23,14 @@ class UserSerializer(serializers.ModelSerializer):
         r = []
         if roles.est_admin(obj):
             r.append('admin')
+        if roles.est_validateur(obj):
+            r.append('validateur')
         if roles.est_evaluateur(obj):
             r.append('evaluateur')
         if roles.est_correcteur(obj):
             r.append('correcteur')
+        if roles.est_lecteur(obj):
+            r.append('lecteur')
         if not r:
             r.append('candidat')
         return r
@@ -61,6 +65,51 @@ class InscriptionSerializer(serializers.ModelSerializer):
 class ConnexionSerializer(serializers.Serializer):
     email = serializers.EmailField()
     mot_de_passe = serializers.CharField(write_only=True)
+
+
+# Rôles attribuables depuis la page « Utilisateurs » (clé API → groupe Django).
+ROLES_ATTRIBUABLES = {
+    'admin': roles.GROUPE_ADMIN,
+    'validateur': roles.GROUPE_VALIDATEUR,
+    'correcteur': roles.GROUPE_CORRECTEUR,
+    'lecteur': roles.GROUPE_LECTEUR,
+    'evaluateur': roles.GROUPE_EVALUATEUR,
+}
+
+
+class CreationAgentSerializer(serializers.Serializer):
+    """Création d'un compte agent (back-office) par un administrateur."""
+
+    email = serializers.EmailField()
+    prenom = serializers.CharField(required=False, allow_blank=True, default='')
+    nom = serializers.CharField(required=False, allow_blank=True, default='')
+    mot_de_passe = serializers.CharField(write_only=True)
+    role = serializers.ChoiceField(choices=list(ROLES_ATTRIBUABLES))
+
+    def validate_email(self, value):
+        value = User.objects.normalize_email(value).lower()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError(
+                "Un compte existe déjà avec cet email. Modifiez son rôle "
+                "depuis la liste ci-contre."
+            )
+        return value
+
+    def validate_mot_de_passe(self, value):
+        validate_password(value)
+        return value
+
+
+class ModificationAgentSerializer(serializers.Serializer):
+    """Modification d'un compte agent : rôle, actif/inactif, mot de passe."""
+
+    role = serializers.ChoiceField(choices=list(ROLES_ATTRIBUABLES), required=False)
+    est_actif = serializers.BooleanField(required=False)
+    mot_de_passe = serializers.CharField(write_only=True, required=False)
+
+    def validate_mot_de_passe(self, value):
+        validate_password(value)
+        return value
 
 
 class JetonSerializer(serializers.Serializer):

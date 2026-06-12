@@ -2,6 +2,9 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import api from '../../api'
 import StatCard from '../../components/StatCard.vue'
+import { useAuthStore } from '../../stores/auth'
+
+const auth = useAuthStore()
 
 const appels = ref([])
 const appelId = ref(null)
@@ -76,9 +79,11 @@ onMounted(rechargerAppels)
           <v-chip color="primary" variant="tonal" size="small">{{ retenus.length }}</v-chip>
           <v-spacer />
           <v-chip v-if="publiee" color="success" variant="flat" prepend-icon="mdi-earth">Liste publiée</v-chip>
-          <v-btn v-if="!publiee" color="primary" variant="flat"
-                 prepend-icon="mdi-publish" :disabled="!retenus.length" @click="publier">Publier la liste</v-btn>
-          <v-btn v-else color="grey" variant="outlined" prepend-icon="mdi-publish-off" @click="depublier">Dépublier</v-btn>
+          <template v-if="auth.estAdmin">
+            <v-btn v-if="!publiee" color="primary" variant="flat"
+                   prepend-icon="mdi-publish" :disabled="!retenus.length" @click="publier">Publier la liste</v-btn>
+            <v-btn v-else color="grey" variant="outlined" prepend-icon="mdi-publish-off" @click="depublier">Dépublier</v-btn>
+          </template>
         </v-card-title>
         <v-divider />
         <v-table class="tableau-admin">

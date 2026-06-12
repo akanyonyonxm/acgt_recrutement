@@ -122,8 +122,8 @@ onMounted(() => charger())
     </v-row>
 
     <v-row>
-      <!-- Import -->
-      <v-col cols="12" md="5">
+      <!-- Import : réservé aux administrateurs (remplace potentiellement la liste) -->
+      <v-col v-if="auth.estAdmin" cols="12" md="5">
         <v-card flat border>
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-file-upload-outline</v-icon>
@@ -200,7 +200,7 @@ onMounted(() => charger())
       </v-col>
 
       <!-- Liste courante -->
-      <v-col cols="12" md="7">
+      <v-col cols="12" :md="auth.estAdmin ? 7 : 12">
         <v-card flat border>
           <div class="pa-4 pb-2">
             <v-text-field v-model="q" @update:modelValue="rechercher"

@@ -9,9 +9,13 @@ reset » et « renvoi de vérification » répondent toujours de façon neutre.
 """
 
 from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth.models import Group
+from django.db import models
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,10 +23,13 @@ from rest_framework.views import APIView
 from .emails import envoyer_reinitialisation, envoyer_verification
 from .models import JetonEmail
 from .serializers import (
+    ROLES_ATTRIBUABLES,
     ConnexionSerializer,
+    CreationAgentSerializer,
     DemandeResetSerializer,
     InscriptionSerializer,
     JetonSerializer,
+    ModificationAgentSerializer,
     ReinitialisationSerializer,
     UserSerializer,
 )
@@ -149,16 +156,20 @@ class MoiView(APIView):
 
 
 class ListeEvaluateursView(APIView):
-    """Liste des évaluateurs (admin) — pour la désignation sur un dossier."""
+    """Liste des évaluateurs — pour la désignation sur un dossier.
+
+    Lecture ouverte au back-office (noms/emails des évaluateurs) ; la
+    désignation elle-même reste réservée aux administrateurs (côté dossiers).
+    """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from candidatures import roles
 
-        if not roles.est_admin(request.user):
+        if not roles.acces_backoffice(request.user):
             return Response(
-                {'detail': "Réservé aux administrateurs."},
+                {'detail': "Réservé au back-office."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         evaluateurs = (
@@ -171,6 +182,114 @@ class ListeEvaluateursView(APIView):
              'nom': f'{u.first_name} {u.last_name}'.strip() or u.email}
             for u in evaluateurs
         ])
+
+
+class GestionUtilisateursView(APIView):
+    """Gestion des comptes agents du back-office (admin uniquement).
+
+    GET  : liste les comptes ayant un rôle back-office (+ superusers).
+    POST : crée un compte agent { email, prenom, nom, mot_de_passe, role }.
+
+    Les candidats auto-inscrits n'apparaissent pas ici : cette page sert à
+    donner accès à l'application de traitement (lecture seule, validation,
+    correction, administration), pas à gérer les candidats.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _verifier_admin(self, request):
+        from candidatures import roles
+
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+
+    @staticmethod
+    def _serialiser(u):
+        return {
+            'id': u.id,
+            'email': u.email,
+            'prenom': u.first_name,
+            'nom': u.last_name,
+            'roles': UserSerializer().get_roles(u),
+            'est_actif': u.is_active,
+            'est_superuser': u.is_superuser,
+            'derniere_connexion': u.last_login,
+        }
+
+    def get(self, request):
+        self._verifier_admin(request)
+        agents = (
+            User.objects
+            .filter(
+                models.Q(is_superuser=True)
+                | models.Q(groups__name__in=list(ROLES_ATTRIBUABLES.values()))
+            )
+            .distinct()
+            .prefetch_related('groups')
+            .order_by('first_name', 'last_name', 'email')
+        )
+        return Response([self._serialiser(u) for u in agents])
+
+    def post(self, request):
+        self._verifier_admin(request)
+        serializer = CreationAgentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        utilisateur = User.objects.create_user(
+            email=d['email'],
+            password=d['mot_de_passe'],
+            first_name=d.get('prenom', ''),
+            last_name=d.get('nom', ''),
+            email_verifie=True,  # compte créé par l'admin : pas de vérification
+        )
+        groupe = Group.objects.get(name=ROLES_ATTRIBUABLES[d['role']])
+        utilisateur.groups.add(groupe)
+        return Response(self._serialiser(utilisateur), status=status.HTTP_201_CREATED)
+
+
+class GestionUtilisateurDetailView(APIView):
+    """Modification d'un compte agent (admin) : rôle, actif/inactif, mot de passe.
+
+    Garde-fous : on ne modifie ni un superuser (compte technique) ni son
+    propre compte (pour ne pas se retirer l'accès ou se désactiver soi-même).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        from candidatures import roles
+
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        utilisateur = get_object_or_404(User, pk=pk)
+        if utilisateur.is_superuser:
+            raise PermissionDenied(
+                "Ce compte technique (superuser) ne se modifie pas ici."
+            )
+        if utilisateur.pk == request.user.pk:
+            raise PermissionDenied(
+                "Vous ne pouvez pas modifier votre propre compte "
+                "(demandez à un autre administrateur)."
+            )
+
+        serializer = ModificationAgentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+
+        if 'role' in d:
+            # Un seul rôle back-office à la fois : on remplace les groupes de
+            # rôle par le nouveau (les autres groupes éventuels sont conservés).
+            groupes_roles = Group.objects.filter(name__in=list(ROLES_ATTRIBUABLES.values()))
+            utilisateur.groups.remove(*groupes_roles)
+            utilisateur.groups.add(Group.objects.get(name=ROLES_ATTRIBUABLES[d['role']]))
+        if 'est_actif' in d:
+            utilisateur.is_active = d['est_actif']
+            utilisateur.save(update_fields=['is_active'])
+        if d.get('mot_de_passe'):
+            utilisateur.set_password(d['mot_de_passe'])
+            utilisateur.save(update_fields=['password'])
+
+        return Response(GestionUtilisateursView._serialiser(utilisateur))
 
 
 class DemandeResetView(APIView):

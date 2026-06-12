@@ -11,6 +11,8 @@ const router = useRouter()
 const auth = useAuthStore()
 // Administrateurs et correcteurs peuvent corriger l'identité du dossier.
 const peutModifier = computed(() => auth.estAdmin || auth.estCorrecteur)
+// Peut faire changer les étapes (approuver, rejeter, retenir…) : admin ou validateur.
+const peutTraiter = computed(() => auth.estAdmin || auth.estValidateur)
 // id réactif : permet de naviguer entre dossiers (doublons) sans recharger la page.
 const id = computed(() => route.params.id)
 
@@ -215,7 +217,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
       <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-left"
              :to="{ name: 'validation' }">Retour</v-btn>
       <v-spacer />
-      <v-btn v-if="peutModifier && dossier.statut === 'depose'" variant="tonal" color="warning"
+      <v-btn v-if="(peutTraiter || peutModifier) && dossier.statut === 'depose'" variant="tonal" color="warning"
              prepend-icon="mdi-content-duplicate" append-icon="mdi-arrow-right"
              :loading="enNav" @click="doublonSuivant">Doublon suivant</v-btn>
     </div>
@@ -263,7 +265,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
             <v-icon size="12" color="warning">mdi-account</v-icon> même nom
             <template v-if="d.meme_email"> · <v-icon size="12" color="warning">mdi-email</v-icon> même email</template>
           </div>
-          <v-btn v-if="d.statut === 'depose'" size="x-small" color="error" variant="tonal"
+          <v-btn v-if="peutTraiter && d.statut === 'depose'" size="x-small" color="error" variant="tonal"
                  class="mt-2" prepend-icon="mdi-content-duplicate" :loading="doublonEnCours === d.id"
                  @click="rejeterDoublon(d)">
             Rejeter comme doublon
@@ -419,24 +421,29 @@ watch(() => route.params.id, (nouvel, ancien) => {
             </v-list>
           </v-card-text>
           <v-divider />
-          <v-alert v-if="!peutDecider" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
-            Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir décider.
+          <template v-if="peutTraiter">
+            <v-alert v-if="!peutDecider" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
+              Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir décider.
+            </v-alert>
+            <v-card-actions class="pa-4">
+              <v-btn color="success" variant="flat" prepend-icon="mdi-check" :disabled="!peutDecider"
+                     @click="demanderConfirmation('Approuver le dossier', 'Le dossier passera en examen et le candidat sera notifié par email.', approuver, 'success')">
+                Approuver → examen
+              </v-btn>
+              <v-spacer />
+              <v-btn color="error" variant="outlined" prepend-icon="mdi-close" :disabled="!peutDecider"
+                     @click="dialogRejet = true">
+                Rejeter
+              </v-btn>
+            </v-card-actions>
+          </template>
+          <v-alert v-else type="info" variant="tonal" density="compact" class="ma-4 mb-4">
+            Votre profil ne permet pas de valider ce dossier (consultation seule).
           </v-alert>
-          <v-card-actions class="pa-4">
-            <v-btn color="success" variant="flat" prepend-icon="mdi-check" :disabled="!peutDecider"
-                   @click="demanderConfirmation('Approuver le dossier', 'Le dossier passera en examen et le candidat sera notifié par email.', approuver, 'success')">
-              Approuver → examen
-            </v-btn>
-            <v-spacer />
-            <v-btn color="error" variant="outlined" prepend-icon="mdi-close" :disabled="!peutDecider"
-                   @click="dialogRejet = true">
-              Rejeter
-            </v-btn>
-          </v-card-actions>
         </v-card>
 
-        <!-- EN EXAMEN : désignation -->
-        <v-card v-if="estEnExamen" flat border class="mb-4">
+        <!-- EN EXAMEN : désignation (réservée aux administrateurs) -->
+        <v-card v-if="estEnExamen && auth.estAdmin" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-account-tie</v-icon> Évaluateurs désignés
           </v-card-title>
@@ -467,8 +474,8 @@ watch(() => route.params.id, (nouvel, ancien) => {
           </v-card-text>
         </v-card>
 
-        <!-- EN EXAMEN : décision finale (l'admin tranche) -->
-        <v-card v-if="estEnExamen" flat border class="mb-4">
+        <!-- EN EXAMEN : décision finale (admin ou validateur) -->
+        <v-card v-if="estEnExamen && peutTraiter" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-gavel</v-icon> Décision finale
           </v-card-title>

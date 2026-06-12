@@ -11,6 +11,14 @@ export const useAuthStore = defineStore('auth', {
     estAdmin: (s) => s.utilisateur?.roles?.includes('admin') ?? false,
     estEvaluateur: (s) => s.utilisateur?.roles?.includes('evaluateur') ?? false,
     estCorrecteur: (s) => s.utilisateur?.roles?.includes('correcteur') ?? false,
+    estValidateur: (s) => s.utilisateur?.roles?.includes('validateur') ?? false,
+    estLecteur: (s) => s.utilisateur?.roles?.includes('lecteur') ?? false,
+    // Peut faire changer les étapes (approuver/rejeter, valider une réclamation…).
+    peutTraiter() { return this.estAdmin || this.estValidateur },
+    // Accès au back-office (en lecture au minimum).
+    accesBackoffice() {
+      return this.estAdmin || this.estValidateur || this.estCorrecteur || this.estLecteur
+    },
   },
   actions: {
     // Vérifie s'il y a déjà une session active (au lancement de l'app).

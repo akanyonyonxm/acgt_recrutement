@@ -95,8 +95,7 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = PaginationPublique
 
     def _staff(self):
-        u = self.request.user
-        return roles.est_admin(u) or roles.est_correcteur(u)
+        return roles.acces_backoffice(self.request.user)
 
     def get_serializer_class(self):
         if self._staff():
@@ -121,7 +120,7 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         modifiable** ici (identifiant stable). `texte_recherche` est recalculé
         (les correspondances avec les dossiers restent cohérentes).
         """
-        if not self._staff():
+        if not (roles.est_admin(request.user) or roles.est_correcteur(request.user)):
             raise PermissionDenied(
                 "Seuls les administrateurs et correcteurs peuvent corriger un nom."
             )
@@ -395,8 +394,8 @@ class DossierViewSet(viewsets.ModelViewSet):
             )
         )
         user = self.request.user
-        if roles.est_admin(user) or roles.est_correcteur(user):
-            pass  # admin et correcteur voient tous les dossiers
+        if roles.acces_backoffice(user):
+            pass  # tout rôle back-office (admin, validateur, correcteur, lecteur) voit tout
         elif roles.est_evaluateur(user):
             qs = qs.filter(
                 Q(affectations__evaluateur=user) | Q(deposant=user)
@@ -529,7 +528,7 @@ class DossierViewSet(viewsets.ModelViewSet):
         """
         user = request.user
         qs = Dossier.objects.all()
-        if roles.est_admin(user) or roles.est_correcteur(user):
+        if roles.acces_backoffice(user):
             pass
         elif roles.est_evaluateur(user):
             qs = qs.filter(Q(affectations__evaluateur=user) | Q(deposant=user)).distinct()
@@ -550,7 +549,7 @@ class DossierViewSet(viewsets.ModelViewSet):
         `?apres=<id>` : renvoie le suivant (id croissant) ; boucle au début sinon.
         `?appel=<id>` : restreint à un appel. Renvoie {id, total}.
         """
-        if not (roles.est_admin(request.user) or roles.est_correcteur(request.user)):
+        if not roles.acces_backoffice(request.user):
             raise PermissionDenied("Réservé au back-office.")
         base = (
             Dossier.objects
@@ -766,21 +765,21 @@ class DossierViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def approuver(self, request, pk=None):
-        """DÉPOSÉ → EN_EXAMEN (admin). Accepte un `eligibilite_id` optionnel.
+        """DÉPOSÉ → EN_EXAMEN (admin ou validateur). `eligibilite_id` optionnel.
 
         Aucun email pendant le traitement : les candidats retenus sont notifiés
         seulement à la publication de la liste (voir `publier_retenus`).
         """
         return self._transition(
-            request, Dossier.Statut.EN_EXAMEN, roles.est_admin,
+            request, Dossier.Statut.EN_EXAMEN, roles.peut_traiter,
             lier_eligibilite=True,
         )
 
     @action(detail=True, methods=['post'])
     def rejeter(self, request, pk=None):
-        """DÉPOSÉ → REJETÉ (admin, motif obligatoire). Aucun email (traitement)."""
+        """DÉPOSÉ → REJETÉ (admin ou validateur, motif obligatoire). Aucun email."""
         return self._transition(
-            request, Dossier.Statut.REJETE, roles.est_admin,
+            request, Dossier.Statut.REJETE, roles.peut_traiter,
             motif_obligatoire=True,
         )
 
@@ -791,8 +790,8 @@ class DossierViewSet(viewsets.ModelViewSet):
         Raccourci pour traiter les doublons : motif « Dossier en double »
         pré-rempli, pas de notification au candidat.
         """
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         dossier = self.get_object()
         try:
             dossier.changer_statut(
@@ -856,10 +855,10 @@ class DossierViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Vous n'êtes pas désigné sur ce dossier.")
 
     def _verifier_validateur(self, dossier):
-        """Qui peut trancher retenir/non-retenir : l'admin, ou un évaluateur
-        désigné ET autorisé (peut_valider) sur ce dossier précis."""
+        """Qui peut trancher retenir/non-retenir : l'admin ou un validateur,
+        ou un évaluateur désigné ET autorisé (peut_valider) sur ce dossier."""
         user = self.request.user
-        if roles.est_admin(user):
+        if roles.peut_traiter(user):
             return
         autorise = dossier.affectations.filter(
             evaluateur=user, peut_valider=True,
@@ -878,7 +877,9 @@ class DossierViewSet(viewsets.ModelViewSet):
         """
         dossier = self.get_object()
         if request.method == 'GET':
-            self._verifier_designe(dossier)
+            # Consultation des avis : tout le back-office, ou un désigné.
+            if not roles.acces_backoffice(request.user):
+                self._verifier_designe(dossier)
             return Response(
                 EvaluationSerializer(dossier.evaluations.all(), many=True).data
             )
@@ -894,9 +895,10 @@ class DossierViewSet(viewsets.ModelViewSet):
 
     # --- Décision (évaluateur désigné ET autorisé, dossier EN_EXAMEN) ----
 
-    # Décision finale : l'admin tranche, ou un évaluateur désigné autorisé.
+    # Décision finale : l'admin ou un validateur tranche, ou un évaluateur
+    # désigné autorisé (vérifié ensuite dossier par dossier).
     _peut_decider = staticmethod(
-        lambda u: roles.est_admin(u) or roles.est_evaluateur(u)
+        lambda u: roles.peut_traiter(u) or roles.est_evaluateur(u)
     )
 
     @action(detail=True, methods=['post'])
@@ -962,8 +964,9 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         return [ReclamationThrottle()] if self.action == 'create' else []
 
     def get_queryset(self):
-        # Hors création, l'accès est strictement réservé aux admins.
-        if not roles.est_admin(self.request.user):
+        # Hors création, l'accès est réservé au back-office (lecture ; les
+        # actions valider/rejeter sont contrôlées séparément).
+        if not roles.acces_backoffice(self.request.user):
             return ReclamationEligibilite.objects.none()
         qs = ReclamationEligibilite.objects.select_related(
             'appel', 'poste', 'traite_par', 'dossier_cree',
@@ -1055,9 +1058,9 @@ class ReclamationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
-        """Comptes de réclamations par statut (admin), pour les KPI."""
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        """Comptes de réclamations par statut (back-office), pour les KPI."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
         par_statut = {
             row['statut']: row['n']
             for row in ReclamationEligibilite.objects.values('statut').annotate(n=Count('id'))
@@ -1067,8 +1070,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def doublons(self, request, pk=None):
         """Autres réclamations du même appel et même nom complet (non rejetées)."""
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
         reclamation = self.get_object()
         if not reclamation.texte_recherche:
             return Response([])
@@ -1094,8 +1097,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
 
         `?apres=<id>` renvoie la suivante ; boucle au début sinon. {id, total}.
         """
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
         sous_req = (
             ReclamationEligibilite.objects
             .filter(appel_id=OuterRef('appel_id'))
@@ -1124,9 +1127,9 @@ class ReclamationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'],
             url_path=r'documents/(?P<doc_id>[^/.]+)')
     def telecharger_document(self, request, pk=None, doc_id=None):
-        """Téléchargement protégé d'un justificatif (admin ; jamais public)."""
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        """Téléchargement protégé d'un justificatif (back-office ; jamais public)."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
         reclamation = self.get_object()
         doc = get_object_or_404(DocumentReclamation, pk=doc_id, reclamation=reclamation)
         try:
@@ -1143,8 +1146,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):
         """Valide la réclamation : crée un dossier et le conduit jusqu'à RETENU."""
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         reclamation = self.get_object()
         if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
             raise ValidationError("Cette réclamation a déjà été traitée.")
@@ -1184,8 +1187,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def rejeter(self, request, pk=None):
         """Rejette la réclamation (motif obligatoire)."""
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         reclamation = self.get_object()
         if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
             raise ValidationError("Cette réclamation a déjà été traitée.")

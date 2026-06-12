@@ -2,6 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '../../api'
 import StatCard from '../../components/StatCard.vue'
+import { useAuthStore } from '../../stores/auth'
+
+const auth = useAuthStore()
+// Peut traiter (valider/rejeter) une réclamation : admin ou validateur.
+const peutTraiter = computed(() => auth.estAdmin || auth.estValidateur)
 
 const reclamations = ref([])
 const total = ref(0)
@@ -244,7 +249,7 @@ onMounted(async () => {
                 <strong>{{ r.nom }} {{ r.postnom }} {{ r.prenom }}</strong>
                 <span class="text-medium-emphasis"> · #{{ r.id }} · {{ r.email }}</span>
               </span>
-              <v-btn v-if="r.statut === 'en_attente'" size="x-small" color="error" variant="tonal"
+              <v-btn v-if="peutTraiter && r.statut === 'en_attente'" size="x-small" color="error" variant="tonal"
                      :loading="doublonEnCours === r.id" @click="rejeterDoublonRec(r)">
                 Rejeter le doublon
               </v-btn>
@@ -267,7 +272,7 @@ onMounted(async () => {
             </a>
           </div>
 
-          <template v-if="detail.statut === 'en_attente'">
+          <template v-if="detail.statut === 'en_attente' && peutTraiter">
             <v-divider class="my-4" />
             <!-- Choix de l'action -->
             <div v-if="!action" class="d-flex ga-3">
@@ -288,7 +293,7 @@ onMounted(async () => {
               <v-textarea v-model="motifRejet" label="Motif du rejet (obligatoire)" rows="3" autofocus hide-details />
             </div>
           </template>
-          <template v-else>
+          <template v-else-if="detail.statut !== 'en_attente'">
             <v-divider class="my-4" />
             <div v-if="detail.motif" class="info-l"><span>Motif</span><strong>{{ detail.motif }}</strong></div>
             <div class="info-l"><span>Traité par</span><strong>{{ detail.traite_par || '—' }}</strong></div>

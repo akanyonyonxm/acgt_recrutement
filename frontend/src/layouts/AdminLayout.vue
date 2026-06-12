@@ -11,13 +11,17 @@ const { mobile } = useDisplay()
 // Ouvert par défaut sur grand écran, replié (overlay) sur mobile.
 const drawer = ref(!mobile.value)
 
-const NAV = [
+const NAV = computed(() => [
   { to: { name: 'validation' }, icon: 'mdi-check-decagram-outline', t1: 'Validation', t2: 'des dossiers' },
   { to: { name: 'eligibilite' }, icon: 'mdi-account-multiple-check-outline', t1: 'Liste', t2: 'éligibilité' },
   { to: { name: 'reclamations' }, icon: 'mdi-account-alert-outline', t1: 'Réclamations', t2: "d'éligibilité" },
   { to: { name: 'appels' }, icon: 'mdi-bullhorn-outline', t1: 'Appels à', t2: 'candidature' },
   { to: { name: 'retenus' }, icon: 'mdi-trophy-outline', t1: 'Publication', t2: 'des retenus' },
-]
+  // Gestion des accès : visible uniquement pour les administrateurs.
+  ...(auth.estAdmin
+    ? [{ to: { name: 'utilisateurs' }, icon: 'mdi-account-cog-outline', t1: 'Utilisateurs', t2: '& accès' }]
+    : []),
+])
 
 const dateCourante = computed(() =>
   new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })

@@ -2,6 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '../../api'
 import StatCard from '../../components/StatCard.vue'
+import { useAuthStore } from '../../stores/auth'
+
+const auth = useAuthStore()
 
 const appels = ref([])
 const chargement = ref(true)
@@ -35,7 +38,7 @@ onMounted(async () => {
       <v-icon color="primary" size="30" class="mr-3">mdi-bullhorn-outline</v-icon>
       <h1 class="text-h5 font-weight-bold text-primary">Appels à candidature</h1>
       <v-spacer />
-      <v-btn color="primary" variant="tonal" prepend-icon="mdi-plus"
+      <v-btn v-if="auth.estAdmin" color="primary" variant="tonal" prepend-icon="mdi-plus"
              href="/console-3xfk2a/candidatures/appelcandidature/add/" target="_blank">
         Nouvel appel
       </v-btn>

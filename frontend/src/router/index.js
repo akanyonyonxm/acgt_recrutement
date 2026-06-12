@@ -107,6 +107,12 @@ const routes = [
         name: 'retenus',
         component: () => import('../views/admin/Retenus.vue'),
       },
+      {
+        path: 'utilisateurs',
+        name: 'utilisateurs',
+        component: () => import('../views/admin/Utilisateurs.vue'),
+        meta: { adminSeul: true },
+      },
     ],
   },
   // Espace évaluateur (examen des dossiers désignés)
@@ -154,10 +160,14 @@ router.beforeEach(async (to) => {
   if (!auth.estConnecte) {
     return { name: 'connexion', query: { suite: to.fullPath } }
   }
-  // Back-office : administrateurs et correcteurs (ces derniers corrigent
-  // l'identité des dossiers, mais ne valident pas — contrôlé côté serveur).
-  if (to.meta.role === 'admin' && !auth.estAdmin && !auth.estCorrecteur) {
+  // Back-office : tout rôle agent (admin, validateur, correcteur, lecteur).
+  // Ce que chacun peut FAIRE est contrôlé par page et côté serveur.
+  if (to.meta.role === 'admin' && !auth.accesBackoffice) {
     return { name: 'connexion' }
+  }
+  // Pages réservées aux administrateurs (ex. gestion des utilisateurs).
+  if (to.meta.adminSeul && !auth.estAdmin) {
+    return { path: '/gestion/validation' }
   }
   // L'espace évaluateur est accessible aux évaluateurs (un admin/superuser
   // cumule le rôle évaluateur, il y a donc aussi accès).
