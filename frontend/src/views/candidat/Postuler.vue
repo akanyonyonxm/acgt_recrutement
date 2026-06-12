@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import api from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import { useCandidatureStore } from '../../stores/candidature'
@@ -76,6 +76,64 @@ function choisirAppel(id) {
   appelSelectionne.value = appels.value.find((a) => a.id === id) || null
 }
 
+// Vérification du code en direct contre la liste des éligibles publiée.
+// Purement indicative, jamais bloquante : le nom affiché est celui de la
+// liste officielle (qui peut comporter des coquilles), le code seul fait foi.
+const verifCode = ref({ etat: '', nom: '', ligne: null })   // etat : '' | 'verif' | 'ok' | 'inconnu'
+let minuterieCode = null
+watch(() => form.value.code, (code) => {
+  clearTimeout(minuterieCode)
+  verifCode.value = { etat: '', nom: '', ligne: null }
+  const c = (code || '').trim()
+  if (!c) return
+  minuterieCode = setTimeout(async () => {
+    verifCode.value = { etat: 'verif', nom: '', ligne: null }
+    try {
+      const { data } = await api.get('/eligibilite/verifier-code/', { params: { code: c } })
+      if ((form.value.code || '').trim() !== c) return   // saisie modifiée entre-temps
+      if (data.trouve) {
+        const l = data.ligne
+        const nom = l ? `${l.nom} ${l.postnom} ${l.prenom}`.replace(/\s+/g, ' ').trim() : ''
+        verifCode.value = { etat: 'ok', nom, ligne: l }
+      } else {
+        verifCode.value = { etat: 'inconnu', nom: '', ligne: null }
+      }
+    } catch {
+      verifCode.value = { etat: '', nom: '', ligne: null }   // panne réseau : pas de message
+    }
+  }, 450)
+}, { immediate: true })
+
+// Compare le nom saisi avec celui de la liste pour le code reconnu : sans
+// accents, sans casse et sans tenir compte de l'ordre des mots. Purement
+// indicatif (la liste peut contenir des coquilles), ne bloque jamais.
+const normaliser = (s) => (s || '')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const tokensTries = (s) => normaliser(s).split(' ').filter(Boolean).sort().join(' ')
+const tokens = (s) => normaliser(s).split(' ').filter(Boolean)
+const nomDiffere = computed(() => {
+  const l = verifCode.value.ligne
+  if (verifCode.value.etat !== 'ok' || !l) return false
+  // On ne compare qu'une fois nom et prénom saisis (sinon fausse alerte
+  // pendant la frappe).
+  if (!form.value.nom.trim() || !form.value.prenom.trim()) return false
+  const saisi = tokensTries(`${form.value.nom} ${form.value.postnom} ${form.value.prenom}`)
+  const liste = tokensTries(`${l.nom} ${l.postnom} ${l.prenom}`)
+  return saisi !== liste
+})
+// Au moins un des trois (nom, postnom ou prénom) doit correspondre à la ligne
+// de la liste : si AUCUN mot ne coïncide, on empêche de continuer (le code
+// n'est très probablement pas celui de la personne).
+const nomCommun = computed(() => {
+  const l = verifCode.value.ligne
+  if (!l) return true
+  const saisis = tokens(`${form.value.nom} ${form.value.postnom} ${form.value.prenom}`)
+  const liste = new Set(tokens(`${l.nom} ${l.postnom} ${l.prenom}`))
+  return saisis.some((t) => liste.has(t))
+})
+const bloqueParNom = computed(() => nomDiffere.value && !nomCommun.value)
+
 async function creerDossier() {
   erreur.value = ''
   enCours.value = true
@@ -88,7 +146,11 @@ async function creerDossier() {
     dossier.value = data
     etape.value = 2
   } catch (e) {
-    erreur.value = e.response?.data?.appel?.[0] || e.response?.data?.detail || 'Enregistrement impossible.'
+    const d = e.response?.data
+    // Les erreurs « hors champ » (ex. brouillon déjà existant) arrivent sous
+    // forme de liste : [message].
+    erreur.value = (Array.isArray(d) && d[0]) || d?.appel?.[0] || d?.detail
+      || 'Enregistrement impossible.'
   } finally {
     enCours.value = false
   }
@@ -171,9 +233,27 @@ async function soumettre() {
     <v-card v-if="etape === 1" flat border class="pa-2">
       <v-card-text>
         <v-text-field v-model="form.code" label="Code du dossier"
-                      prepend-inner-icon="mdi-identifier" class="mb-2 champ-code"
-                      hint="Renseignez votre code figurant sur la liste des éligibles."
-                      persistent-hint />
+                      prepend-inner-icon="mdi-identifier" class="champ-code"
+                      :loading="verifCode.etat === 'verif'" hide-details="auto" />
+        <p class="indice-code mb-2">
+          Renseignez votre code figurant sur la
+          <RouterLink :to="{ name: 'eligibles' }" target="_blank" class="lien-code">
+            liste des éligibles
+            <v-icon size="13">mdi-open-in-new</v-icon>
+          </RouterLink>.
+        </p>
+        <v-alert v-if="verifCode.etat === 'ok'" type="success" variant="tonal"
+                 density="compact" class="mb-3">
+          Code reconnu sur la liste des éligibles<template v-if="verifCode.nom">
+            : <strong>{{ verifCode.nom }}</strong>
+            <span class="text-caption">(orthographe de la liste officielle)</span></template>.
+        </v-alert>
+        <v-alert v-else-if="verifCode.etat === 'inconnu'" type="error" variant="tonal"
+                 density="compact" class="mb-3" icon="mdi-alert">
+          Ce code ne figure pas sur la liste des éligibles publiée. Vérifiez
+          attentivement votre saisie : <strong>un dossier dont le code n'est pas
+          reconnu sera automatiquement rejeté.</strong>
+        </v-alert>
         <v-select :model-value="form.appel" @update:modelValue="choisirAppel"
                   :items="appelItems" :item-props="(i) => ({ disabled: i.disabled })"
                   label="Appel à candidature" prepend-inner-icon="mdi-bullhorn" class="mb-2" />
@@ -188,6 +268,23 @@ async function soumettre() {
           <v-col cols="12" sm="4"><v-text-field v-model="form.postnom" label="Postnom" /></v-col>
           <v-col cols="12" sm="4"><v-text-field v-model="form.prenom" label="Prénom" /></v-col>
         </v-row>
+        <v-alert v-if="bloqueParNom" type="error" variant="tonal" density="compact"
+                 class="mb-3" icon="mdi-account-alert">
+          Le nom saisi ne correspond pas à celui inscrit sur la liste des éligibles
+          pour ce code : <strong>{{ verifCode.nom }}</strong>.
+          <strong>Au moins le nom, le postnom ou le prénom doit correspondre pour
+          continuer.</strong> Vérifiez votre code ou votre saisie.
+        </v-alert>
+        <v-alert v-else-if="nomDiffere" type="error" variant="tonal" density="compact"
+                 class="mb-3" icon="mdi-account-alert">
+          Le nom saisi diffère de celui inscrit sur la liste des éligibles pour ce
+          code : <strong>{{ verifCode.nom }}</strong> (au moins le nom, le postnom ou
+          le prénom doit correspondre avant de continuer). Cela ne vous empêche pas
+          de continuer — il peut s'agir d'une simple faute d'orthographe (dans votre
+          saisie ou sur la liste). Assurez-vous simplement que ce code est bien
+          <strong>le vôtre</strong>. Dans le cas contraire, <strong>votre dossier sera
+          rejeté automatiquement</strong>.
+        </v-alert>
         <v-text-field v-model="form.email" label="Email de contact" type="email" prepend-inner-icon="mdi-email"
                       hint="Vous (ou un proche) y recevrez le suivi du dossier" persistent-hint />
         <v-alert v-if="erreur" type="error" variant="tonal" density="compact" class="mt-3">{{ erreur }}</v-alert>
@@ -197,7 +294,7 @@ async function soumettre() {
         <v-spacer />
         <v-btn color="accent" variant="flat" size="large" rounded="lg" class="text-primary font-weight-bold"
                append-icon="mdi-arrow-right" :loading="enCours"
-               :disabled="!form.code || !form.appel || !form.poste || !form.nom || !form.prenom || !form.email || appelBloque(appelSelectionne)"
+               :disabled="!form.code || !form.appel || !form.poste || !form.nom || !form.prenom || !form.email || appelBloque(appelSelectionne) || bloqueParNom"
                @click="creerDossier">
           Continuer
         </v-btn>
@@ -399,4 +496,7 @@ async function soumettre() {
 }
 /* Indice du champ « Code du dossier » en bleu. */
 .champ-code :deep(.v-messages__message) { color: #1a237e; opacity: 1; font-weight: 600; }
+.indice-code { font-size: 0.78rem; color: #1a237e; font-weight: 600; padding: 4px 0 0 16px; }
+.lien-code { color: #1a237e; font-weight: 800; text-decoration: underline; white-space: nowrap; }
+.lien-code:hover { color: #283593; }
 </style>

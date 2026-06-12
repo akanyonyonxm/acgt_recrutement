@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue'
 import api, { initCsrf } from '../../api'
 
 const appels = ref([])
-const form = ref({ appel: null, nom: '', postnom: '', prenom: '', email: '', telephone: '', message: '' })
+const postes = ref([])
+const form = ref({ appel: null, poste: null, nom: '', postnom: '', prenom: '', email: '', telephone: '', message: '' })
 const docs = ref({ accuse: null, cv: null, identite: null })
 const diplomes = ref([])
 const siteWeb = ref('')        // honeypot anti-spam (doit rester vide)
@@ -16,14 +17,15 @@ const f = (v) => (Array.isArray(v) ? v[0] : v) || null
 const arr = (v) => (Array.isArray(v) ? v : v ? [v] : [])
 
 const valide = () =>
-  form.value.appel && form.value.nom.trim() && form.value.prenom.trim() &&
+  form.value.appel && form.value.poste && form.value.nom.trim() && form.value.prenom.trim() &&
   form.value.email.trim() && form.value.message.trim() && f(docs.value.accuse) &&
   f(docs.value.cv) && f(docs.value.identite) && arr(diplomes.value).length
 
 onMounted(async () => {
   await initCsrf()
-  const { data } = await api.get('/appels/')
+  const [{ data }, { data: dp }] = await Promise.all([api.get('/appels/'), api.get('/postes/')])
   appels.value = data.results.filter((a) => a.statut === 'publie').map((a) => ({ value: a.id, title: a.titre }))
+  postes.value = dp.results.map((p) => ({ value: p.id, title: p.libelle }))
   if (appels.value.length === 1) form.value.appel = appels.value[0].value
 })
 
@@ -81,6 +83,10 @@ async function envoyer() {
           <div class="text-subtitle-1 font-weight-bold text-primary mb-3">Vos informations</div>
           <v-select v-model="form.appel" :items="appels" label="Appel à candidature concerné *"
                     prepend-inner-icon="mdi-bullhorn-outline" />
+          <v-select v-model="form.poste" :items="postes" label="Poste / fonction visé(e) *"
+                    prepend-inner-icon="mdi-briefcase-outline"
+                    hint="Le poste pour lequel vous souhaitez être candidat." persistent-hint
+                    class="mb-2" />
           <v-row dense>
             <v-col cols="12" sm="4"><v-text-field v-model="form.nom" label="Nom *" /></v-col>
             <v-col cols="12" sm="4"><v-text-field v-model="form.postnom" label="Post-nom" /></v-col>

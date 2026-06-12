@@ -10,6 +10,7 @@ const loading = ref(true)
 
 const ACTIFS = ['brouillon', 'depose', 'en_examen']
 const nbActifs = computed(() => dossiers.value.filter((d) => ACTIFS.includes(d.statut)).length)
+const aBrouillon = computed(() => dossiers.value.some((d) => d.statut === 'brouillon'))
 
 const ACCENT = {
   brouillon: '#90A4AE', depose: '#FBC02D', en_examen: '#0288D1',
@@ -58,6 +59,13 @@ onMounted(charger)
     <v-alert v-if="bloque() && dossiers.length" type="info" variant="tonal" density="comfortable"
              class="mb-5" icon="mdi-check-circle-outline">
       Vous avez déjà postulé aux appels à candidature disponibles.
+    </v-alert>
+
+    <!-- Aide : suppression des brouillons -->
+    <v-alert v-if="!loading && aBrouillon" type="warning" variant="tonal" density="comfortable"
+             class="mb-5" icon="mdi-delete-alert-outline">
+      Vous pouvez supprimer le dossier <strong>Brouillon</strong> en cliquant sur le petit
+      bouton rouge <v-icon size="small" color="error">mdi-delete-outline</v-icon> à droite du dossier.
     </v-alert>
 
     <div v-if="loading" class="text-center py-10"><v-progress-circular indeterminate color="primary" /></div>

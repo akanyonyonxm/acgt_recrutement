@@ -8,7 +8,7 @@ contrôlent le rôle de l'utilisateur.
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -105,6 +105,36 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         for token in tokens_recherche(self.request.query_params.get('q', '')):
             qs = qs.filter(texte_recherche__contains=token)
         return qs
+
+    @action(detail=False, methods=['get'], url_path='verifier-code')
+    def verifier_code(self, request):
+        """Vérifie qu'un code figure sur la liste publiée (aide à la saisie).
+
+        Renvoie le nom tel qu'écrit sur la liste, à titre de repère visuel
+        uniquement : le code seul fait foi, aucune comparaison de noms n'est
+        faite et rien n'est bloquant. N'expose que des données déjà publiques
+        (la liste des éligibles affiche code + noms).
+        """
+        code = (request.query_params.get('code') or '').strip()
+        if not code:
+            return Response({'trouve': False, 'multiple': False, 'ligne': None})
+        lignes = list(
+            ListeEligibilite.objects.filter(est_publie=True, code__iexact=code)[:2]
+        )
+        if not lignes:
+            return Response({'trouve': False, 'multiple': False, 'ligne': None})
+        if len(lignes) > 1:
+            # Code ambigu (présent sur plusieurs lignes) : reconnu, mais sans
+            # nom affichable ni rattachement automatique possible.
+            return Response({'trouve': True, 'multiple': True, 'ligne': None})
+        ligne = lignes[0]
+        return Response({
+            'trouve': True, 'multiple': False,
+            'ligne': {
+                'id': ligne.id, 'code': ligne.code, 'nom': ligne.nom,
+                'postnom': ligne.postnom, 'prenom': ligne.prenom,
+            },
+        })
 
     @action(detail=False, methods=['post'], url_path='importer',
             parser_classes=[MultiPartParser, FormParser])
@@ -261,6 +291,20 @@ class DossierViewSet(viewsets.ModelViewSet):
             Dossier.objects
             .select_related('appel', 'deposant', 'ligne_eligibilite')
             .prefetch_related('pieces__type_piece')
+            # Correspondance avec la liste d'éligibilité (badge indicatif dans
+            # la file de validation) : le code saisi est-il reconnu ? Sinon, un
+            # homonyme exact (texte normalisé) existe-t-il ? Calculé en SQL
+            # (Exists) pour éviter tout N+1 ; jamais bloquant.
+            .annotate(
+                corresp_code=Exists(
+                    ListeEligibilite.objects.exclude(code='')
+                    .filter(code__iexact=OuterRef('code'))
+                ),
+                corresp_nom=Exists(
+                    ListeEligibilite.objects.exclude(texte_recherche='')
+                    .filter(texte_recherche=OuterRef('texte_recherche'))
+                ),
+            )
         )
         user = self.request.user
         if roles.est_admin(user):
@@ -313,6 +357,17 @@ class DossierViewSet(viewsets.ModelViewSet):
         if appel.candidature_unique and appel.dossiers.filter(deposant=user).exists():
             raise ValidationError(
                 "Vous avez déjà une candidature pour cet appel : une seule est autorisée."
+            )
+        # Anti-doublon : un seul brouillon à la fois par appel et par compte.
+        # Règle applicative à la création uniquement (pas de contrainte en
+        # base) : les brouillons multiples existants restent valides.
+        if appel.dossiers.filter(
+            deposant=user, statut=Dossier.Statut.BROUILLON,
+        ).exists():
+            raise ValidationError(
+                "Vous avez déjà un dossier en brouillon pour cet appel. "
+                "Reprenez-le depuis « Mes dossiers » (ou supprimez-le) "
+                "avant d'en créer un nouveau."
             )
         serializer.save(deposant=user, statut=Dossier.Statut.BROUILLON)
 
@@ -437,6 +492,7 @@ class DossierViewSet(viewsets.ModelViewSet):
                 'pieces_manquantes': [tp.libelle for tp in manquantes],
                 'detail': "Des pièces obligatoires sont manquantes.",
             })
+        self._rattacher_par_code(dossier)
         try:
             dossier.changer_statut(
                 Dossier.Statut.DEPOSE, par=request.user,
@@ -447,6 +503,23 @@ class DossierViewSet(viewsets.ModelViewSet):
 
         self._envoyer_accuse(dossier)
         return Response(self.get_serializer(dossier).data)
+
+    @staticmethod
+    def _rattacher_par_code(dossier):
+        """Rattache la ligne d'éligibilité dont le code correspond exactement.
+
+        Le code seul fait foi (jamais de comparaison de noms : la liste peut
+        contenir des coquilles). Best-effort : ne se fait que si le dossier
+        n'est pas déjà rattaché et que le code identifie UNE seule ligne ;
+        l'admin garde la main (il peut re-rattacher manuellement).
+        """
+        code = (dossier.code or '').strip()
+        if dossier.ligne_eligibilite_id or not code:
+            return
+        lignes = list(ListeEligibilite.objects.filter(code__iexact=code)[:2])
+        if len(lignes) == 1:
+            dossier.ligne_eligibilite = lignes[0]
+            dossier.save(update_fields=['ligne_eligibilite'])
 
     @staticmethod
     def _code_dossier(dossier):
@@ -712,7 +785,7 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         if not roles.est_admin(self.request.user):
             return ReclamationEligibilite.objects.none()
         qs = ReclamationEligibilite.objects.select_related(
-            'appel', 'traite_par', 'dossier_cree',
+            'appel', 'poste', 'traite_par', 'dossier_cree',
         ).prefetch_related('documents')
         statut = self.request.query_params.get('statut')
         if statut:
@@ -827,8 +900,11 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
             raise ValidationError("Cette réclamation a déjà été traitée.")
 
+        # Poste : celui choisi par l'admin à la validation, sinon celui déclaré
+        # par le réclamant dans le formulaire (absent sur les anciennes
+        # réclamations, d'où le repli sur None).
         poste_id = request.data.get('poste_id')
-        poste = get_object_or_404(Poste, pk=poste_id) if poste_id else None
+        poste = get_object_or_404(Poste, pk=poste_id) if poste_id else reclamation.poste
 
         with transaction.atomic():
             dossier = Dossier.objects.create(

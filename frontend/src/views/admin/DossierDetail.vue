@@ -29,6 +29,10 @@ const peutValider = ref(true)
 
 const estDepose = computed(() => dossier.value?.statut === 'depose')
 const estEnExamen = computed(() => dossier.value?.statut === 'en_examen')
+// La décision est possible dès qu'un rattachement existe : soit fait ici par
+// l'agent (ligneChoisie), soit déjà en place (rattachement automatique par
+// code à la soumission, ou rattachement antérieur).
+const peutDecider = computed(() => !!(ligneChoisie.value || dossier.value?.ligne_eligibilite))
 
 function notifier(text, color = 'success') {
   snack.value = { show: true, color, text }
@@ -220,6 +224,28 @@ onMounted(charger)
           </v-card-title>
           <v-divider />
           <v-card-text>
+            <!-- Rattachement déjà en place (auto par code, ou antérieur) -->
+            <v-alert v-if="dossier.ligne_eligibilite" type="success" variant="tonal"
+                     density="compact" class="mb-3">
+              Dossier rattaché à <strong>{{ dossier.ligne_eligibilite }}</strong> sur la
+              liste d'éligibilité. Vous pouvez décider directement, ou sélectionner une
+              autre personne ci-dessous pour corriger le rattachement.
+            </v-alert>
+            <!-- Suggestion : le code saisi correspond à une ligne unique -->
+            <v-alert v-else-if="dossier.suggestion_eligibilite" type="info" variant="tonal"
+                     density="compact" class="mb-3">
+              Le code « <strong>{{ dossier.code }}</strong> » correspond à
+              <strong>{{ dossier.suggestion_eligibilite.nom }}
+                {{ dossier.suggestion_eligibilite.postnom }}
+                {{ dossier.suggestion_eligibilite.prenom }}</strong>
+              (orthographe de la liste).
+              <div class="mt-2">
+                <v-btn size="small" color="success" variant="flat" prepend-icon="mdi-link-variant"
+                       @click="ligneChoisie = dossier.suggestion_eligibilite.id">
+                  Utiliser cette correspondance
+                </v-btn>
+              </div>
+            </v-alert>
             <v-text-field v-model="q" label="Rechercher un nom dans la liste"
                           append-inner-icon="mdi-magnify" hide-details
                           @click:append-inner="chercherEligibilite" @keyup.enter="chercherEligibilite" />
@@ -244,16 +270,16 @@ onMounted(charger)
             </v-alert>
           </v-card-text>
           <v-divider />
-          <v-alert v-if="!ligneChoisie" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
+          <v-alert v-if="!peutDecider" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
             Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir décider.
           </v-alert>
           <v-card-actions class="pa-4">
-            <v-btn color="success" variant="flat" prepend-icon="mdi-check" :disabled="!ligneChoisie"
+            <v-btn color="success" variant="flat" prepend-icon="mdi-check" :disabled="!peutDecider"
                    @click="demanderConfirmation('Approuver le dossier', 'Le dossier passera en examen et le candidat sera notifié par email.', approuver, 'success')">
               Approuver → examen
             </v-btn>
             <v-spacer />
-            <v-btn color="error" variant="outlined" prepend-icon="mdi-close" :disabled="!ligneChoisie"
+            <v-btn color="error" variant="outlined" prepend-icon="mdi-close" :disabled="!peutDecider"
                    @click="dialogRejet = true">
               Rejeter
             </v-btn>

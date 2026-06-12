@@ -84,7 +84,9 @@ function rechercher() { clearTimeout(minuteur); minuteur = setTimeout(() => { q.
 function ouvrir(rec) {
   detail.value = rec
   action.value = null
-  posteChoisi.value = null
+  // Pré-sélectionne le poste déclaré par le réclamant (absent sur les
+  // anciennes réclamations) ; l'admin peut le changer avant de valider.
+  posteChoisi.value = rec.poste || null
   motifRejet.value = ''
   dialog.value = true
 }
@@ -175,6 +177,7 @@ onMounted(async () => {
         <v-card-text>
           <div class="info-l"><span>Personne</span><strong>{{ detail.nom }} {{ detail.postnom }} {{ detail.prenom }}</strong></div>
           <div class="info-l"><span>Appel</span><strong>{{ detail.appel_titre }}</strong></div>
+          <div class="info-l"><span>Poste souhaité</span><strong>{{ detail.poste_libelle || '—' }}</strong></div>
           <div class="info-l"><span>Email</span><strong>{{ detail.email }}</strong></div>
           <div class="info-l"><span>Téléphone</span><strong>{{ detail.telephone || '—' }}</strong></div>
           <div v-if="detail.message" class="info-l"><span>Message</span><strong>{{ detail.message }}</strong></div>
@@ -208,7 +211,9 @@ onMounted(async () => {
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
                 La personne sera ajoutée aux <strong>retenus</strong> (un dossier est créé et marqué retenu).
               </v-alert>
-              <v-select v-model="posteChoisi" :items="postes" label="Poste visé (facultatif)" clearable hide-details />
+              <v-select v-model="posteChoisi" :items="postes" label="Poste visé" clearable
+                        :hint="detail.poste ? 'Pré-rempli avec le poste déclaré par le réclamant.' : 'Non déclaré par le réclamant : choisissez-le si possible.'"
+                        persistent-hint />
             </div>
             <!-- Rejet -->
             <div v-else>
