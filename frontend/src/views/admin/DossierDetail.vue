@@ -281,8 +281,8 @@ onMounted(charger)
                 </div>
               </v-card>
             </template>
-            <v-alert v-else-if="!dossier.ligne_eligibilite" type="warning" variant="tonal"
-                     density="compact" class="mb-2">
+            <v-alert v-else-if="!dossier.ligne_eligibilite" type="error" variant="tonal"
+                     density="compact" class="mb-2" icon="mdi-alert-circle">
               Aucune correspondance automatique trouvée. Recherchez manuellement ci-dessous.
             </v-alert>
 
