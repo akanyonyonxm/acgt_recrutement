@@ -563,7 +563,7 @@ class DossierViewSet(viewsets.ModelViewSet):
     def _rattacher_par_nom(dossier):
         """Rattache la ligne d'éligibilité qui désigne cette même personne.
 
-        Critère = au moins 2 des 3 champs du nom coïncident (cf.
+        Critère = nom complet identique (nom ET postnom ET prénom ; cf.
         `Dossier.ligne_eligibilite_correspondante`), JAMAIS le code seul : des
         candidats saisissent le code d'autrui (triche). Best-effort : seulement
         si le dossier n'est pas déjà rattaché et si la correspondance est unique.

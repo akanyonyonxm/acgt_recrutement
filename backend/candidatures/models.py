@@ -206,43 +206,22 @@ class Dossier(models.Model):
     def ligne_eligibilite_correspondante(self):
         """LA ligne de la liste d'éligibilité qui désigne cette même personne.
 
-        Critère : au moins **2 des 3** champs (nom, postnom, prénom) coïncident
-        (insensible à la casse ; un champ vide ne compte pas). Tolère donc une
-        coquille ou un champ manquant sur la liste, mais rejette quelqu'un qui a
-        juste copié le code d'autrui (son nom ne partage qu'au plus un champ).
-        Renvoie la ligne seulement si la **meilleure** correspondance est unique
-        (égalité au sommet = ambigu → None, l'admin tranche). Jamais le code.
+        Critère STRICT : le nom complet (nom **et** postnom **et** prénom) est
+        identique. La comparaison se fait sur `texte_recherche` (forme
+        normalisée : sans accents, minuscules, espaces simples), donc insensible
+        aux accents et à la casse, et un champ vide des deux côtés est bien
+        considéré comme identique. Jamais le code (des candidats saisissent le
+        code d'autrui). Renvoie la ligne seulement si elle est unique (si la
+        liste contient deux personnes du même nom complet → None, l'admin
+        tranche).
         """
-        import operator
-        from functools import reduce
-
-        conds = []
-        if self.nom:
-            conds.append(models.Q(nom__iexact=self.nom))
-        if self.postnom:
-            conds.append(models.Q(postnom__iexact=self.postnom))
-        if self.prenom:
-            conds.append(models.Q(prenom__iexact=self.prenom))
-        if len(conds) < 2:
+        if not self.texte_recherche:
             return None
-
-        def egal(a, b):
-            return bool(a) and bool(b) and a.strip().lower() == b.strip().lower()
-
-        candidats = ListeEligibilite.objects.filter(reduce(operator.or_, conds))[:50]
-        scores = sorted(
-            (
-                (egal(c.nom, self.nom) + egal(c.postnom, self.postnom)
-                 + egal(c.prenom, self.prenom), c)
-                for c in candidats
-            ),
-            key=lambda x: x[0], reverse=True,
+        lignes = list(
+            ListeEligibilite.objects.filter(texte_recherche=self.texte_recherche)[:2]
         )
-        scores = [(s, c) for s, c in scores if s >= 2]
-        if not scores:
-            return None
-        if len(scores) == 1 or scores[0][0] > scores[1][0]:
-            return scores[0][1]
+        if len(lignes) == 1:
+            return lignes[0]
         return None
 
     def transitions_possibles(self):

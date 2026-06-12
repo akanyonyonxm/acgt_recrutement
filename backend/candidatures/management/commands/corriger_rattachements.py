@@ -7,9 +7,8 @@ légitimes n'étaient pas rattachés. Le rattachement doit se faire sur le NOM
 (nom+postnom+prénom), jamais sur le code seul.
 
 Cette commande parcourt **tous les dossiers soumis** (hors brouillons) et, pour
-chacun, calcule la bonne correspondance par le nom — au moins 2 des 3 champs
-nom/postnom/prénom coïncident, meilleure correspondance unique ; tolère une
-coquille ou un champ manquant sur la liste (cf.
+chacun, calcule la bonne correspondance par le nom — nom complet identique (nom
+ET postnom ET prénom, insensible aux accents/casse), correspondance unique (cf.
 `Dossier.ligne_eligibilite_correspondante`). Puis :
   - **rattache** ceux qui ne le sont pas encore mais dont le nom correspond ;
   - **conserve** les rattachements déjà corrects ;
