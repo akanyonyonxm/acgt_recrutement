@@ -821,6 +821,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
     `Dossier.changer_statut()` (l'audit et l'invariant de statut sont préservés).
     """
 
+    # 25 par page, taille ajustable (page_size) — comme la file de validation.
+    pagination_class = PaginationStandard
     # Multipart pour la création (fichiers) ; JSON pour valider/rejeter.
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 

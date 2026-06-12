@@ -32,12 +32,12 @@ const compte = (k) => (k === '' ? stats.value.total : stats.value.par_statut[k] 
 const COULEUR = { en_attente: 'warning', validee: 'success', rejetee: 'error' }
 
 const ENTETES = [
-  { title: '#', key: 'id', width: 60 },
+  { title: '#', key: 'id', width: 60, sortable: false },
   { title: 'Personne', key: 'personne', sortable: false },
-  { title: 'Appel', key: 'appel_titre' },
-  { title: 'Contact', key: 'email' },
-  { title: 'Statut', key: 'statut' },
-  { title: 'Reçue le', key: 'cree_le' },
+  { title: 'Appel', key: 'appel_titre', sortable: false },
+  { title: 'Contact', key: 'email', sortable: false },
+  { title: 'Statut', key: 'statut', sortable: false },
+  { title: 'Reçue le', key: 'cree_le', sortable: false },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
 
@@ -62,10 +62,14 @@ async function chargerStats() {
   const { data } = await api.get('/reclamations/stats/')
   stats.value = data
 }
-async function charger() {
+
+// Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${q.value}`)
+
+async function charger({ page = 1, itemsPerPage = 25 } = {}) {
   chargement.value = true
   try {
-    const params = {}
+    const params = { page, page_size: itemsPerPage > 0 ? itemsPerPage : 25 }
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
     if (q.value) params.q = q.value
@@ -76,10 +80,10 @@ async function charger() {
     chargement.value = false
   }
 }
-function filtrer(k) { statut.value = k; charger() }
+function filtrer(k) { statut.value = k }     // -> cle change -> tableau rechargé
 
 let minuteur
-function rechercher() { clearTimeout(minuteur); minuteur = setTimeout(() => { q.value = q.value.trim(); charger() }, 300) }
+function rechercher() { clearTimeout(minuteur); minuteur = setTimeout(() => { q.value = q.value.trim() }, 300) }
 
 function ouvrir(rec) {
   detail.value = rec
@@ -116,7 +120,8 @@ onMounted(async () => {
   const [a, p] = await Promise.all([api.get('/appels/'), api.get('/postes/')])
   appels.value = a.data.results.map((x) => ({ value: x.id, title: x.titre }))
   postes.value = p.data.results.map((x) => ({ value: x.id, title: x.libelle }))
-  await Promise.all([charger(), chargerStats()])
+  // Le tableau (v-data-table-server) déclenche le 1er chargement via @update:options.
+  chargerStats()
 })
 </script>
 
@@ -128,9 +133,9 @@ onMounted(async () => {
       <v-spacer />
       <v-text-field v-model="q" @update:modelValue="rechercher" placeholder="Rechercher un nom…"
                     prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details clearable
-                    style="max-width: 260px" @click:clear="q = ''; charger()" />
+                    style="max-width: 260px" @click:clear="q = ''" />
       <v-select v-model="appel" :items="appels" label="Appel" clearable hide-details density="compact"
-                variant="outlined" style="max-width: 220px" @update:modelValue="charger" />
+                variant="outlined" style="max-width: 220px" />
     </div>
 
     <!-- KPI -->
@@ -143,9 +148,12 @@ onMounted(async () => {
 
     <!-- Tableau -->
     <v-card flat border>
-      <v-data-table :headers="ENTETES" :items="reclamations" :loading="chargement"
-                    items-per-page="25" hover class="tableau-admin"
-                    no-data-text="Aucune réclamation dans cette catégorie.">
+      <v-data-table-server
+        :headers="ENTETES" :items="reclamations" :items-length="total" :loading="chargement"
+        :search="cle" :items-per-page="25"
+        :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
+        @update:options="charger" hover class="tableau-admin"
+        no-data-text="Aucune réclamation dans cette catégorie." loading-text="Chargement…">
         <template #item.personne="{ item }">
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
         </template>
@@ -160,7 +168,7 @@ onMounted(async () => {
             Examiner
           </v-btn>
         </template>
-      </v-data-table>
+      </v-data-table-server>
     </v-card>
 
     <!-- Détail / décision -->
