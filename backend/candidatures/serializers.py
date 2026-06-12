@@ -222,15 +222,16 @@ class DossierSerializer(serializers.ModelSerializer):
         return resultats[:6]
 
     def get_doublons(self, obj):
-        """Autres dossiers du même appel = même personne probable (même email
-        OU même nom complet normalisé). Pour repérer et traiter les doublons."""
-        from django.db.models import Q
-
+        """Autres dossiers SOUMIS du même appel ayant le même NOM COMPLET
+        (nom+postnom+prénom normalisé) = même personne probable. On n'utilise
+        pas l'email (un proche peut déposer pour plusieurs personnes depuis la
+        même adresse). Les brouillons sont ignorés."""
+        if not obj.texte_recherche:
+            return []
         autres = (
             Dossier.objects
-            .filter(appel_id=obj.appel_id)
+            .filter(appel_id=obj.appel_id, texte_recherche=obj.texte_recherche)
             .exclude(statut=Dossier.Statut.BROUILLON)   # on ignore les brouillons
-            .filter(Q(email__iexact=obj.email) | Q(texte_recherche=obj.texte_recherche))
             .exclude(pk=obj.pk)
             .order_by('cree_le')[:10]
         )
@@ -240,7 +241,6 @@ class DossierSerializer(serializers.ModelSerializer):
                 'prenom': d.prenom, 'email': d.email, 'statut': d.statut,
                 'statut_libelle': d.get_statut_display(),
                 'meme_email': (d.email or '').strip().lower() == (obj.email or '').strip().lower(),
-                'meme_nom': d.texte_recherche == obj.texte_recherche,
             }
             for d in autres
         ]

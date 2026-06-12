@@ -178,7 +178,8 @@ watch(() => route.params.id, (nouvel, ancien) => {
         sur le même appel.
       </div>
       <div class="text-caption mb-2">
-        Même email ou même nom. Traitez-en un seul et rejetez les autres (motif « Dossier en double »).
+        Même nom complet (nom, postnom et prénom). Traitez-en un seul et rejetez les autres
+        (motif « Dossier en double »).
       </div>
       <div class="d-flex flex-wrap ga-2">
         <v-card v-for="d in dossier.doublons" :key="d.id" flat border class="pa-2 px-3 doublon-carte"
@@ -189,11 +190,8 @@ watch(() => route.params.id, (nouvel, ancien) => {
           </div>
           <div class="text-caption">{{ d.nom }} {{ d.postnom }} {{ d.prenom }}</div>
           <div class="text-caption text-medium-emphasis">
-            <v-icon v-if="d.meme_email" size="12" color="warning">mdi-email</v-icon>
-            <span v-if="d.meme_email">même email</span>
-            <span v-if="d.meme_email && d.meme_nom"> · </span>
-            <v-icon v-if="d.meme_nom" size="12" color="warning">mdi-account</v-icon>
-            <span v-if="d.meme_nom">même nom</span>
+            <v-icon size="12" color="warning">mdi-account</v-icon> même nom
+            <template v-if="d.meme_email"> · <v-icon size="12" color="warning">mdi-email</v-icon> même email</template>
           </div>
         </v-card>
       </div>
