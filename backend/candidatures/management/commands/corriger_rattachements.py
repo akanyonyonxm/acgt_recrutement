@@ -6,12 +6,13 @@ code d'autrui : le dossier se retrouvait rattaché à une personne qui n'est pas
 la sienne (nom totalement différent). Le rattachement doit se faire sur le NOM
 COMPLET (nom+postnom+prénom), jamais sur le code seul.
 
-Cette commande :
-  - détache (`ligne_eligibilite = None`) les dossiers dont le nom complet ne
-    correspond PAS à la ligne actuellement rattachée (rattachement par code
-    erroné) ;
-  - tente ensuite un rattachement correct par nom complet (si une seule ligne
-    de la liste porte exactement ce nom).
+Cette commande, pour chaque dossier rattaché, recalcule la bonne correspondance
+par le nom (au moins 2 des 3 champs nom/postnom/prénom — tolère une coquille ou
+un champ manquant ; cf. `Dossier.ligne_eligibilite_correspondante`) et :
+  - conserve le rattachement s'il est correct ;
+  - le remplace (détache, ou rerattache à la bonne personne) sinon — ce qui
+    retire les rattachements faits par code à une personne qui n'est pas la
+    sienne (triche).
 
 Opération NON destructive (on ne supprime aucune donnée ; on corrige seulement
 le champ `ligne_eligibilite`). À lancer MANUELLEMENT sur le serveur — jamais
@@ -23,7 +24,7 @@ dans le pipeline de déploiement.
 
 from django.core.management.base import BaseCommand
 
-from candidatures.models import Dossier, ListeEligibilite
+from candidatures.models import Dossier
 
 
 class Command(BaseCommand):
@@ -47,33 +48,25 @@ class Command(BaseCommand):
             .select_related('ligne_eligibilite')
         )
         for dossier in qs:
-            ligne = dossier.ligne_eligibilite
-            # Le rattachement est correct si le nom complet normalisé coïncide.
-            if dossier.texte_recherche and dossier.texte_recherche == ligne.texte_recherche:
+            ancienne = dossier.ligne_eligibilite
+            # La bonne correspondance par le nom (≥2 champs sur 3), ou None.
+            correcte = dossier.ligne_eligibilite_correspondante()
+
+            # Rattachement déjà correct → on n'y touche pas.
+            if correcte is not None and correcte.id == ancienne.id:
                 conserves += 1
                 continue
-
-            # Rattachement erroné (probablement par code) → on le retire.
-            ancienne = str(ligne)
-            nouvelle = None
-            if dossier.texte_recherche:
-                candidates = list(
-                    ListeEligibilite.objects
-                    .filter(texte_recherche=dossier.texte_recherche)[:2]
-                )
-                if len(candidates) == 1:
-                    nouvelle = candidates[0]
 
             self.stdout.write(
                 f"#{dossier.pk} {dossier.nom} {dossier.postnom} {dossier.prenom} "
                 f"(code {dossier.code or '-'}) : detache de « {ancienne} »"
-                + (f" -> rerattache a « {nouvelle} »" if nouvelle else " -> aucun nom correspondant")
+                + (f" -> rerattache a « {correcte} »" if correcte else " -> aucun nom correspondant")
             )
             if not simuler:
-                dossier.ligne_eligibilite = nouvelle
+                dossier.ligne_eligibilite = correcte
                 dossier.save(update_fields=['ligne_eligibilite'])
             detaches += 1
-            if nouvelle:
+            if correcte:
                 rerattaches += 1
 
         prefixe = '[SIMULATION] ' if simuler else ''

@@ -561,20 +561,18 @@ class DossierViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _rattacher_par_nom(dossier):
-        """Rattache la ligne d'éligibilité dont le NOM COMPLET correspond.
+        """Rattache la ligne d'éligibilité qui désigne cette même personne.
 
-        Le rattachement se fait sur nom+postnom+prénom (texte normalisé), JAMAIS
-        sur le code seul : des candidats saisissent le code d'autrui (triche).
-        Best-effort : seulement si le dossier n'est pas déjà rattaché et si le
-        nom complet identifie UNE seule personne (homonymes → l'admin tranche).
+        Critère = au moins 2 des 3 champs du nom coïncident (cf.
+        `Dossier.ligne_eligibilite_correspondante`), JAMAIS le code seul : des
+        candidats saisissent le code d'autrui (triche). Best-effort : seulement
+        si le dossier n'est pas déjà rattaché et si la correspondance est unique.
         """
-        if dossier.ligne_eligibilite_id or not dossier.texte_recherche:
+        if dossier.ligne_eligibilite_id:
             return
-        lignes = list(
-            ListeEligibilite.objects.filter(texte_recherche=dossier.texte_recherche)[:2]
-        )
-        if len(lignes) == 1:
-            dossier.ligne_eligibilite = lignes[0]
+        ligne = dossier.ligne_eligibilite_correspondante()
+        if ligne:
+            dossier.ligne_eligibilite = ligne
             dossier.save(update_fields=['ligne_eligibilite'])
 
     @staticmethod
