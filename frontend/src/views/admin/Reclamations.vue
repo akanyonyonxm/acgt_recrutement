@@ -240,7 +240,10 @@ onMounted(async () => {
             </div>
             <div v-for="r in doublonsRec" :key="r.id" class="d-flex align-center ga-2 mt-1">
               <v-chip :color="COULEUR[r.statut]" size="x-small" variant="flat" label>{{ r.statut_libelle }}</v-chip>
-              <span class="text-caption flex-grow-1">#{{ r.id }} · {{ r.email }}</span>
+              <span class="text-caption flex-grow-1" style="min-width:0">
+                <strong>{{ r.nom }} {{ r.postnom }} {{ r.prenom }}</strong>
+                <span class="text-medium-emphasis"> · #{{ r.id }} · {{ r.email }}</span>
+              </span>
               <v-btn v-if="r.statut === 'en_attente'" size="x-small" color="error" variant="tonal"
                      :loading="doublonEnCours === r.id" @click="rejeterDoublonRec(r)">
                 Rejeter le doublon
