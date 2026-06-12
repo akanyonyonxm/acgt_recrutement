@@ -432,9 +432,15 @@ async function soumettre() {
       <v-card v-else flat border class="pa-10 text-center">
         <v-icon color="success" size="72" class="mb-3">mdi-check-circle</v-icon>
         <h2 class="text-h5 text-primary mb-2">Dossier soumis !</h2>
-        <p class="text-body-1 mb-1">Votre dossier <strong>#{{ dossier.id }}</strong> a bien été enregistré.</p>
+        <p class="text-body-1 mb-1">
+          Votre dossier <strong>{{ dossier.code || ('#' + dossier.id) }}</strong> a bien été enregistré.
+        </p>
+        <p class="text-body-2 text-medium-emphasis mb-1">
+          Un seul dossier a été créé. Un accusé de réception vous a été envoyé avec ce
+          même code <strong>{{ dossier.code || ('#' + dossier.id) }}</strong>.
+        </p>
         <p class="text-body-2 text-medium-emphasis mb-6">
-          Un accusé de réception vous a été envoyé. Suivez son statut dans « Mes dossiers ».
+          Suivez son statut dans « Mes dossiers ».
         </p>
         <v-btn color="primary" variant="flat" :to="{ name: 'mes-dossiers' }" prepend-icon="mdi-folder-account">
           Voir mes dossiers
