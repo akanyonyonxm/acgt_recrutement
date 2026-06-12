@@ -154,7 +154,9 @@ router.beforeEach(async (to) => {
   if (!auth.estConnecte) {
     return { name: 'connexion', query: { suite: to.fullPath } }
   }
-  if (to.meta.role === 'admin' && !auth.estAdmin) {
+  // Back-office : administrateurs et correcteurs (ces derniers corrigent
+  // l'identité des dossiers, mais ne valident pas — contrôlé côté serveur).
+  if (to.meta.role === 'admin' && !auth.estAdmin && !auth.estCorrecteur) {
     return { name: 'connexion' }
   }
   // L'espace évaluateur est accessible aux évaluateurs (un admin/superuser

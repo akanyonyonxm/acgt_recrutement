@@ -25,6 +25,8 @@ class UserSerializer(serializers.ModelSerializer):
             r.append('admin')
         if roles.est_evaluateur(obj):
             r.append('evaluateur')
+        if roles.est_correcteur(obj):
+            r.append('correcteur')
         if not r:
             r.append('candidat')
         return r

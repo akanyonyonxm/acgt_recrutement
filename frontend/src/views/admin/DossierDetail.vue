@@ -4,8 +4,12 @@ import { useRoute } from 'vue-router'
 import api from '../../api'
 import StatutBadge from '../../components/StatutBadge.vue'
 import { couleurStatut } from '../../statuts'
+import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
+const auth = useAuthStore()
+// Administrateurs et correcteurs peuvent corriger l'identité du dossier.
+const peutModifier = computed(() => auth.estAdmin || auth.estCorrecteur)
 // id réactif : permet de naviguer entre dossiers (doublons) sans recharger la page.
 const id = computed(() => route.params.id)
 
@@ -24,6 +28,35 @@ const CHAMPS = [
   { key: 'postnom', libelle: 'Postnom' },
   { key: 'prenom', libelle: 'Prénom' },
 ]
+
+// Édition de l'identité (code/nom/postnom/prénom)
+const dialogEdition = ref(false)
+const formEdition = ref({ code: '', nom: '', postnom: '', prenom: '' })
+const enEdition = ref(false)
+function ouvrirEdition() {
+  formEdition.value = {
+    code: dossier.value.code || '', nom: dossier.value.nom || '',
+    postnom: dossier.value.postnom || '', prenom: dossier.value.prenom || '',
+  }
+  dialogEdition.value = true
+}
+async function enregistrerIdentite() {
+  if (!formEdition.value.nom.trim() || !formEdition.value.prenom.trim()) {
+    return notifier('Le nom et le prénom sont obligatoires.', 'error')
+  }
+  enEdition.value = true
+  try {
+    await api.patch(`/dossiers/${id.value}/identite/`, formEdition.value)
+    dialogEdition.value = false
+    notifier('Identité mise à jour.')
+    await charger()
+  } catch (e) {
+    notifier(e.response?.data?.detail || e.response?.data?.nom?.[0]
+      || e.response?.data?.prenom?.[0] || 'Modification impossible.', 'error')
+  } finally {
+    enEdition.value = false
+  }
+}
 
 const motifRejet = ref('')
 const dialogRejet = ref(false)
@@ -201,7 +234,12 @@ watch(() => route.params.id, (nouvel, ancien) => {
       <!-- Colonne gauche : infos + pièces -->
       <v-col cols="12" md="6">
         <v-card flat border class="mb-4">
-          <v-card-title class="text-subtitle-1 font-weight-bold">Informations</v-card-title>
+          <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
+            Informations
+            <v-spacer />
+            <v-btn v-if="peutModifier" size="small" variant="text" color="primary"
+                   prepend-icon="mdi-pencil" @click="ouvrirEdition">Modifier</v-btn>
+          </v-card-title>
           <v-divider />
           <div class="pa-4">
             <div class="info-tuile">
@@ -447,6 +485,36 @@ watch(() => route.params.id, (nouvel, ancien) => {
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- Dialog édition de l'identité -->
+    <v-dialog v-model="dialogEdition" max-width="520">
+      <v-card>
+        <v-card-title class="d-flex align-center bg-primary text-white">
+          <v-icon class="mr-2">mdi-account-edit</v-icon>Modifier l'identité du dossier
+        </v-card-title>
+        <v-card-text class="pt-4">
+          <v-text-field v-model="formEdition.code" label="Code du dossier"
+                        prepend-inner-icon="mdi-identifier" class="mb-1" />
+          <v-row dense>
+            <v-col cols="12" sm="4"><v-text-field v-model="formEdition.nom" label="Nom *" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="formEdition.postnom" label="Postnom" /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="formEdition.prenom" label="Prénom *" /></v-col>
+          </v-row>
+          <v-alert type="info" variant="tonal" density="compact" class="mt-2">
+            La correction met à jour la recherche, les correspondances d'éligibilité et la
+            détection de doublons. Le rattachement existant n'est pas modifié.
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="pa-4 pt-0">
+          <span class="text-caption text-medium-emphasis">* obligatoire</span>
+          <v-spacer />
+          <v-btn variant="text" @click="dialogEdition = false">Annuler</v-btn>
+          <v-btn color="primary" variant="flat" :loading="enEdition" @click="enregistrerIdentite">
+            Enregistrer
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Dialog rejet -->
     <v-dialog v-model="dialogRejet" max-width="480">

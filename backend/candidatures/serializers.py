@@ -325,6 +325,27 @@ class DossierListeSerializer(serializers.ModelSerializer):
         return {'etat': 'champs', 'champs': champs}
 
 
+class ModificationIdentiteSerializer(serializers.ModelSerializer):
+    """Correction de l'identité d'un dossier (code, nom, postnom, prénom).
+
+    Réservé aux administrateurs et correcteurs. `save()` recalcule
+    automatiquement `texte_recherche` (recherche et doublons restent cohérents)."""
+
+    class Meta:
+        model = Dossier
+        fields = ['code', 'nom', 'postnom', 'prenom']
+
+    def validate_nom(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le nom est obligatoire.")
+        return v
+
+    def validate_prenom(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le prénom est obligatoire.")
+        return v
+
+
 class ChangementStatutSerializer(serializers.Serializer):
     """Corps des actions de transition : motif optionnel (obligatoire au rejet)."""
 

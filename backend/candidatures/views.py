@@ -47,6 +47,7 @@ from .serializers import (
     EligibilitePubliqueSerializer,
     EvaluationSerializer,
     HistoriqueStatutSerializer,
+    ModificationIdentiteSerializer,
     PieceJointeSerializer,
     PieceJointeUploadSerializer,
     PosteSerializer,
@@ -337,8 +338,8 @@ class DossierViewSet(viewsets.ModelViewSet):
             )
         )
         user = self.request.user
-        if roles.est_admin(user):
-            pass
+        if roles.est_admin(user) or roles.est_correcteur(user):
+            pass  # admin et correcteur voient tous les dossiers
         elif roles.est_evaluateur(user):
             qs = qs.filter(
                 Q(affectations__evaluateur=user) | Q(deposant=user)
@@ -444,6 +445,24 @@ class DossierViewSet(viewsets.ModelViewSet):
         self._verifier_modifiable(self.get_object())
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=True, methods=['patch'], url_path='identite')
+    def modifier_identite(self, request, pk=None):
+        """Corrige l'identité d'un dossier : code, nom, postnom, prénom.
+
+        Réservé aux administrateurs et correcteurs ; possible quel que soit le
+        statut (sert à corriger une coquille après dépôt). `texte_recherche` est
+        recalculé automatiquement (recherche/doublons cohérents).
+        """
+        if not (roles.est_admin(request.user) or roles.est_correcteur(request.user)):
+            raise PermissionDenied(
+                "Seuls les administrateurs et correcteurs peuvent modifier l'identité."
+            )
+        dossier = self.get_object()
+        serializer = ModificationIdentiteSerializer(dossier, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(self.get_serializer(dossier).data)
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Comptes de dossiers par statut (scopés par rôle), pour les KPI.
@@ -453,7 +472,7 @@ class DossierViewSet(viewsets.ModelViewSet):
         """
         user = request.user
         qs = Dossier.objects.all()
-        if roles.est_admin(user):
+        if roles.est_admin(user) or roles.est_correcteur(user):
             pass
         elif roles.est_evaluateur(user):
             qs = qs.filter(Q(affectations__evaluateur=user) | Q(deposant=user)).distinct()

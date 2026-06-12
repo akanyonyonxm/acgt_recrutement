@@ -10,6 +10,7 @@ export const useAuthStore = defineStore('auth', {
     estConnecte: (s) => !!s.utilisateur,
     estAdmin: (s) => s.utilisateur?.roles?.includes('admin') ?? false,
     estEvaluateur: (s) => s.utilisateur?.roles?.includes('evaluateur') ?? false,
+    estCorrecteur: (s) => s.utilisateur?.roles?.includes('correcteur') ?? false,
   },
   actions: {
     // Vérifie s'il y a déjà une session active (au lancement de l'app).
