@@ -468,6 +468,8 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
     traite_par = serializers.StringRelatedField(read_only=True)
     dossier_cree_id = serializers.IntegerField(source='dossier_cree.id', read_only=True, default=None)
     documents = DocumentReclamationSerializer(many=True, read_only=True)
+    # Doublon probable (autre réclamation du même appel, même nom complet).
+    a_doublon = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
         model = ReclamationEligibilite
@@ -475,5 +477,5 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
             'id', 'appel', 'appel_titre', 'poste', 'poste_libelle',
             'nom', 'postnom', 'prenom', 'email',
             'telephone', 'message', 'documents', 'statut', 'statut_libelle',
-            'motif', 'traite_par', 'traite_le', 'dossier_cree_id', 'cree_le',
+            'motif', 'traite_par', 'traite_le', 'dossier_cree_id', 'a_doublon', 'cree_le',
         ]

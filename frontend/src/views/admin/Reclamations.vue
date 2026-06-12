@@ -85,14 +85,36 @@ function filtrer(k) { statut.value = k }     // -> cle change -> tableau recharg
 let minuteur
 function rechercher() { clearTimeout(minuteur); minuteur = setTimeout(() => { q.value = q.value.trim() }, 300) }
 
-function ouvrir(rec) {
+const doublonsRec = ref([])
+const doublonEnCours = ref(null)
+async function ouvrir(rec) {
   detail.value = rec
   action.value = null
   // Pré-sélectionne le poste déclaré par le réclamant (absent sur les
   // anciennes réclamations) ; l'admin peut le changer avant de valider.
   posteChoisi.value = rec.poste || null
   motifRejet.value = ''
+  doublonsRec.value = []
   dialog.value = true
+  if (rec.a_doublon) {
+    try { doublonsRec.value = (await api.get(`/reclamations/${rec.id}/doublons/`)).data } catch { /* ignore */ }
+  }
+}
+
+// Rejet d'un doublon de réclamation en un clic (motif « Réclamation en double »).
+async function rejeterDoublonRec(r) {
+  if (!confirm(`Rejeter la réclamation de ${r.nom} ${r.prenom} comme doublon ?`)) return
+  doublonEnCours.value = r.id
+  try {
+    await api.post(`/reclamations/${r.id}/rejeter/`, { motif: 'Réclamation en double' })
+    notifier('Doublon rejeté.')
+    doublonsRec.value = doublonsRec.value.filter((x) => x.id !== r.id)
+    await Promise.all([charger(), chargerStats()])
+  } catch (e) {
+    notifier(e.response?.data?.detail || e.response?.data?.motif?.[0] || 'Rejet impossible.', 'error')
+  } finally {
+    doublonEnCours.value = null
+  }
 }
 
 async function confirmer() {
@@ -156,6 +178,8 @@ onMounted(async () => {
         no-data-text="Aucune réclamation dans cette catégorie." loading-text="Chargement…">
         <template #item.personne="{ item }">
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
+          <v-chip v-if="item.a_doublon" color="warning" size="x-small" label variant="tonal"
+                  prepend-icon="mdi-content-duplicate" class="ml-1">Doublon</v-chip>
         </template>
         <template #item.statut="{ item }">
           <v-chip :color="COULEUR[item.statut]" size="small" variant="flat" label>{{ item.statut_libelle }}</v-chip>
@@ -190,6 +214,22 @@ onMounted(async () => {
           <div class="info-l"><span>Téléphone</span><strong>{{ detail.telephone || '—' }}</strong></div>
           <div v-if="detail.message" class="info-l"><span>Message</span><strong>{{ detail.message }}</strong></div>
           <div class="info-l"><span>Reçue le</span><strong>{{ dateFr(detail.cree_le) }}</strong></div>
+
+          <!-- Doublons : autres réclamations de la même personne -->
+          <v-alert v-if="doublonsRec.length" type="warning" variant="tonal" density="compact"
+                   class="mt-3" icon="mdi-content-duplicate">
+            <div class="font-weight-bold mb-1">
+              {{ doublonsRec.length }} autre(s) réclamation(s) de cette personne (même nom).
+            </div>
+            <div v-for="r in doublonsRec" :key="r.id" class="d-flex align-center ga-2 mt-1">
+              <v-chip :color="COULEUR[r.statut]" size="x-small" variant="flat" label>{{ r.statut_libelle }}</v-chip>
+              <span class="text-caption flex-grow-1">#{{ r.id }} · {{ r.email }}</span>
+              <v-btn v-if="r.statut === 'en_attente'" size="x-small" color="error" variant="tonal"
+                     :loading="doublonEnCours === r.id" @click="rejeterDoublonRec(r)">
+                Rejeter le doublon
+              </v-btn>
+            </div>
+          </v-alert>
 
           <div class="text-caption text-medium-emphasis mt-3 mb-1">
             Justificatifs ({{ detail.documents?.length || 0 }})

@@ -934,7 +934,18 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             return ReclamationEligibilite.objects.none()
         qs = ReclamationEligibilite.objects.select_related(
             'appel', 'poste', 'traite_par', 'dossier_cree',
-        ).prefetch_related('documents')
+        ).prefetch_related('documents').annotate(
+            # Doublon probable : une AUTRE réclamation du même appel, même nom
+            # complet (normalisé), pas encore rejetée. Indicatif.
+            a_doublon=Exists(
+                ReclamationEligibilite.objects
+                .filter(appel_id=OuterRef('appel_id'))
+                .exclude(statut=ReclamationEligibilite.Statut.REJETEE)
+                .exclude(texte_recherche='')
+                .filter(texte_recherche=OuterRef('texte_recherche'))
+                .exclude(pk=OuterRef('pk'))
+            ),
+        )
         statut = self.request.query_params.get('statut')
         if statut:
             qs = qs.filter(statut=statut)
@@ -1019,6 +1030,30 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             for row in ReclamationEligibilite.objects.values('statut').annotate(n=Count('id'))
         }
         return Response({'total': sum(par_statut.values()), 'par_statut': par_statut})
+
+    @action(detail=True, methods=['get'])
+    def doublons(self, request, pk=None):
+        """Autres réclamations du même appel et même nom complet (non rejetées)."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        reclamation = self.get_object()
+        if not reclamation.texte_recherche:
+            return Response([])
+        autres = (
+            ReclamationEligibilite.objects
+            .filter(appel_id=reclamation.appel_id, texte_recherche=reclamation.texte_recherche)
+            .exclude(statut=ReclamationEligibilite.Statut.REJETEE)
+            .exclude(pk=reclamation.pk)
+            .order_by('cree_le')
+        )
+        return Response([
+            {
+                'id': r.id, 'nom': r.nom, 'postnom': r.postnom, 'prenom': r.prenom,
+                'email': r.email, 'statut': r.statut,
+                'statut_libelle': r.get_statut_display(), 'cree_le': r.cree_le,
+            }
+            for r in autres
+        ])
 
     @action(detail=True, methods=['get'],
             url_path=r'documents/(?P<doc_id>[^/.]+)')
