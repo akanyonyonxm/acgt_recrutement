@@ -287,36 +287,40 @@ class DossierViewSet(viewsets.ModelViewSet):
           s'il a aussi déposé) ;
         - candidat : uniquement ses propres dossiers.
         """
-        # Correspondance par nom avec la liste d'éligibilité (badge indicatif,
-        # jamais bloquant). On compare champ par champ, sans tenir compte de la
-        # casse (`iexact`) ; l'insensibilité aux accents viendra avec `unaccent`
-        # en prod (cf. CLAUDE.md). Un champ ne compte que s'il est renseigné des
-        # deux côtés (jamais de faux match sur un champ vide).
-        m_nom = Q(nom__iexact=OuterRef('nom')) & ~Q(nom='')
-        m_postnom = Q(postnom__iexact=OuterRef('postnom')) & ~Q(postnom='')
-        m_prenom = Q(prenom__iexact=OuterRef('prenom')) & ~Q(prenom='')
-        # « Fort » : au moins 2 des 3 champs coïncident sur une même ligne
-        # (très probablement la même personne, même si le code diffère).
-        deux_sur_trois = (
-            (m_nom & m_postnom) | (m_nom & m_prenom) | (m_postnom & m_prenom)
-        )
-        # « Partiel » : au moins un des trois champs coïncide (simple indice).
-        au_moins_un = m_nom | m_postnom | m_prenom
-
+        # Correspondance avec la liste d'éligibilité (badge indicatif, jamais
+        # bloquant) : on indique précisément quels champs coïncident (code, nom,
+        # postnom, prénom). Comparaison insensible à la casse (`iexact`) ;
+        # l'insensibilité aux accents viendra avec `unaccent` en prod (cf.
+        # CLAUDE.md). Un champ ne compte que s'il est renseigné des deux côtés
+        # (jamais de faux match sur un champ vide). Calcul en SQL (Exists) pour
+        # éviter tout N+1.
         qs = (
             Dossier.objects
             .select_related('appel', 'deposant', 'ligne_eligibilite')
             .prefetch_related('pieces__type_piece')
-            # Le code saisi est-il reconnu ? Sinon, le nom correspond-il à une
-            # personne de la liste (fort / partiel) ? Calculé en SQL (Exists)
-            # pour éviter tout N+1 ; jamais bloquant.
             .annotate(
                 corresp_code=Exists(
                     ListeEligibilite.objects.exclude(code='')
                     .filter(code__iexact=OuterRef('code'))
                 ),
-                corresp_nom=Exists(ListeEligibilite.objects.filter(deux_sur_trois)),
-                corresp_nom_partiel=Exists(ListeEligibilite.objects.filter(au_moins_un)),
+                # Nom complet (nom+postnom+prénom) trouvé sur une même ligne →
+                # « à rattacher » : c'est très probablement la personne.
+                corresp_nom_complet=Exists(
+                    ListeEligibilite.objects.exclude(texte_recherche='')
+                    .filter(texte_recherche=OuterRef('texte_recherche'))
+                ),
+                corresp_f_nom=Exists(
+                    ListeEligibilite.objects.exclude(nom='')
+                    .filter(nom__iexact=OuterRef('nom'))
+                ),
+                corresp_f_postnom=Exists(
+                    ListeEligibilite.objects.exclude(postnom='')
+                    .filter(postnom__iexact=OuterRef('postnom'))
+                ),
+                corresp_f_prenom=Exists(
+                    ListeEligibilite.objects.exclude(prenom='')
+                    .filter(prenom__iexact=OuterRef('prenom'))
+                ),
             )
         )
         user = self.request.user

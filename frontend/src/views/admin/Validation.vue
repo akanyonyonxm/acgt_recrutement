@@ -30,21 +30,14 @@ const ENTETES = [
   { title: 'Candidat', key: 'candidat', sortable: true },
   { title: 'Éligibilité', key: 'correspondance', sortable: false },
   { title: 'Poste', key: 'poste_libelle' },
-  { title: 'Appel', key: 'appel_titre' },
   { title: 'Statut', key: 'statut' },
   { title: 'Déposé le', key: 'cree_le' },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
 
-// Badge de correspondance avec la liste d'éligibilité (indicatif, jamais
-// bloquant) : aide l'agent à prioriser sans remplacer son contrôle.
-const CORRESPONDANCE = {
-  rattache: { libelle: 'Rattaché', color: 'success', icon: 'mdi-link-variant', variant: 'flat' },
-  code: { libelle: 'Code reconnu', color: 'success', icon: 'mdi-check', variant: 'tonal' },
-  nom: { libelle: 'Nom reconnu', color: 'warning', icon: 'mdi-account-check', variant: 'tonal' },
-  nom_partiel: { libelle: 'Nom partiel', color: 'blue-grey', icon: 'mdi-account-search', variant: 'tonal' },
-  aucune: { libelle: 'Aucune', color: 'error', icon: 'mdi-help-circle-outline', variant: 'tonal' },
-}
+// Libellés des champs qui coïncident avec la liste d'éligibilité (badge
+// indicatif, jamais bloquant) : on affiche précisément ce qui correspond.
+const LIBELLE_CHAMP = { code: 'Code', nom: 'Nom', postnom: 'Postnom', prenom: 'Prénom' }
 
 // Mappe la clé de colonne triée -> champ de tri côté API (allowlist backend).
 const TRI = {
@@ -147,12 +140,22 @@ onMounted(async () => {
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
         </template>
         <template #item.correspondance="{ item }">
-          <v-chip :color="CORRESPONDANCE[item.correspondance]?.color || 'grey'"
-                  :variant="CORRESPONDANCE[item.correspondance]?.variant || 'tonal'"
-                  :prepend-icon="CORRESPONDANCE[item.correspondance]?.icon"
-                  size="small" label>
-            {{ CORRESPONDANCE[item.correspondance]?.libelle || '—' }}
-          </v-chip>
+          <!-- Déjà rattaché à une personne de la liste -->
+          <v-chip v-if="item.correspondance.etat === 'rattache'" color="success" variant="flat"
+                  size="small" label prepend-icon="mdi-link-variant">Rattaché</v-chip>
+          <!-- Nom complet trouvé sur la liste : prêt à rattacher -->
+          <v-chip v-else-if="item.correspondance.etat === 'a_rattacher'" color="success" variant="tonal"
+                  size="small" label prepend-icon="mdi-account-check">À rattacher</v-chip>
+          <!-- Champs qui coïncident (code / nom / postnom / prénom) -->
+          <div v-else-if="item.correspondance.etat === 'champs'" class="d-flex flex-wrap ga-1">
+            <v-chip v-for="c in item.correspondance.champs" :key="c"
+                    :color="c === 'code' ? 'success' : 'blue-grey'" variant="tonal" size="x-small" label>
+              {{ LIBELLE_CHAMP[c] }}
+            </v-chip>
+          </div>
+          <!-- Rien ne correspond -->
+          <v-chip v-else color="error" variant="tonal" size="small" label
+                  prepend-icon="mdi-help-circle-outline">Aucune</v-chip>
         </template>
         <template #item.poste_libelle="{ item }">{{ item.poste_libelle || '—' }}</template>
         <template #item.statut="{ item }">

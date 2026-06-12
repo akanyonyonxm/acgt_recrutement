@@ -192,9 +192,12 @@ class DossierListeSerializer(serializers.ModelSerializer):
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
     # Correspondance avec la liste d'éligibilité (badge indicatif, jamais
-    # bloquant) : 'rattache' > 'code' (code reconnu) > 'nom' (≥2 champs du nom
-    # coïncident) > 'nom_partiel' (1 champ coïncide) > 'aucune'. S'appuie sur
-    # les annotations du queryset.
+    # bloquant). Renvoie { etat, champs } :
+    #   etat='rattache'     déjà relié à une personne de la liste ;
+    #   etat='a_rattacher'  nom complet trouvé sur la liste (prêt à rattacher) ;
+    #   etat='champs'       liste des champs qui coïncident (code/nom/postnom/prenom) ;
+    #   etat='aucune'       rien ne correspond.
+    # S'appuie sur les annotations du queryset.
     correspondance = serializers.SerializerMethodField()
 
     class Meta:
@@ -206,14 +209,23 @@ class DossierListeSerializer(serializers.ModelSerializer):
 
     def get_correspondance(self, obj):
         if obj.ligne_eligibilite_id:
-            return 'rattache'
+            return {'etat': 'rattache', 'champs': []}
+        # Nom complet trouvé sur la liste → prêt à rattacher (la personne y est).
+        if getattr(obj, 'corresp_nom_complet', False):
+            return {'etat': 'a_rattacher', 'champs': []}
+        # Sinon, on liste précisément les champs qui coïncident.
+        champs = []
         if getattr(obj, 'corresp_code', False):
-            return 'code'
-        if getattr(obj, 'corresp_nom', False):
-            return 'nom'
-        if getattr(obj, 'corresp_nom_partiel', False):
-            return 'nom_partiel'
-        return 'aucune'
+            champs.append('code')
+        if getattr(obj, 'corresp_f_nom', False):
+            champs.append('nom')
+        if getattr(obj, 'corresp_f_postnom', False):
+            champs.append('postnom')
+        if getattr(obj, 'corresp_f_prenom', False):
+            champs.append('prenom')
+        if not champs:
+            return {'etat': 'aucune', 'champs': []}
+        return {'etat': 'champs', 'champs': champs}
 
 
 class ChangementStatutSerializer(serializers.Serializer):
