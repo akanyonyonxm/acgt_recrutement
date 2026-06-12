@@ -136,6 +136,10 @@ class DossierSerializer(serializers.ModelSerializer):
     # Ligne d'éligibilité dont le code correspond exactement au code saisi
     # (suggestion de rattachement en un clic ; jamais de comparaison de noms).
     suggestion_eligibilite = serializers.SerializerMethodField()
+    # Personnes de la liste d'éligibilité qui correspondent au dossier (par code
+    # ou par nom), avec comparaison champ par champ — affiché automatiquement à
+    # l'ouverture pour décider vite. Détail uniquement (une seule requête).
+    candidats_eligibilite = serializers.SerializerMethodField()
 
     class Meta:
         model = Dossier
@@ -143,8 +147,8 @@ class DossierSerializer(serializers.ModelSerializer):
             'id', 'code', 'appel', 'appel_titre', 'poste', 'poste_libelle', 'deposant',
             'nom', 'postnom', 'prenom', 'email', 'statut', 'statut_libelle',
             'transitions_possibles', 'ligne_eligibilite', 'suggestion_eligibilite',
-            'pieces', 'pieces_manquantes', 'est_complet', 'modifiable',
-            'cree_le', 'modifie_le',
+            'candidats_eligibilite', 'pieces', 'pieces_manquantes', 'est_complet',
+            'modifiable', 'cree_le', 'modifie_le',
         ]
         # Le statut ne se change jamais par PATCH direct : il passe par les
         # actions dédiées (soumettre / approuver / rejeter / retenir / …).
@@ -173,6 +177,46 @@ class DossierSerializer(serializers.ModelSerializer):
             'id': ligne.id, 'code': ligne.code, 'nom': ligne.nom,
             'postnom': ligne.postnom, 'prenom': ligne.prenom,
         }
+
+    def get_candidats_eligibilite(self, obj):
+        """Lignes de la liste correspondant au dossier (code OU un des noms),
+        avec comparaison champ par champ. Triées par nombre de champs en commun.
+        Calculé pour le détail uniquement (une seule ligne → une requête)."""
+        from functools import reduce
+        import operator
+        from django.db.models import Q
+
+        code = (obj.code or '').strip()
+        conds = []
+        if code:
+            conds.append(Q(code__iexact=code))
+        if obj.nom:
+            conds.append(Q(nom__iexact=obj.nom))
+        if obj.postnom:
+            conds.append(Q(postnom__iexact=obj.postnom))
+        if obj.prenom:
+            conds.append(Q(prenom__iexact=obj.prenom))
+        if not conds:
+            return []
+
+        def egal(a, b):
+            return bool(a) and bool(b) and a.strip().lower() == b.strip().lower()
+
+        resultats = []
+        for ligne in ListeEligibilite.objects.filter(reduce(operator.or_, conds))[:30]:
+            match = {
+                'code': egal(ligne.code, code),
+                'nom': egal(ligne.nom, obj.nom),
+                'postnom': egal(ligne.postnom, obj.postnom),
+                'prenom': egal(ligne.prenom, obj.prenom),
+            }
+            resultats.append({
+                'id': ligne.id, 'code': ligne.code, 'nom': ligne.nom,
+                'postnom': ligne.postnom, 'prenom': ligne.prenom,
+                'match': match, 'score': sum(match.values()),
+            })
+        resultats.sort(key=lambda r: r['score'], reverse=True)
+        return resultats[:6]
 
     def validate_appel(self, appel):
         # On ne dépose que sur un appel à candidature ouvert (publié).

@@ -16,6 +16,14 @@ const q = ref('')
 const resultats = ref([])
 const ligneChoisie = ref(null)
 
+// Champs comparés entre le dossier et la liste d'éligibilité (ordre d'affichage).
+const CHAMPS = [
+  { key: 'code', libelle: 'Code' },
+  { key: 'nom', libelle: 'Nom' },
+  { key: 'postnom', libelle: 'Postnom' },
+  { key: 'prenom', libelle: 'Prénom' },
+]
+
 const motifRejet = ref('')
 const dialogRejet = ref(false)
 const motifNonRetenu = ref('')
@@ -225,49 +233,73 @@ onMounted(charger)
           <v-divider />
           <v-card-text>
             <!-- Rattachement déjà en place (auto par code, ou antérieur) -->
+            <!-- Rappel de ce que le candidat a saisi (pour comparer d'un coup d'œil) -->
+            <div class="ref-saisie mb-3">
+              <div class="ref-saisie-label">Saisi par le candidat</div>
+              <div class="ref-saisie-nom">{{ dossier.nom }} {{ dossier.postnom }} {{ dossier.prenom }}</div>
+              <div class="ref-saisie-code">Code saisi : <strong>{{ dossier.code || '—' }}</strong></div>
+            </div>
+
             <v-alert v-if="dossier.ligne_eligibilite" type="success" variant="tonal"
                      density="compact" class="mb-3">
-              Dossier rattaché à <strong>{{ dossier.ligne_eligibilite }}</strong> sur la
-              liste d'éligibilité. Vous pouvez décider directement, ou sélectionner une
-              autre personne ci-dessous pour corriger le rattachement.
+              Déjà rattaché à <strong>{{ dossier.ligne_eligibilite }}</strong>.
+              Vous pouvez décider directement, ou choisir une autre personne ci-dessous.
             </v-alert>
-            <!-- Suggestion : le code saisi correspond à une ligne unique -->
-            <v-alert v-else-if="dossier.suggestion_eligibilite" type="info" variant="tonal"
-                     density="compact" class="mb-3">
-              Le code « <strong>{{ dossier.code }}</strong> » correspond à
-              <strong>{{ dossier.suggestion_eligibilite.nom }}
-                {{ dossier.suggestion_eligibilite.postnom }}
-                {{ dossier.suggestion_eligibilite.prenom }}</strong>
-              (orthographe de la liste).
-              <div class="mt-2">
-                <v-btn size="small" color="success" variant="flat" prepend-icon="mdi-link-variant"
-                       @click="ligneChoisie = dossier.suggestion_eligibilite.id">
-                  Utiliser cette correspondance
-                </v-btn>
+
+            <!-- Correspondances trouvées automatiquement dans la liste -->
+            <template v-if="dossier.candidats_eligibilite?.length">
+              <div class="text-caption font-weight-bold text-medium-emphasis mb-2">
+                <v-icon size="16" color="primary">mdi-account-search</v-icon>
+                Correspondances dans la liste d'éligibilité — cliquez pour sélectionner :
               </div>
+              <v-card v-for="c in dossier.candidats_eligibilite" :key="c.id" flat border
+                      class="candidat-elig mb-2" :class="{ choisi: ligneChoisie === c.id }"
+                      @click="ligneChoisie = (ligneChoisie === c.id ? null : c.id)">
+                <div class="pa-3">
+                  <div class="d-flex align-center">
+                    <v-icon :color="ligneChoisie === c.id ? 'success' : '#c2c8d0'" class="mr-2">
+                      {{ ligneChoisie === c.id ? 'mdi-check-circle' : 'mdi-circle-outline' }}
+                    </v-icon>
+                    <div class="flex-grow-1" style="min-width:0">
+                      <div class="font-weight-bold">{{ c.nom }} {{ c.postnom }} {{ c.prenom }}</div>
+                      <div class="text-caption text-medium-emphasis">Code liste : {{ c.code || '—' }}</div>
+                    </div>
+                    <v-chip size="x-small" label variant="flat"
+                            :color="c.score === 4 ? 'success' : (c.score >= 2 ? 'warning' : 'blue-grey')">
+                      {{ c.score }}/4
+                    </v-chip>
+                  </div>
+                  <!-- Comparaison champ par champ : vert = identique, gris barré = différent -->
+                  <div class="d-flex flex-wrap ga-1 mt-2">
+                    <v-chip v-for="f in CHAMPS" :key="f.key" size="x-small" label
+                            :color="c.match[f.key] ? 'success' : 'grey'"
+                            :variant="c.match[f.key] ? 'flat' : 'outlined'"
+                            :prepend-icon="c.match[f.key] ? 'mdi-check' : 'mdi-close'">
+                      {{ f.libelle }}
+                    </v-chip>
+                  </div>
+                </div>
+              </v-card>
+            </template>
+            <v-alert v-else-if="!dossier.ligne_eligibilite" type="warning" variant="tonal"
+                     density="compact" class="mb-2">
+              Aucune correspondance automatique trouvée. Recherchez manuellement ci-dessous.
             </v-alert>
-            <v-text-field v-model="q" label="Rechercher un nom dans la liste"
-                          append-inner-icon="mdi-magnify" hide-details
+
+            <!-- Recherche manuelle (repli) -->
+            <v-text-field v-model="q" label="Rechercher un autre nom dans la liste"
+                          class="mt-3" append-inner-icon="mdi-magnify" hide-details density="compact"
                           @click:append-inner="chercherEligibilite" @keyup.enter="chercherEligibilite" />
-            <v-list class="mt-2" density="compact">
+            <v-list v-if="resultats.length" class="mt-1" density="compact">
               <v-list-item v-for="r in resultats" :key="r.id"
                            :active="ligneChoisie === r.id" color="success"
                            @click="ligneChoisie = r.id" rounded="lg">
                 <v-list-item-title>
                   <strong>{{ r.nom }}</strong> {{ r.postnom }} {{ r.prenom }}
                 </v-list-item-title>
-                <v-list-item-subtitle>
-                  Code : {{ r.code || '—' }}
-                </v-list-item-subtitle>
-              </v-list-item>
-              <v-list-item v-if="!resultats.length" class="text-medium-emphasis">
-                Recherchez puis sélectionnez la personne dans la liste d'éligibilité.
+                <v-list-item-subtitle>Code : {{ r.code || '—' }}</v-list-item-subtitle>
               </v-list-item>
             </v-list>
-            <v-alert v-if="ligneChoisie" type="success" variant="tonal" density="compact" class="mt-2">
-              Rattachement sélectionné.
-              <a href="#" @click.prevent="ligneChoisie = null"> retirer</a>
-            </v-alert>
           </v-card-text>
           <v-divider />
           <v-alert v-if="!peutDecider" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
@@ -484,6 +516,17 @@ onMounted(charger)
   color: #6b7785; font-weight: 600;
 }
 .info-valeur { font-size: 14px; font-weight: 600; color: #1f2933; }
+
+/* Rappel de la saisie candidat dans le panneau d'éligibilité */
+.ref-saisie { background: #f4f5f9; border: 1px solid #e4e7ef; border-radius: 10px; padding: 10px 14px; }
+.ref-saisie-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #6b7785; font-weight: 700; }
+.ref-saisie-nom { font-size: 15px; font-weight: 800; color: #1a237e; }
+.ref-saisie-code { font-size: 12px; color: #525f71; }
+
+/* Cartes de correspondance d'éligibilité (sélectionnables) */
+.candidat-elig { border-radius: 12px !important; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.candidat-elig:hover { border-color: #aeb6e8; background: #fafaff; }
+.candidat-elig.choisi { border-color: #2e7d32 !important; background: #f3faf4; box-shadow: 0 2px 10px rgba(46,125,50,0.12); }
 
 /* Aperçu des pièces */
 .apercu-zone { position: relative; background: #2b2b2b; display: flex; align-items: center; justify-content: center; height: 72vh; overflow: auto; }
