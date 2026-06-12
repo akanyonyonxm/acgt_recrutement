@@ -340,6 +340,28 @@ class DossierViewSet(viewsets.ModelViewSet):
         if appel:
             qs = qs.filter(appel_id=appel)
 
+        # Filtre par correspondance avec la liste d'éligibilité (buckets alignés
+        # sur les badges de la colonne « Éligibilité »).
+        corr = self.request.query_params.get('correspondance')
+        if corr == 'rattache':
+            qs = qs.filter(ligne_eligibilite__isnull=False)
+        elif corr == 'a_rattacher':
+            qs = qs.filter(ligne_eligibilite__isnull=True, corresp_nom_complet=True)
+        elif corr == 'partielle':
+            # Au moins un champ coïncide, mais ni rattaché ni nom complet.
+            qs = qs.filter(
+                ligne_eligibilite__isnull=True, corresp_nom_complet=False,
+            ).filter(
+                Q(corresp_code=True) | Q(corresp_f_nom=True)
+                | Q(corresp_f_postnom=True) | Q(corresp_f_prenom=True)
+            )
+        elif corr == 'aucune':
+            qs = qs.filter(
+                ligne_eligibilite__isnull=True, corresp_nom_complet=False,
+                corresp_code=False, corresp_f_nom=False,
+                corresp_f_postnom=False, corresp_f_prenom=False,
+            )
+
         # Recherche tolérante par nom (accents/casse/ordre indifférents) OU par code.
         q = self.request.query_params.get('q', '').strip()
         if q:

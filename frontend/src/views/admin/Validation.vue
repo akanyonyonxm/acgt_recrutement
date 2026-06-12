@@ -10,7 +10,16 @@ const dossiers = ref([])
 const appels = ref([])
 const statut = ref('depose')
 const appel = ref(null)
+const eligibilite = ref(null)
 const q = ref('')
+
+// Options du filtre « Éligibilité » (alignées sur les badges de la colonne).
+const ELIGIBILITE_OPTIONS = [
+  { value: 'rattache', title: 'Rattaché' },
+  { value: 'a_rattacher', title: 'À rattacher (nom complet trouvé)' },
+  { value: 'partielle', title: 'Correspondance partielle' },
+  { value: 'aucune', title: 'Aucune correspondance' },
+]
 const chargement = ref(false)
 const total = ref(0)
 const stats = ref({ total: 0, par_statut: {} })
@@ -46,7 +55,7 @@ const TRI = {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
   chargement.value = true
@@ -54,6 +63,7 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
     const params = { page, page_size: itemsPerPage > 0 ? itemsPerPage : 25 }
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
+    if (eligibilite.value) params.correspondance = eligibilite.value
     if (q.value) params.q = q.value
     if (sortBy.length && TRI[sortBy[0].key]) {
       params.ordering = (sortBy[0].order === 'desc' ? '-' : '') + TRI[sortBy[0].key]
@@ -103,6 +113,9 @@ onMounted(async () => {
                     placeholder="Rechercher un candidat…" prepend-inner-icon="mdi-magnify"
                     variant="outlined" density="compact" hide-details clearable
                     style="max-width: 280px" @click:clear="q = ''" />
+      <v-select v-model="eligibilite" :items="ELIGIBILITE_OPTIONS" label="Filtrer par éligibilité"
+                clearable hide-details density="compact" variant="outlined" style="max-width: 240px"
+                prepend-inner-icon="mdi-account-search-outline" />
       <v-select v-model="appel" :items="appels" label="Filtrer par appel" clearable hide-details
                 density="compact" variant="outlined" style="max-width: 240px"
                 @update:modelValue="changerAppel" />
