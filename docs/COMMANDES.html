@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACGT — Guide des commandes d'administration</title>
+<style>
+  :root { --bleu:#1a237e; --bleu2:#283593; --jaune:#FDD835; --gris:#f5f7fa; --bord:#e2e6ea; --txt:#1f2933; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--txt);
+         margin:0; background:var(--gris); line-height:1.6; }
+  header { background:linear-gradient(135deg,var(--bleu) 0%,#0d1b2a 100%); color:#fff; padding:32px 24px; }
+  header .wrap { max-width:900px; margin:0 auto; }
+  header h1 { margin:0 0 6px; font-size:1.8rem; }
+  header p { margin:0; opacity:.85; }
+  main { max-width:900px; margin:0 auto; padding:24px; }
+  h2 { color:var(--bleu); border-bottom:2px solid var(--jaune); padding-bottom:6px; margin-top:38px; }
+  h3 { color:var(--bleu2); margin-bottom:4px; }
+  section { background:#fff; border:1px solid var(--bord); border-radius:12px; padding:20px 24px; margin-bottom:18px;
+            box-shadow:0 2px 8px rgba(26,35,126,.04); }
+  code { background:#eef0f7; padding:2px 6px; border-radius:5px; font-size:.9em; }
+  pre { background:#0d1b2a; color:#e8eaf6; padding:14px 16px; border-radius:10px; overflow-x:auto; font-size:.88rem; }
+  pre code { background:none; color:inherit; padding:0; }
+  .pastille { display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+              padding:3px 10px; border-radius:999px; vertical-align:middle; margin-left:8px; }
+  .lecture { background:#e3f2fd; color:#1565c0; }
+  .ecrit { background:#fff3e0; color:#e65100; }
+  .danger { background:#ffebee; color:#c62828; }
+  .note { background:#fffde7; border-left:4px solid var(--jaune); padding:10px 14px; border-radius:6px; margin:12px 0; }
+  .danger-box { background:#ffebee; border-left:4px solid #c62828; padding:10px 14px; border-radius:6px; margin:12px 0; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--bord); font-size:.92rem; vertical-align:top; }
+  th { color:var(--bleu); }
+  a { color:var(--bleu2); }
+  footer { text-align:center; color:#6b7785; font-size:.82rem; padding:24px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Guide des commandes d'administration — ACGT</h1>
+    <p>Comment lancer et utiliser les commandes de gestion de la plateforme de recrutement.</p>
+  </div>
+</header>
+<main>
+
+  <section>
+    <h2 style="margin-top:0">Comment lancer une commande</h2>
+    <p>Toutes les commandes se lancent <strong>sur le serveur</strong> (connecté en SSH), dans le dossier du projet
+       (<code>/opt/acgt_recrutement</code>), via le conteneur <code>backend</code> :</p>
+    <pre><code>docker compose -f docker-compose.prod.yml exec backend python manage.py &lt;commande&gt;</code></pre>
+    <p>Remplacez <code>&lt;commande&gt;</code> par le nom voulu (voir ci-dessous). En local (développement), on utilise
+       plutôt <code>venv\Scripts\python.exe manage.py &lt;commande&gt;</code> depuis le dossier <code>backend/</code>.</p>
+    <div class="note">
+      <strong>Codes couleur :</strong>
+      <span class="pastille lecture">lecture seule</span> n'écrit rien ·
+      <span class="pastille ecrit">modifie des données</span> écrit en base (non destructif) ·
+      <span class="pastille danger">destructif</span> à manier avec précaution.
+    </div>
+  </section>
+
+  <h2>1. Rattachement des dossiers à la liste d'éligibilité</h2>
+
+  <section>
+    <h3>corriger_rattachements <span class="pastille ecrit">modifie des données</span></h3>
+    <p>Réconcilie le rattachement de <strong>tous les dossiers soumis</strong> avec la liste d'éligibilité.
+       Un dossier est rattaché à une personne de la liste uniquement si le <strong>nom complet est identique</strong>
+       (nom <em>ET</em> postnom <em>ET</em> prénom — insensible aux accents et à la casse), et si la correspondance
+       est unique. <strong>Le code n'entre jamais en jeu</strong> (des candidats saisissent le code d'autrui).</p>
+    <p>La commande&nbsp;: <strong>rattache</strong> ceux qui correspondent et ne le sont pas encore,
+       <strong>conserve</strong> les rattachements corrects, <strong>détache</strong> ceux faits à tort (triche par code).</p>
+    <p><strong>Toujours simuler d'abord</strong> (n'écrit rien, affiche ce qui serait changé) :</p>
+    <pre><code>docker compose -f docker-compose.prod.yml exec backend python manage.py corriger_rattachements --simuler</code></pre>
+    <p>Si le récapitulatif convient, appliquer :</p>
+    <pre><code>docker compose -f docker-compose.prod.yml exec backend python manage.py corriger_rattachements</code></pre>
+    <p>Le résumé indique&nbsp;: <em>« X nouveaux rattachements, Y rerattachés, Z détachés, W conservés »</em>.
+       La commande est <strong>idempotente</strong> (on peut la relancer sans risque) et <strong>non destructive</strong>
+       (elle ne touche que le champ de rattachement, aucune donnée n'est supprimée).</p>
+  </section>
+
+  <section>
+    <h3>correspondances_a_verifier <span class="pastille lecture">lecture seule</span></h3>
+    <p>Liste les dossiers <strong>non rattachés</strong> dont le nom partage avec une personne de la liste
+       <strong>le même nom + postnom</strong>, ou <strong>le même nom + prénom</strong> — typiquement une
+       <em>coquille</em> (ex. prénom « Achillene » au lieu d'« Archillene ») ou un champ manquant.
+       Affiche côte à côte les noms complets et les codes, pour vérification manuelle.</p>
+    <pre><code>docker compose -f docker-compose.prod.yml exec backend python manage.py correspondances_a_verifier</code></pre>
+    <p>Exemple de sortie :</p>
+    <pre><code>DOSSIER #1483 [0599] YAKONGBO SIKI Achillene
+   ~ LISTE  [0599] YAKONGBO SIKI Archillene   (nom+postnom)</code></pre>
+    <p>Pour chacun, ouvrez la fiche du dossier dans <em>Validation → Ouvrir</em>, vérifiez qu'il s'agit bien de la
+       même personne, puis cliquez sur la carte de correspondance pour la sélectionner et approuvez (rattachement
+       manuel). Cette commande <strong>n'écrit rien</strong>.</p>
+  </section>
+
+  <h2>2. Liste d'éligibilité</h2>
+
+  <section>
+    <h3>import_eligibilite <span class="pastille ecrit">modifie des données</span> <span class="pastille danger">option --vider</span></h3>
+    <p>Importe la liste des personnes éligibles depuis un fichier Excel (<code>.xlsx</code>, colonnes
+       <code>code, nom, postnom, prenom, type, annee, reference</code>).</p>
+    <pre><code># Ajouter/mettre à jour sans rien supprimer
+docker compose -f docker-compose.prod.yml exec backend python manage.py import_eligibilite fichier.xlsx --publier
+
+# Remplacer toute la liste (VIDE l'ancienne d'abord)
+docker compose -f docker-compose.prod.yml exec backend python manage.py import_eligibilite fichier.xlsx --vider --publier</code></pre>
+    <div class="danger-box"><strong>Attention :</strong> <code>--vider</code> supprime la liste existante avant l'import.
+      À n'utiliser que pour un remplacement complet et volontaire.</div>
+  </section>
+
+  <h2>3. Comptes, rôles et référentiels</h2>
+
+  <section>
+    <table>
+      <tr><th>Commande</th><th>Rôle</th></tr>
+      <tr><td><code>init_roles</code> <span class="pastille ecrit">écrit</span></td>
+          <td>Crée les groupes <em>Administrateurs</em> et <em>Évaluateurs</em> (idempotent).</td></tr>
+      <tr><td><code>init_postes</code> <span class="pastille ecrit">écrit</span></td>
+          <td>Crée les postes/fonctions de référence (Ingénieur civil, Architecte…).</td></tr>
+      <tr><td><code>init_types_piece</code> <span class="pastille ecrit">écrit</span></td>
+          <td>Crée les types de pièces (Identité, CV, Diplôme…).</td></tr>
+      <tr><td><code>createsuperuser</code> <span class="pastille ecrit">écrit</span></td>
+          <td>Crée un compte administrateur technique (demande l'email + mot de passe).</td></tr>
+    </table>
+    <pre><code>docker compose -f docker-compose.prod.yml exec backend python manage.py init_roles</code></pre>
+  </section>
+
+  <h2>4. Emails en masse</h2>
+
+  <section>
+    <h3>envoyer_emails_en_attente <span class="pastille ecrit">envoie des emails</span></h3>
+    <p>Vide la file d'attente des emails en masse (convocations…), par lots, pour respecter la limite d'envoi.</p>
+    <pre><code>docker compose -f docker-compose.prod.yml exec backend python manage.py envoyer_emails_en_attente --limite 90</code></pre>
+  </section>
+
+  <h2>5. Sauvegarde et réinitialisation</h2>
+
+  <section>
+    <p>Ces opérations ont leur propre guide détaillé :</p>
+    <ul>
+      <li><strong>Sauvegarde</strong> (base + documents) : voir <a href="SAUVEGARDE.html">SAUVEGARDE.html</a>
+          — script <code>scripts/sauvegarde.sh</code>.</li>
+      <li><strong>Réinitialisation des données</strong> <span class="pastille danger">destructif</span> :
+          voir <a href="REINITIALISATION.md">REINITIALISATION.md</a> — commande <code>reinitialiser_donnees</code>
+          (exige <code>--confirmer</code>, conserve le compte administrateur).</li>
+    </ul>
+    <div class="danger-box"><strong>Règle impérative :</strong> aucune commande destructive (réinitialisation, import
+      <code>--vider</code>, suppression) ne doit jamais être lancée par le déploiement automatique. Elles se lancent
+      <strong>uniquement à la main</strong>, et après une <a href="SAUVEGARDE.html">sauvegarde</a>.</div>
+  </section>
+
+</main>
+<footer>© Agence Congolaise des Grands Travaux (ACGT) — Plateforme de recrutement.</footer>
+</body>
+</html>
