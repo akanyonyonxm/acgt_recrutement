@@ -602,6 +602,16 @@ class ReclamationEligibilite(models.Model):
         related_name='reclamations',
         verbose_name='appel à candidature',
     )
+    # Poste/fonction visé(e), déclaré par le réclamant : évite à l'admin de le
+    # deviner depuis le CV au moment de valider. Nullable : les réclamations
+    # antérieures à ce champ n'en ont pas (l'admin choisit alors manuellement).
+    poste = models.ForeignKey(
+        'Poste',
+        on_delete=models.PROTECT,
+        related_name='reclamations',
+        null=True, blank=True,
+        verbose_name='poste souhaité',
+    )
     # Identité revendiquée (saisie libre, comme pour un dossier).
     nom = models.CharField('nom', max_length=100)
     postnom = models.CharField('postnom', max_length=100, blank=True)

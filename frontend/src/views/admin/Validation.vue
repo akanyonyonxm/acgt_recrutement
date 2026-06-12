@@ -28,12 +28,22 @@ const compte = (key) => (key === '' ? stats.value.total : stats.value.par_statut
 const ENTETES = [
   { title: 'Code', key: 'code', width: 110 },
   { title: 'Candidat', key: 'candidat', sortable: true },
+  { title: 'Éligibilité', key: 'correspondance', sortable: false },
   { title: 'Poste', key: 'poste_libelle' },
   { title: 'Appel', key: 'appel_titre' },
   { title: 'Statut', key: 'statut' },
   { title: 'Déposé le', key: 'cree_le' },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
+
+// Badge de correspondance avec la liste d'éligibilité (indicatif, jamais
+// bloquant) : aide l'agent à prioriser sans remplacer son contrôle.
+const CORRESPONDANCE = {
+  rattache: { libelle: 'Rattaché', color: 'success', icon: 'mdi-link-variant', variant: 'flat' },
+  code: { libelle: 'Code reconnu', color: 'success', icon: 'mdi-check', variant: 'tonal' },
+  nom: { libelle: 'Nom trouvé', color: 'warning', icon: 'mdi-account-search', variant: 'tonal' },
+  aucune: { libelle: 'Aucune', color: 'error', icon: 'mdi-help-circle-outline', variant: 'tonal' },
+}
 
 // Mappe la clé de colonne triée -> champ de tri côté API (allowlist backend).
 const TRI = {
@@ -134,6 +144,14 @@ onMounted(async () => {
         </template>
         <template #item.candidat="{ item }">
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
+        </template>
+        <template #item.correspondance="{ item }">
+          <v-chip :color="CORRESPONDANCE[item.correspondance]?.color || 'grey'"
+                  :variant="CORRESPONDANCE[item.correspondance]?.variant || 'tonal'"
+                  :prepend-icon="CORRESPONDANCE[item.correspondance]?.icon"
+                  size="small" label>
+            {{ CORRESPONDANCE[item.correspondance]?.libelle || '—' }}
+          </v-chip>
         </template>
         <template #item.poste_libelle="{ item }">{{ item.poste_libelle || '—' }}</template>
         <template #item.statut="{ item }">

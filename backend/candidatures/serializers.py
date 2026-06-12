@@ -133,14 +133,18 @@ class DossierSerializer(serializers.ModelSerializer):
     # Statuts atteignables depuis l'état courant — utile au front pour n'afficher
     # que les actions réellement possibles.
     transitions_possibles = serializers.SerializerMethodField()
+    # Ligne d'éligibilité dont le code correspond exactement au code saisi
+    # (suggestion de rattachement en un clic ; jamais de comparaison de noms).
+    suggestion_eligibilite = serializers.SerializerMethodField()
 
     class Meta:
         model = Dossier
         fields = [
             'id', 'code', 'appel', 'appel_titre', 'poste', 'poste_libelle', 'deposant',
             'nom', 'postnom', 'prenom', 'email', 'statut', 'statut_libelle',
-            'transitions_possibles', 'ligne_eligibilite', 'pieces',
-            'pieces_manquantes', 'est_complet', 'modifiable', 'cree_le', 'modifie_le',
+            'transitions_possibles', 'ligne_eligibilite', 'suggestion_eligibilite',
+            'pieces', 'pieces_manquantes', 'est_complet', 'modifiable',
+            'cree_le', 'modifie_le',
         ]
         # Le statut ne se change jamais par PATCH direct : il passe par les
         # actions dédiées (soumettre / approuver / rejeter / retenir / …).
@@ -153,6 +157,22 @@ class DossierSerializer(serializers.ModelSerializer):
 
     def get_pieces_manquantes(self, obj):
         return [tp.libelle for tp in obj.pieces_obligatoires_manquantes()]
+
+    def get_suggestion_eligibilite(self, obj):
+        # Suggestion uniquement si pas déjà rattaché et si le code saisi
+        # correspond à UNE seule ligne (un code ambigu ne suggère rien).
+        if obj.ligne_eligibilite_id or not (obj.code or '').strip():
+            return None
+        lignes = list(
+            ListeEligibilite.objects.filter(code__iexact=obj.code.strip())[:2]
+        )
+        if len(lignes) != 1:
+            return None
+        ligne = lignes[0]
+        return {
+            'id': ligne.id, 'code': ligne.code, 'nom': ligne.nom,
+            'postnom': ligne.postnom, 'prenom': ligne.prenom,
+        }
 
     def validate_appel(self, appel):
         # On ne dépose que sur un appel à candidature ouvert (publié).
@@ -171,13 +191,26 @@ class DossierListeSerializer(serializers.ModelSerializer):
     )
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
+    # Correspondance avec la liste d'éligibilité (badge indicatif, jamais
+    # bloquant) : 'rattache' > 'code' (code reconnu) > 'nom' (homonyme exact
+    # normalisé) > 'aucune'. S'appuie sur les annotations du queryset.
+    correspondance = serializers.SerializerMethodField()
 
     class Meta:
         model = Dossier
         fields = [
             'id', 'code', 'appel', 'appel_titre', 'poste_libelle', 'nom', 'postnom', 'prenom',
-            'statut', 'statut_libelle', 'cree_le',
+            'statut', 'statut_libelle', 'correspondance', 'cree_le',
         ]
+
+    def get_correspondance(self, obj):
+        if obj.ligne_eligibilite_id:
+            return 'rattache'
+        if getattr(obj, 'corresp_code', False):
+            return 'code'
+        if getattr(obj, 'corresp_nom', False):
+            return 'nom'
+        return 'aucune'
 
 
 class ChangementStatutSerializer(serializers.Serializer):
@@ -236,12 +269,17 @@ class ReclamationCreationSerializer(serializers.ModelSerializer):
     site_web = serializers.CharField(required=False, allow_blank=True, write_only=True)
     # Message obligatoire (le modèle l'autorise vide, on l'exige à la saisie).
     message = serializers.CharField(required=True, allow_blank=False)
+    # Poste souhaité : obligatoire à la saisie (le modèle reste nullable pour
+    # les réclamations antérieures à ce champ).
+    poste = serializers.PrimaryKeyRelatedField(
+        queryset=Poste.objects.filter(actif=True), required=True,
+    )
 
     class Meta:
         model = ReclamationEligibilite
         fields = [
-            'id', 'appel', 'nom', 'postnom', 'prenom', 'email', 'telephone',
-            'message', 'site_web',
+            'id', 'appel', 'poste', 'nom', 'postnom', 'prenom', 'email',
+            'telephone', 'message', 'site_web',
         ]
 
     def validate_appel(self, appel):
@@ -275,6 +313,7 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
 
     statut_libelle = serializers.CharField(source='get_statut_display', read_only=True)
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
+    poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
     traite_par = serializers.StringRelatedField(read_only=True)
     dossier_cree_id = serializers.IntegerField(source='dossier_cree.id', read_only=True, default=None)
     documents = DocumentReclamationSerializer(many=True, read_only=True)
@@ -282,7 +321,8 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReclamationEligibilite
         fields = [
-            'id', 'appel', 'appel_titre', 'nom', 'postnom', 'prenom', 'email',
+            'id', 'appel', 'appel_titre', 'poste', 'poste_libelle',
+            'nom', 'postnom', 'prenom', 'email',
             'telephone', 'message', 'documents', 'statut', 'statut_libelle',
             'motif', 'traite_par', 'traite_le', 'dossier_cree_id', 'cree_le',
         ]
