@@ -651,10 +651,14 @@ class DossierViewSet(viewsets.ModelViewSet):
             })
         self._rattacher_par_nom(dossier)
         try:
-            dossier.changer_statut(
-                Dossier.Statut.DEPOSE, par=request.user,
-                motif='Soumission par le candidat',
-            )
+            # Verrou : un double-clic sur « Soumettre » ne dépose qu'une fois
+            # (le second relit le statut DÉPOSÉ et échoue sans second accusé).
+            with transaction.atomic():
+                dossier = Dossier.objects.select_for_update().get(pk=dossier.pk)
+                dossier.changer_statut(
+                    Dossier.Statut.DEPOSE, par=request.user,
+                    motif='Soumission par le candidat',
+                )
         except DjangoValidationError as exc:
             raise ValidationError({'detail': exc.messages})
 
@@ -726,15 +730,20 @@ class DossierViewSet(viewsets.ModelViewSet):
         if verif_validateur:
             self._verifier_validateur(dossier)
 
-        if lier_eligibilite:
-            eid = request.data.get('eligibilite_id')
-            if eid:
-                ligne = get_object_or_404(ListeEligibilite, pk=eid)
-                dossier.ligne_eligibilite = ligne
-                dossier.save(update_fields=['ligne_eligibilite'])
-
+        # Verrou ligne par ligne : deux décisions simultanées sur le MÊME
+        # dossier (double-clic, deux agents) se sérialisent ; la seconde relit
+        # le statut à jour et échoue proprement si la transition est devenue
+        # interdite. Ne touche jamais qu'un seul dossier (pk de l'URL).
         try:
-            dossier.changer_statut(vers, par=request.user, motif=motif)
+            with transaction.atomic():
+                dossier = Dossier.objects.select_for_update().get(pk=dossier.pk)
+                if lier_eligibilite:
+                    eid = request.data.get('eligibilite_id')
+                    if eid:
+                        ligne = get_object_or_404(ListeEligibilite, pk=eid)
+                        dossier.ligne_eligibilite = ligne
+                        dossier.save(update_fields=['ligne_eligibilite'])
+                dossier.changer_statut(vers, par=request.user, motif=motif)
         except DjangoValidationError as exc:
             raise ValidationError({'detail': exc.messages})
 
@@ -794,9 +803,11 @@ class DossierViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         dossier = self.get_object()
         try:
-            dossier.changer_statut(
-                Dossier.Statut.REJETE, par=request.user, motif='Dossier en double',
-            )
+            with transaction.atomic():
+                dossier = Dossier.objects.select_for_update().get(pk=dossier.pk)
+                dossier.changer_statut(
+                    Dossier.Statut.REJETE, par=request.user, motif='Dossier en double',
+                )
         except DjangoValidationError as exc:
             raise ValidationError({'detail': exc.messages})
         return Response(self.get_serializer(dossier).data)
@@ -1149,8 +1160,6 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         if not roles.peut_traiter(request.user):
             raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         reclamation = self.get_object()
-        if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
-            raise ValidationError("Cette réclamation a déjà été traitée.")
 
         # Poste : celui choisi par l'admin à la validation, sinon celui déclaré
         # par le réclamant dans le formulaire (absent sur les anciennes
@@ -1159,6 +1168,15 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         poste = get_object_or_404(Poste, pk=poste_id) if poste_id else reclamation.poste
 
         with transaction.atomic():
+            # Verrou + re-contrôle du statut SOUS verrou : deux validations
+            # simultanées de la même réclamation ne peuvent pas créer deux
+            # dossiers — la seconde échoue avec « déjà traitée ».
+            reclamation = (
+                ReclamationEligibilite.objects
+                .select_for_update().get(pk=reclamation.pk)
+            )
+            if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
+                raise ValidationError("Cette réclamation a déjà été traitée.")
             dossier = Dossier.objects.create(
                 appel=reclamation.appel, poste=poste, deposant=None,
                 nom=reclamation.nom, postnom=reclamation.postnom,
@@ -1190,17 +1208,24 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         if not roles.peut_traiter(request.user):
             raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         reclamation = self.get_object()
-        if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
-            raise ValidationError("Cette réclamation a déjà été traitée.")
         motif = (request.data.get('motif') or '').strip()
         if not motif:
             raise ValidationError({'motif': "Un motif est obligatoire."})
 
-        reclamation.statut = ReclamationEligibilite.Statut.REJETEE
-        reclamation.motif = motif
-        reclamation.traite_par = request.user
-        reclamation.traite_le = timezone.now()
-        reclamation.save(update_fields=['statut', 'motif', 'traite_par', 'traite_le'])
+        with transaction.atomic():
+            # Verrou + re-contrôle sous verrou (cf. `valider`) : un rejet ne
+            # peut pas écraser une validation simultanée, et inversement.
+            reclamation = (
+                ReclamationEligibilite.objects
+                .select_for_update().get(pk=reclamation.pk)
+            )
+            if reclamation.statut != ReclamationEligibilite.Statut.EN_ATTENTE:
+                raise ValidationError("Cette réclamation a déjà été traitée.")
+            reclamation.statut = ReclamationEligibilite.Statut.REJETEE
+            reclamation.motif = motif
+            reclamation.traite_par = request.user
+            reclamation.traite_le = timezone.now()
+            reclamation.save(update_fields=['statut', 'motif', 'traite_par', 'traite_le'])
 
         # Aucun email pendant le traitement (un rejet de réclamation ne notifie pas).
         return Response(ReclamationAdminSerializer(reclamation).data)
