@@ -321,12 +321,14 @@ class DossierViewSet(viewsets.ModelViewSet):
                     ListeEligibilite.objects.exclude(prenom='')
                     .filter(prenom__iexact=OuterRef('prenom'))
                 ),
-                # Doublon probable : un AUTRE dossier du même appel partage le
-                # même email OU le même nom complet (normalisé). Indicatif :
+                # Doublon probable : un AUTRE dossier SOUMIS (hors brouillon) du
+                # même appel partage le même email OU le même nom complet. On
+                # ignore les brouillons : ils ne seront pas traités. Indicatif :
                 # l'admin tranche (jamais de suppression/fusion automatique).
                 a_doublon=Exists(
                     Dossier.objects
                     .filter(appel_id=OuterRef('appel_id'))
+                    .exclude(statut=Dossier.Statut.BROUILLON)
                     .filter(
                         Q(email__iexact=OuterRef('email'))
                         | Q(texte_recherche=OuterRef('texte_recherche'))

@@ -39,6 +39,7 @@ const ENTETES = [
   { title: 'Code', key: 'code', width: 110 },
   { title: 'Candidat', key: 'candidat', sortable: true },
   { title: 'Éligibilité', key: 'correspondance', sortable: false },
+  { title: 'Nom sur la liste', key: 'eligibilite_nom', sortable: false },
   { title: 'Poste', key: 'poste_libelle' },
   { title: 'Statut', key: 'statut' },
   { title: 'Déposé le', key: 'cree_le' },
@@ -178,6 +179,17 @@ onMounted(async () => {
           <v-chip v-else color="error" variant="tonal" size="small" label
                   prepend-icon="mdi-help-circle-outline">Aucune</v-chip>
         </template>
+        <template #item.eligibilite_nom="{ item }">
+          <template v-if="item.eligibilite_nom">
+            <span :class="item.eligibilite_nom.rattache ? 'font-weight-medium' : 'nom-code'">
+              {{ item.eligibilite_nom.nom }}
+            </span>
+            <div v-if="!item.eligibilite_nom.rattache" class="nom-code-hint">
+              propriétaire du code {{ item.eligibilite_nom.code }}
+            </div>
+          </template>
+          <span v-else class="text-medium-emphasis">—</span>
+        </template>
         <template #item.poste_libelle="{ item }">{{ item.poste_libelle || '—' }}</template>
         <template #item.statut="{ item }">
           <StatutBadge :statut="item.statut" :libelle="item.statut_libelle" />
@@ -197,4 +209,7 @@ onMounted(async () => {
 <style scoped>
 .tableau-admin :deep(thead th) { background: #f4f5f9; font-weight: 700 !important; color: #1a237e !important; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
 .tableau-admin :deep(tbody tr) { cursor: pointer; }
+/* Nom de la liste affiché pour un dossier NON rattaché (juste le propriétaire du code) */
+.nom-code { color: #8a94a6; font-style: italic; }
+.nom-code-hint { font-size: 0.68rem; color: #b0b7c3; }
 </style>

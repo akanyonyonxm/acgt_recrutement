@@ -229,6 +229,7 @@ class DossierSerializer(serializers.ModelSerializer):
         autres = (
             Dossier.objects
             .filter(appel_id=obj.appel_id)
+            .exclude(statut=Dossier.Statut.BROUILLON)   # on ignore les brouillons
             .filter(Q(email__iexact=obj.email) | Q(texte_recherche=obj.texte_recherche))
             .exclude(pk=obj.pk)
             .order_by('cree_le')[:10]
@@ -271,13 +272,37 @@ class DossierListeSerializer(serializers.ModelSerializer):
     correspondance = serializers.SerializerMethodField()
     # Doublon probable (autre dossier du même appel, même email ou même nom).
     a_doublon = serializers.BooleanField(read_only=True, default=False)
+    # Nom complet tel qu'il figure sur la liste d'éligibilité :
+    #   - si rattaché : la personne liée ;
+    #   - sinon, si le code saisi est reconnu : le propriétaire de ce code
+    #     (révèle un éventuel décalage nom saisi / nom de la liste — triche).
+    # `rattache` indique lequel des deux cas (pour l'affichage côté front).
+    eligibilite_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Dossier
         fields = [
             'id', 'code', 'appel', 'appel_titre', 'poste_libelle', 'nom', 'postnom', 'prenom',
-            'statut', 'statut_libelle', 'correspondance', 'a_doublon', 'cree_le',
+            'statut', 'statut_libelle', 'correspondance', 'a_doublon',
+            'eligibilite_nom', 'cree_le',
         ]
+
+    def get_eligibilite_nom(self, obj):
+        ligne = obj.ligne_eligibilite   # select_related dans get_queryset
+        rattache = ligne is not None
+        if ligne is None:
+            code = (obj.code or '').strip()
+            if code:
+                lignes = list(ListeEligibilite.objects.filter(code__iexact=code)[:2])
+                if len(lignes) == 1:
+                    ligne = lignes[0]
+        if ligne is None:
+            return None
+        return {
+            'nom': f'{ligne.nom} {ligne.postnom} {ligne.prenom}'.strip(),
+            'code': ligne.code,
+            'rattache': rattache,
+        }
 
     def get_correspondance(self, obj):
         if obj.ligne_eligibilite_id:
