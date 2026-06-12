@@ -21,7 +21,8 @@ async function soumettre() {
     await auth.connexion(email.value, motDePasse.value)
     if (route.query.suite) {
       router.push(route.query.suite)
-    } else if (auth.estAdmin) {
+    } else if (auth.accesBackoffice) {
+      // Tout rôle back-office : admin, validateur, correcteur, lecteur.
       router.push({ name: 'validation' })
     } else if (auth.estEvaluateur) {
       router.push({ name: 'eval-dossiers' })
