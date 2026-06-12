@@ -231,7 +231,9 @@ class DossierSerializer(serializers.ModelSerializer):
         autres = (
             Dossier.objects
             .filter(appel_id=obj.appel_id, texte_recherche=obj.texte_recherche)
-            .exclude(statut=Dossier.Statut.BROUILLON)   # on ignore les brouillons
+            # On ignore les brouillons (non traités) et les rejetés (déjà écartés,
+            # ex. doublon déjà traité).
+            .exclude(statut__in=[Dossier.Statut.BROUILLON, Dossier.Statut.REJETE])
             .exclude(pk=obj.pk)
             .order_by('cree_le')[:10]
         )

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import api from '../../api'
 import StatutBadge from '../../components/StatutBadge.vue'
 import { couleurStatut } from '../../statuts'
@@ -55,6 +55,22 @@ async function enregistrerIdentite() {
       || e.response?.data?.prenom?.[0] || 'Modification impossible.', 'error')
   } finally {
     enEdition.value = false
+  }
+}
+
+// Rejet d'un doublon en un clic (motif « Dossier en double », sans email)
+const doublonEnCours = ref(null)
+async function rejeterDoublon(d) {
+  if (!confirm(`Rejeter le dossier ${d.code || ('#' + d.id)} comme doublon ? (aucun email envoyé)`)) return
+  doublonEnCours.value = d.id
+  try {
+    await api.post(`/dossiers/${d.id}/rejeter-doublon/`)
+    notifier('Doublon rejeté.')
+    await charger()
+  } catch (e) {
+    notifier(e.response?.data?.detail || 'Rejet impossible.', 'error')
+  } finally {
+    doublonEnCours.value = null
   }
 }
 
@@ -215,10 +231,11 @@ watch(() => route.params.id, (nouvel, ancien) => {
         (motif « Dossier en double »).
       </div>
       <div class="d-flex flex-wrap ga-2">
-        <v-card v-for="d in dossier.doublons" :key="d.id" flat border class="pa-2 px-3 doublon-carte"
-                :to="{ name: 'dossier', params: { id: d.id } }">
+        <v-card v-for="d in dossier.doublons" :key="d.id" flat border class="pa-2 px-3 doublon-carte">
           <div class="d-flex align-center ga-2">
-            <span class="font-weight-bold">{{ d.code || ('#' + d.id) }}</span>
+            <RouterLink :to="{ name: 'dossier', params: { id: d.id } }" class="doublon-lien">
+              {{ d.code || ('#' + d.id) }}
+            </RouterLink>
             <StatutBadge :statut="d.statut" :libelle="d.statut_libelle" />
           </div>
           <div class="text-caption">{{ d.nom }} {{ d.postnom }} {{ d.prenom }}</div>
@@ -226,6 +243,11 @@ watch(() => route.params.id, (nouvel, ancien) => {
             <v-icon size="12" color="warning">mdi-account</v-icon> même nom
             <template v-if="d.meme_email"> · <v-icon size="12" color="warning">mdi-email</v-icon> même email</template>
           </div>
+          <v-btn v-if="d.statut === 'depose'" size="x-small" color="error" variant="tonal"
+                 class="mt-2" prepend-icon="mdi-content-duplicate" :loading="doublonEnCours === d.id"
+                 @click="rejeterDoublon(d)">
+            Rejeter comme doublon
+          </v-btn>
         </v-card>
       </div>
     </v-alert>
@@ -634,8 +656,10 @@ watch(() => route.params.id, (nouvel, ancien) => {
 .candidat-elig.choisi { border-color: #2e7d32 !important; background: #f3faf4; box-shadow: 0 2px 10px rgba(46,125,50,0.12); }
 
 /* Carte d'un dossier en doublon (cliquable) */
-.doublon-carte { border-radius: 10px !important; text-decoration: none; transition: box-shadow 0.15s, border-color 0.15s; min-width: 180px; }
+.doublon-carte { border-radius: 10px !important; transition: box-shadow 0.15s, border-color 0.15s; min-width: 200px; }
 .doublon-carte:hover { border-color: #f9a825 !important; box-shadow: 0 3px 12px rgba(249,168,37,0.2); }
+.doublon-lien { font-weight: 700; color: #1a237e; text-decoration: none; }
+.doublon-lien:hover { text-decoration: underline; }
 
 /* Aperçu des pièces */
 .apercu-zone { position: relative; background: #2b2b2b; display: flex; align-items: center; justify-content: center; height: 72vh; overflow: auto; }

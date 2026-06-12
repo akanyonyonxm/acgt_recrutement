@@ -28,6 +28,7 @@ from .models import (
     AppelCandidature,
     DocumentReclamation,
     Dossier,
+    EmailQueue,
     Evaluation,
     ListeEligibilite,
     PieceJointe,
@@ -238,19 +239,45 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
     def publier_retenus(self, request, pk=None):
         """Publie la liste des retenus (admin) → affichage public.
 
-        Le candidat retenu a déjà été notifié par l'email de décision (action
-        `retenir`). L'email de convocation à la publication sera ajouté plus
-        tard (l'infrastructure EmailQueue / envoyer_emails_en_attente est déjà
-        en place).
+        C'est le SEUL moment où des emails partent : aucun email n'est envoyé
+        pendant le traitement. On met en file (`EmailQueue`) l'email de
+        convocation pour chaque retenu pas encore mis en file (idempotent :
+        republier ne recrée pas de doublon). Les envois sont ensuite lissés par
+        `python manage.py envoyer_emails_en_attente --limite N` (cron), pour
+        respecter la limite quotidienne de Resend.
         """
         if not roles.est_admin(request.user):
             raise PermissionDenied("Réservé aux administrateurs.")
         appel = self.get_object()
         appel.liste_retenus_publiee = True
         appel.save(update_fields=['liste_retenus_publiee'])
+
+        retenus = appel.dossiers.filter(statut=Dossier.Statut.RETENU)
+        deja = set(
+            EmailQueue.objects.filter(dossier__appel=appel)
+            .values_list('dossier_id', flat=True)
+        )
+        def _code(d):
+            return d.code or f'#{d.pk}'
+
+        a_creer = [
+            EmailQueue(
+                dossier=d, destinataire=d.email,
+                sujet=f'Résultat de votre candidature — dossier {_code(d)}',
+                template='convocation_retenu.html',
+                contexte={
+                    'nom_candidat': f'{d.nom} {d.postnom} {d.prenom}'.strip(),
+                    'code_dossier': _code(d),
+                    'appel': appel.titre,
+                },
+            )
+            for d in retenus if d.id not in deja and d.email
+        ]
+        EmailQueue.objects.bulk_create(a_creer)
         return Response({
             'detail': 'Liste des retenus publiée.',
-            'retenus': appel.dossiers.filter(statut=Dossier.Statut.RETENU).count(),
+            'retenus': retenus.count(),
+            'emails_en_file': len(a_creer),
         })
 
     @action(detail=True, methods=['post'], url_path='depublier-retenus')
@@ -353,7 +380,7 @@ class DossierViewSet(viewsets.ModelViewSet):
                 a_doublon=Exists(
                     Dossier.objects
                     .filter(appel_id=OuterRef('appel_id'))
-                    .exclude(statut=Dossier.Statut.BROUILLON)
+                    .exclude(statut__in=[Dossier.Statut.BROUILLON, Dossier.Statut.REJETE])
                     .exclude(texte_recherche='')
                     .filter(texte_recherche=OuterRef('texte_recherche'))
                     .exclude(pk=OuterRef('pk'))
@@ -706,21 +733,41 @@ class DossierViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def approuver(self, request, pk=None):
-        """DÉPOSÉ → EN_EXAMEN (admin). Accepte un `eligibilite_id` optionnel."""
+        """DÉPOSÉ → EN_EXAMEN (admin). Accepte un `eligibilite_id` optionnel.
+
+        Aucun email pendant le traitement : les candidats retenus sont notifiés
+        seulement à la publication de la liste (voir `publier_retenus`).
+        """
         return self._transition(
             request, Dossier.Statut.EN_EXAMEN, roles.est_admin,
             lier_eligibilite=True,
-            email=('Votre dossier est en cours d\'examen', 'dossier_approuve.html'),
         )
 
     @action(detail=True, methods=['post'])
     def rejeter(self, request, pk=None):
-        """DÉPOSÉ → REJETÉ (admin, motif obligatoire)."""
+        """DÉPOSÉ → REJETÉ (admin, motif obligatoire). Aucun email (traitement)."""
         return self._transition(
             request, Dossier.Statut.REJETE, roles.est_admin,
             motif_obligatoire=True,
-            email=('Décision concernant votre candidature', 'dossier_rejete.html'),
         )
+
+    @action(detail=True, methods=['post'], url_path='rejeter-doublon')
+    def rejeter_doublon(self, request, pk=None):
+        """Rejette un dossier en double (DÉPOSÉ → REJETÉ), sans email.
+
+        Raccourci pour traiter les doublons : motif « Dossier en double »
+        pré-rempli, pas de notification au candidat.
+        """
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        dossier = self.get_object()
+        try:
+            dossier.changer_statut(
+                Dossier.Statut.REJETE, par=request.user, motif='Dossier en double',
+            )
+        except DjangoValidationError as exc:
+            raise ValidationError({'detail': exc.messages})
+        return Response(self.get_serializer(dossier).data)
 
     # --- Affectation des évaluateurs (admin) ----------------------------
 
@@ -821,20 +868,22 @@ class DossierViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def retenir(self, request, pk=None):
-        """EN_EXAMEN → RETENU (admin, ou évaluateur désigné et autorisé)."""
+        """EN_EXAMEN → RETENU (admin, ou évaluateur désigné et autorisé).
+
+        Aucun email ici : le retenu est notifié à la publication de la liste.
+        """
         return self._transition(
             request, Dossier.Statut.RETENU, self._peut_decider,
             verif_validateur=True,
-            email=('Vous êtes retenu(e) pour la suite', 'dossier_retenu.html'),
         )
 
     @action(detail=True, methods=['post'], url_path='non-retenir')
     def non_retenir(self, request, pk=None):
-        """EN_EXAMEN → NON_RETENU (admin ou évaluateur autorisé, motif requis)."""
+        """EN_EXAMEN → NON_RETENU (admin ou évaluateur autorisé, motif requis).
+        Aucun email (traitement)."""
         return self._transition(
             request, Dossier.Statut.NON_RETENU, self._peut_decider,
             motif_obligatoire=True, verif_validateur=True,
-            email=('Décision concernant votre candidature', 'dossier_non_retenu.html'),
         )
 
     @action(detail=True, methods=['get'])
@@ -1027,7 +1076,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             reclamation.dossier_cree = dossier
             reclamation.save(update_fields=['statut', 'traite_par', 'traite_le', 'dossier_cree'])
 
-        self._notifier(reclamation, validee=True)
+        # Aucun email pendant le traitement : la personne (désormais RETENUE via
+        # le dossier créé) sera notifiée à la publication de la liste.
         return Response(ReclamationAdminSerializer(reclamation).data)
 
     @action(detail=True, methods=['post'])
@@ -1048,7 +1098,7 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         reclamation.traite_le = timezone.now()
         reclamation.save(update_fields=['statut', 'motif', 'traite_par', 'traite_le'])
 
-        self._notifier(reclamation, validee=False)
+        # Aucun email pendant le traitement (un rejet de réclamation ne notifie pas).
         return Response(ReclamationAdminSerializer(reclamation).data)
 
     # --- Emails (best-effort : n'annulent jamais l'opération) ----------
