@@ -103,8 +103,37 @@ async function chargerStats() {
   stats.value = data
 }
 
+// Histogramme : brouillons + déposés ventilés par correspondance.
+const histo = ref(null)
+async function chargerHisto() {
+  const params = {}
+  if (appel.value) params.appel = appel.value
+  const { data } = await api.get('/dossiers/stats-correspondance/', { params })
+  histo.value = data
+}
+// Barres de l'histogramme (clic → applique le filtre statut + éligibilité).
+const BARRES = [
+  { cle: 'brouillon', label: 'Brouillon', desc: 'Non soumis', couleur: '#90A4AE', statut: 'brouillon', elig: null },
+  { cle: 'rattache', label: 'Rattaché', desc: 'Déposé', couleur: '#2E7D32', statut: 'depose', elig: 'rattache' },
+  { cle: 'a_rattacher', label: 'À rattacher', desc: 'Déposé', couleur: '#43A047', statut: 'depose', elig: 'a_rattacher' },
+  { cle: 'partielle', label: 'Partielle', desc: 'Déposé', couleur: '#0288D1', statut: 'depose', elig: 'partielle' },
+  { cle: 'aucune', label: 'Aucune', desc: 'Déposé', couleur: '#C62828', statut: 'depose', elig: 'aucune' },
+]
+function valeurBarre(cle) {
+  if (!histo.value) return 0
+  return cle === 'brouillon' ? histo.value.brouillon : (histo.value.depose?.[cle] || 0)
+}
+const histoMax = computed(() => Math.max(1, ...BARRES.map((b) => valeurBarre(b.cle))))
+const histoTotal = computed(() =>
+  histo.value ? histo.value.brouillon + (histo.value.depose?.total || 0) : 0)
+function filtrerBarre(b) {
+  statut.value = b.statut
+  eligibilite.value = b.elig
+  doublons.value = false
+}
+
 function filtrer(key) { statut.value = key }     // -> cle change -> tableau rechargé
-function changerAppel() { chargerStats() }        // le tableau se recharge via cle
+function changerAppel() { chargerStats(); chargerHisto() }   // le tableau se recharge via cle
 
 let minuteur
 function rechercher() {
@@ -119,6 +148,7 @@ onMounted(async () => {
   const { data } = await api.get('/appels/')
   appels.value = data.results.map((a) => ({ value: a.id, title: a.titre }))
   chargerStats()
+  chargerHisto()
 })
 </script>
 
@@ -152,6 +182,36 @@ onMounted(async () => {
                   :color="k.color" clickable :active="statut === k.key" @click="filtrer(k.key)" />
       </v-col>
     </v-row>
+
+    <!-- Histogramme : brouillons + déposés par correspondance d'éligibilité -->
+    <v-card v-if="histo" flat border class="histo-carte mb-5">
+      <div class="histo-entete">
+        <div>
+          <div class="histo-titre">Répartition des dossiers</div>
+          <div class="histo-sous">
+            Brouillons et dossiers déposés selon leur correspondance avec la liste d'éligibilité
+          </div>
+        </div>
+        <div class="histo-total">
+          <span class="histo-total-val">{{ histoTotal }}</span>
+          <span class="histo-total-lib">dossiers</span>
+        </div>
+      </div>
+      <div class="histo-zone">
+        <button v-for="b in BARRES" :key="b.cle" class="histo-col"
+                :class="{ actif: statut === b.statut && eligibilite === b.elig }"
+                @click="filtrerBarre(b)"
+                :title="`Filtrer : ${b.label}`">
+          <span class="histo-val">{{ valeurBarre(b.cle) }}</span>
+          <span class="histo-bar-piste">
+            <span class="histo-bar" :style="{
+              height: (valeurBarre(b.cle) / histoMax * 100) + '%', background: b.couleur }" />
+          </span>
+          <span class="histo-label">{{ b.label }}</span>
+          <span class="histo-desc">{{ b.desc }}</span>
+        </button>
+      </div>
+    </v-card>
 
     <!-- Tableau -->
     <v-card flat border>
@@ -224,6 +284,32 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Histogramme correspondance */
+.histo-carte { border-radius: 16px; padding: 20px 22px 16px; }
+.histo-entete { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.histo-titre { font-size: 1.05rem; font-weight: 800; color: #1a237e; }
+.histo-sous { font-size: 0.8rem; color: #8a92a4; margin-top: 2px; }
+.histo-total { text-align: right; line-height: 1.05; flex-shrink: 0; }
+.histo-total-val { display: block; font-size: 1.5rem; font-weight: 800; color: #1a237e; }
+.histo-total-lib { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: #9098a8; }
+.histo-zone { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: end; }
+.histo-col { display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer; padding: 8px 4px 6px; border-radius: 12px;
+  transition: background 0.15s; }
+.histo-col:hover { background: #f4f6fb; }
+.histo-col.actif { background: #eef1fb; box-shadow: inset 0 0 0 2px #1a237e22; }
+.histo-val { font-size: 1.1rem; font-weight: 800; color: #1f2430; }
+.histo-bar-piste { width: 100%; max-width: 64px; height: 120px; display: flex; align-items: flex-end;
+  justify-content: center; background: #f1f3f8; border-radius: 8px; overflow: hidden; }
+.histo-bar { width: 100%; border-radius: 8px 8px 0 0; min-height: 4px;
+  transition: height 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.histo-label { font-size: 0.82rem; font-weight: 700; color: #2c3344; margin-top: 4px; text-align: center; }
+.histo-desc { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; color: #9098a8; }
+@media (max-width: 600px) {
+  .histo-bar-piste { height: 90px; }
+  .histo-label { font-size: 0.72rem; }
+}
+
 .tableau-admin :deep(thead th) { background: #f4f5f9; font-weight: 700 !important; color: #1a237e !important; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
 .tableau-admin :deep(tbody tr) { cursor: pointer; }
 /* Nom de la liste affiché pour un dossier NON rattaché (juste le propriétaire du code) */

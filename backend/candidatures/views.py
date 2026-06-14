@@ -330,6 +330,39 @@ class DossierViewSet(viewsets.ModelViewSet):
         return DossierSerializer
 
     @staticmethod
+    def _annoter_correspondance(qs):
+        """Ajoute les annotations de correspondance avec la liste d'éligibilité.
+
+        Réutilisé par `get_queryset` (badges) et par `stats_correspondance`
+        (histogramme) pour garantir des définitions identiques. Comparaison
+        insensible à la casse ; un champ ne compte que renseigné des deux côtés.
+        """
+        return qs.annotate(
+            corresp_code=Exists(
+                ListeEligibilite.objects.exclude(code='')
+                .filter(code__iexact=OuterRef('code'))
+            ),
+            # Nom complet (nom+postnom+prénom) trouvé sur une même ligne →
+            # « à rattacher » : c'est très probablement la personne.
+            corresp_nom_complet=Exists(
+                ListeEligibilite.objects.exclude(texte_recherche='')
+                .filter(texte_recherche=OuterRef('texte_recherche'))
+            ),
+            corresp_f_nom=Exists(
+                ListeEligibilite.objects.exclude(nom='')
+                .filter(nom__iexact=OuterRef('nom'))
+            ),
+            corresp_f_postnom=Exists(
+                ListeEligibilite.objects.exclude(postnom='')
+                .filter(postnom__iexact=OuterRef('postnom'))
+            ),
+            corresp_f_prenom=Exists(
+                ListeEligibilite.objects.exclude(prenom='')
+                .filter(prenom__iexact=OuterRef('prenom'))
+            ),
+        )
+
+    @staticmethod
     def _doublon_exists():
         """Sous-requête : ce dossier a-t-il un jumeau SOUMIS (hors brouillon et
         rejeté) du même appel et même nom complet ? Réutilisée par l'annotation
@@ -358,40 +391,17 @@ class DossierViewSet(viewsets.ModelViewSet):
         # CLAUDE.md). Un champ ne compte que s'il est renseigné des deux côtés
         # (jamais de faux match sur un champ vide). Calcul en SQL (Exists) pour
         # éviter tout N+1.
-        qs = (
+        qs = self._annoter_correspondance(
             Dossier.objects
             .select_related('appel', 'deposant', 'ligne_eligibilite')
             .prefetch_related('pieces__type_piece')
-            .annotate(
-                corresp_code=Exists(
-                    ListeEligibilite.objects.exclude(code='')
-                    .filter(code__iexact=OuterRef('code'))
-                ),
-                # Nom complet (nom+postnom+prénom) trouvé sur une même ligne →
-                # « à rattacher » : c'est très probablement la personne.
-                corresp_nom_complet=Exists(
-                    ListeEligibilite.objects.exclude(texte_recherche='')
-                    .filter(texte_recherche=OuterRef('texte_recherche'))
-                ),
-                corresp_f_nom=Exists(
-                    ListeEligibilite.objects.exclude(nom='')
-                    .filter(nom__iexact=OuterRef('nom'))
-                ),
-                corresp_f_postnom=Exists(
-                    ListeEligibilite.objects.exclude(postnom='')
-                    .filter(postnom__iexact=OuterRef('postnom'))
-                ),
-                corresp_f_prenom=Exists(
-                    ListeEligibilite.objects.exclude(prenom='')
-                    .filter(prenom__iexact=OuterRef('prenom'))
-                ),
-                # Doublon probable : un AUTRE dossier SOUMIS (hors brouillon) du
-                # même appel a le même NOM COMPLET (nom+postnom+prénom normalisé).
-                # On n'utilise PAS l'email : un proche peut déposer plusieurs
-                # dossiers (personnes différentes) depuis la même adresse. On
-                # ignore les brouillons (non traités). Indicatif : l'admin tranche.
-                a_doublon=self._doublon_exists(),
-            )
+        ).annotate(
+            # Doublon probable : un AUTRE dossier SOUMIS (hors brouillon) du
+            # même appel a le même NOM COMPLET (nom+postnom+prénom normalisé).
+            # On n'utilise PAS l'email : un proche peut déposer plusieurs
+            # dossiers (personnes différentes) depuis la même adresse. On
+            # ignore les brouillons (non traités). Indicatif : l'admin tranche.
+            a_doublon=self._doublon_exists(),
         )
         user = self.request.user
         if roles.acces_backoffice(user):
@@ -547,6 +557,43 @@ class DossierViewSet(viewsets.ModelViewSet):
 
         par_statut = {row['statut']: row['n'] for row in qs.values('statut').annotate(n=Count('id'))}
         return Response({'total': sum(par_statut.values()), 'par_statut': par_statut})
+
+    @action(detail=False, methods=['get'], url_path='stats-correspondance')
+    def stats_correspondance(self, request):
+        """Histogramme : brouillons + dossiers DÉPOSÉS ventilés par correspondance
+        avec la liste d'éligibilité (rattaché / à rattacher / partielle / aucune).
+
+        Réservé au back-office. Filtrable par `?appel=`. Les buckets reprennent
+        exactement la logique des filtres de la liste (cf. `get_queryset`)."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+
+        qs = Dossier.objects.all()
+        appel = request.query_params.get('appel')
+        if appel:
+            qs = qs.filter(appel_id=appel)
+
+        brouillon = qs.filter(statut=Dossier.Statut.BROUILLON).count()
+        deposes = self._annoter_correspondance(qs.filter(statut=Dossier.Statut.DEPOSE))
+        rattache = deposes.filter(ligne_eligibilite__isnull=False).count()
+        reste = deposes.filter(ligne_eligibilite__isnull=True)
+        a_rattacher = reste.filter(corresp_nom_complet=True).count()
+        partielle = reste.filter(corresp_nom_complet=False).filter(
+            Q(corresp_code=True) | Q(corresp_f_nom=True)
+            | Q(corresp_f_postnom=True) | Q(corresp_f_prenom=True)
+        ).count()
+        aucune = reste.filter(
+            corresp_nom_complet=False, corresp_code=False, corresp_f_nom=False,
+            corresp_f_postnom=False, corresp_f_prenom=False,
+        ).count()
+        return Response({
+            'brouillon': brouillon,
+            'depose': {
+                'rattache': rattache, 'a_rattacher': a_rattacher,
+                'partielle': partielle, 'aucune': aucune,
+                'total': rattache + a_rattacher + partielle + aucune,
+            },
+        })
 
     @action(detail=False, methods=['get'], url_path='doublon-suivant')
     def doublon_suivant(self, request):
