@@ -93,6 +93,26 @@
        manuel). Cette commande <strong>n'écrit rien</strong>.</p>
   </section>
 
+  <section>
+    <h3>croiser_reclamations_dossiers <span class="pastille lecture">lecture seule</span></h3>
+    <p>Croise les <strong>réclamations</strong> avec les <strong>dossiers déposés</strong> pour repérer les personnes
+       présentes des deux côtés : quelqu'un qui a déposé un dossier en ligne <em>et</em> introduit une réclamation
+       (réclamation en général redondante). Rapprochement par <strong>nom complet identique</strong>
+       (nom + postnom + prénom, sans accents/casse) — jamais l'email. Côté dossiers, seuls les
+       <strong>déposés</strong> sont considérés ; côté réclamations, les <strong>en attente</strong> par défaut
+       (<code>--tous</code> pour toutes les non rejetées).</p>
+    <pre><code># Réclamations en attente vs dossiers déposés
+docker compose -f docker-compose.prod.yml exec backend python manage.py croiser_reclamations_dossiers
+
+# Toutes les réclamations non rejetées
+docker compose -f docker-compose.prod.yml exec backend python manage.py croiser_reclamations_dossiers --tous</code></pre>
+    <p>Exemple de sortie :</p>
+    <pre><code>RECLAMATION #675 [en_attente] MBAYI MAKOLO ANDRE  (andrembayi4@gmail.com)
+   ~ DOSSIER [0133] MBAYI MAKOLO ANDRE  (depose le 14/06/2026)</code></pre>
+    <p>Cette commande <strong>n'écrit rien</strong> : elle aide à décider quelles réclamations traiter (la personne
+       est déjà candidate via un dossier déposé).</p>
+  </section>
+
   <h2>2. Liste d'éligibilité</h2>
 
   <section>
