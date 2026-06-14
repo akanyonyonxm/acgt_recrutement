@@ -184,9 +184,24 @@ const CALENDRIER = [
           </div>
         </div>
       </div>
+      </template>
 
-      <!-- Calendrier du processus -->
-      <section class="calendrier">
+      <!-- Candidatures clôturées : encart vers les résultats (remplit la zone) -->
+      <section v-else-if="candidaturesOuvertes === false" class="resultats-bloc">
+        <div class="resultats-ic">🏆</div>
+        <h2 class="resultats-titre">Résultats du recrutement</h2>
+        <p class="resultats-txt">
+          La liste des candidats retenus sera publiée à l'issue du processus de
+          sélection. Consultez-la dès sa mise en ligne.
+        </p>
+        <RouterLink :to="{ name: 'retenus-public' }" class="resultats-btn">
+          Voir les candidats retenus
+        </RouterLink>
+      </section>
+
+      <!-- Calendrier du processus : affiché ouvert ET clôturé (indique la date
+           de publication des résultats). Caché tant que l'état est inconnu. -->
+      <section v-if="candidaturesOuvertes !== null" class="calendrier">
         <h2 class="cal-titre">Calendrier du processus</h2>
         <div class="cal-grid">
           <div v-for="(e, i) in CALENDRIER" :key="i" class="cal-item" :class="{ fort: e.fort }">
@@ -196,7 +211,6 @@ const CALENDRIER = [
           </div>
         </div>
       </section>
-      </template>
 
     </div>
   </div>
@@ -208,6 +222,18 @@ const CALENDRIER = [
   border-radius: 9999px; background: rgba(229,57,53,0.18); border: 1px solid rgba(255,255,255,0.35);
   color: #fff; font-size: 1rem; font-weight: 800; letter-spacing: 0.02em; }
 .hero-cloture-ic { font-size: 1.1rem; }
+
+/* Encart « Résultats » affiché à la clôture (remplit la zone sous le hero) */
+.resultats-bloc { max-width: 620px; margin: -40px auto 0; position: relative; z-index: 2;
+  text-align: center; background: #fff; border: 1px solid #e2e6ea; border-radius: 18px;
+  padding: 40px 32px; box-shadow: 0 12px 30px rgba(26,35,126,0.10); }
+.resultats-ic { font-size: 2.6rem; margin-bottom: 6px; }
+.resultats-titre { color: #1a237e; font-size: 1.5rem; font-weight: 800; margin-bottom: 10px; }
+.resultats-txt { color: #5b5b6b; font-size: 1rem; line-height: 1.6; margin-bottom: 24px; }
+.resultats-btn { display: inline-flex; align-items: center; background: #1a237e; color: #fff;
+  padding: 12px 28px; border-radius: 9999px; font-weight: 700; text-decoration: none;
+  transition: background 0.15s, box-shadow 0.15s; }
+.resultats-btn:hover { background: #0d1b2a; box-shadow: 0 6px 16px rgba(26,35,126,0.3); }
 
 /* HERO centré */
 .hero { background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%); position: relative; overflow: hidden; padding: 56px 24px 64px; }
