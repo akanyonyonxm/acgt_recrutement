@@ -198,17 +198,19 @@ onMounted(async () => {
         </div>
       </div>
       <div class="histo-zone">
-        <button v-for="b in BARRES" :key="b.cle" class="histo-col"
+        <button v-for="b in BARRES" :key="b.cle" class="histo-ligne"
                 :class="{ actif: statut === b.statut && eligibilite === b.elig }"
                 @click="filtrerBarre(b)"
                 :title="`Filtrer : ${b.label}`">
-          <span class="histo-val">{{ valeurBarre(b.cle) }}</span>
-          <span class="histo-bar-piste">
-            <span class="histo-bar" :style="{
-              height: (valeurBarre(b.cle) / histoMax * 100) + '%', background: b.couleur }" />
+          <span class="histo-lbl">
+            <span class="histo-pastille" :style="{ background: b.couleur }" />
+            {{ b.label }}<span class="histo-desc">{{ b.desc }}</span>
           </span>
-          <span class="histo-label">{{ b.label }}</span>
-          <span class="histo-desc">{{ b.desc }}</span>
+          <span class="histo-piste">
+            <span class="histo-fill" :style="{
+              width: (valeurBarre(b.cle) / histoMax * 100) + '%', background: b.couleur }" />
+          </span>
+          <span class="histo-val">{{ valeurBarre(b.cle) }}</span>
         </button>
       </div>
     </v-card>
@@ -292,22 +294,23 @@ onMounted(async () => {
 .histo-total { text-align: right; line-height: 1.05; flex-shrink: 0; }
 .histo-total-val { display: block; font-size: 1.5rem; font-weight: 800; color: #1a237e; }
 .histo-total-lib { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: #9098a8; }
-.histo-zone { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: end; }
-.histo-col { display: flex; flex-direction: column; align-items: center; gap: 4px;
-  background: none; border: none; cursor: pointer; padding: 8px 4px 6px; border-radius: 12px;
-  transition: background 0.15s; }
-.histo-col:hover { background: #f4f6fb; }
-.histo-col.actif { background: #eef1fb; box-shadow: inset 0 0 0 2px #1a237e22; }
-.histo-val { font-size: 1.1rem; font-weight: 800; color: #1f2430; }
-.histo-bar-piste { width: 100%; max-width: 64px; height: 120px; display: flex; align-items: flex-end;
-  justify-content: center; background: #f1f3f8; border-radius: 8px; overflow: hidden; }
-.histo-bar { width: 100%; border-radius: 8px 8px 0 0; min-height: 4px;
-  transition: height 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
-.histo-label { font-size: 0.82rem; font-weight: 700; color: #2c3344; margin-top: 4px; text-align: center; }
-.histo-desc { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; color: #9098a8; }
+.histo-zone { display: flex; flex-direction: column; gap: 6px; }
+.histo-ligne { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 12px;
+  background: none; border: none; cursor: pointer; padding: 5px 8px; border-radius: 10px;
+  transition: background 0.15s; text-align: left; }
+.histo-ligne:hover { background: #f4f6fb; }
+.histo-ligne.actif { background: #eef1fb; box-shadow: inset 0 0 0 2px #1a237e22; }
+.histo-lbl { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; color: #2c3344; white-space: nowrap; }
+.histo-pastille { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.histo-desc { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.03em; color: #9098a8; font-weight: 600; }
+.histo-piste { height: 18px; background: #f1f3f8; border-radius: 9px; overflow: hidden; }
+.histo-fill { display: block; height: 100%; min-width: 3px; border-radius: 9px;
+  transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1); }
+.histo-val { font-size: 1rem; font-weight: 800; color: #1f2430; text-align: right; }
 @media (max-width: 600px) {
-  .histo-bar-piste { height: 90px; }
-  .histo-label { font-size: 0.72rem; }
+  .histo-ligne { grid-template-columns: 120px 1fr 40px; gap: 8px; }
+  .histo-lbl { font-size: 0.78rem; }
+  .histo-desc { display: none; }
 }
 
 .tableau-admin :deep(thead th) { background: #f4f5f9; font-weight: 700 !important; color: #1a237e !important; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
