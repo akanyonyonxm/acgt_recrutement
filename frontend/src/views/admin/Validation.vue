@@ -105,6 +105,10 @@ async function chargerStats() {
 
 // Histogramme : brouillons + déposés ventilés par correspondance.
 const histo = ref(null)
+// Accordéon : repliable pour gagner de l'espace pendant le traitement. État
+// mémorisé (ouvert par défaut au premier passage).
+const histoOuvert = ref(localStorage.getItem('acgt_histo_ouvert') !== '0')
+watch(histoOuvert, (v) => localStorage.setItem('acgt_histo_ouvert', v ? '1' : '0'))
 async function chargerHisto() {
   const params = {}
   if (appel.value) params.appel = appel.value
@@ -183,21 +187,26 @@ onMounted(async () => {
       </v-col>
     </v-row>
 
-    <!-- Histogramme : brouillons + déposés par correspondance d'éligibilité -->
+    <!-- Histogramme (accordéon) : brouillons + déposés par correspondance -->
     <v-card v-if="histo" flat border class="histo-carte mb-5">
-      <div class="histo-entete">
-        <div>
-          <div class="histo-titre">Répartition des dossiers</div>
-          <div class="histo-sous">
-            Brouillons et dossiers déposés selon leur correspondance avec la liste d'éligibilité
+      <button class="histo-entete histo-toggle" @click="histoOuvert = !histoOuvert"
+              :aria-expanded="histoOuvert">
+        <div class="d-flex align-center" style="min-width:0">
+          <v-icon class="histo-chevron" :class="{ ouvert: histoOuvert }" size="22">mdi-chevron-right</v-icon>
+          <div style="min-width:0">
+            <div class="histo-titre">Répartition des dossiers</div>
+            <div class="histo-sous">
+              Brouillons et dossiers déposés selon leur correspondance avec la liste d'éligibilité
+            </div>
           </div>
         </div>
         <div class="histo-total">
           <span class="histo-total-val">{{ histoTotal }}</span>
           <span class="histo-total-lib">dossiers</span>
         </div>
-      </div>
-      <div class="histo-zone">
+      </button>
+      <v-expand-transition>
+        <div v-show="histoOuvert" class="histo-zone mt-4">
         <button v-for="b in BARRES" :key="b.cle" class="histo-ligne"
                 :class="{ actif: statut === b.statut && eligibilite === b.elig }"
                 @click="filtrerBarre(b)"
@@ -212,7 +221,8 @@ onMounted(async () => {
           </span>
           <span class="histo-val">{{ valeurBarre(b.cle) }}</span>
         </button>
-      </div>
+        </div>
+      </v-expand-transition>
     </v-card>
 
     <!-- Tableau -->
@@ -288,7 +298,11 @@ onMounted(async () => {
 <style scoped>
 /* Histogramme correspondance */
 .histo-carte { border-radius: 16px; padding: 20px 22px 16px; }
-.histo-entete { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.histo-entete { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.histo-toggle { width: 100%; background: none; border: none; cursor: pointer; text-align: left; padding: 2px; }
+.histo-toggle:hover .histo-titre { color: #283593; }
+.histo-chevron { color: #1a237e; margin-right: 8px; transition: transform 0.25s ease; flex-shrink: 0; }
+.histo-chevron.ouvert { transform: rotate(90deg); }
 .histo-titre { font-size: 1.05rem; font-weight: 800; color: #1a237e; }
 .histo-sous { font-size: 0.8rem; color: #8a92a4; margin-top: 2px; }
 .histo-total { text-align: right; line-height: 1.05; flex-shrink: 0; }
