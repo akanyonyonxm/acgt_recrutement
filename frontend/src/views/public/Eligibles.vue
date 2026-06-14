@@ -117,7 +117,7 @@ const CALENDRIER = [
           <div v-else-if="candidaturesOuvertes === false" class="hero-cloture">
             <span class="hero-cloture-ic">🔒</span> Les candidatures sont clôturées
           </div>
-          <RouterLink :to="{ name: 'guide' }" class="hero-guide">
+          <RouterLink v-if="candidaturesOuvertes" :to="{ name: 'guide' }" class="hero-guide">
             <span class="hero-guide-ic">📖</span> Besoin d'aide ? Voir le guide « Comment postuler ? »
           </RouterLink>
         </div>
@@ -125,22 +125,9 @@ const CALENDRIER = [
     </section>
 
     <div class="wrap">
-      <!-- Candidatures clôturées : la liste des éligibles n'est plus affichée -->
-      <div v-if="candidaturesOuvertes === false" class="cloture-bloc">
-        <div class="cloture-ic">🔒</div>
-        <h2 class="cloture-titre">Les candidatures sont clôturées</h2>
-        <p class="cloture-txt">
-          La période de dépôt des candidatures est terminée. La liste des
-          éligibles et le dépôt de dossiers ne sont plus accessibles.
-          Consultez la liste des personnes retenues dès sa publication.
-        </p>
-        <RouterLink :to="{ name: 'retenus-public' }" class="cloture-btn">
-          Voir les personnes retenues
-        </RouterLink>
-      </div>
-
-      <!-- Candidatures ouvertes : liste consultable + recherche -->
-      <template v-else-if="candidaturesOuvertes">
+      <!-- Candidatures ouvertes : liste consultable + recherche. À la clôture,
+           rien ici : le hero porte déjà le message (la liste disparaît). -->
+      <template v-if="candidaturesOuvertes">
       <!-- Carte recherche flottante -->
       <div class="recherche">
         <div class="rech-input">
@@ -221,18 +208,6 @@ const CALENDRIER = [
   border-radius: 9999px; background: rgba(229,57,53,0.18); border: 1px solid rgba(255,255,255,0.35);
   color: #fff; font-size: 1rem; font-weight: 800; letter-spacing: 0.02em; }
 .hero-cloture-ic { font-size: 1.1rem; }
-
-/* Bloc de clôture (corps de page, remplace la liste) */
-.cloture-bloc { max-width: 620px; margin: 48px auto; text-align: center; background: #fff;
-  border: 1px solid #e2e6ea; border-radius: 18px; padding: 48px 32px;
-  box-shadow: 0 12px 30px rgba(26,35,126,0.08); }
-.cloture-ic { font-size: 3rem; margin-bottom: 8px; }
-.cloture-titre { color: #1a237e; font-size: 1.6rem; font-weight: 800; margin-bottom: 12px; }
-.cloture-txt { color: #5b5b6b; font-size: 1rem; line-height: 1.6; margin-bottom: 24px; }
-.cloture-btn { display: inline-flex; align-items: center; background: #1a237e; color: #fff;
-  padding: 11px 26px; border-radius: 9999px; font-weight: 700; text-decoration: none;
-  transition: background 0.15s, box-shadow 0.15s; }
-.cloture-btn:hover { background: #0d1b2a; box-shadow: 0 6px 16px rgba(26,35,126,0.3); }
 
 /* HERO centré */
 .hero { background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%); position: relative; overflow: hidden; padding: 56px 24px 64px; }
