@@ -274,7 +274,7 @@ onMounted(async () => {
               {{ item.eligibilite_nom.nom }}
             </span>
             <div v-if="!item.eligibilite_nom.rattache" class="nom-code-hint">
-              propriétaire du code {{ item.eligibilite_nom.code }}
+              nom identique — à rattacher
             </div>
           </template>
           <span v-else class="text-medium-emphasis">—</span>

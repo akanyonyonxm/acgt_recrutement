@@ -291,20 +291,28 @@ class DossierListeSerializer(serializers.ModelSerializer):
 
     def get_eligibilite_nom(self, obj):
         ligne = obj.ligne_eligibilite   # select_related dans get_queryset
-        rattache = ligne is not None
-        if ligne is None:
-            code = (obj.code or '').strip()
-            if code:
-                lignes = list(ListeEligibilite.objects.filter(code__iexact=code)[:2])
-                if len(lignes) == 1:
-                    ligne = lignes[0]
-        if ligne is None:
-            return None
-        return {
-            'nom': f'{ligne.nom} {ligne.postnom} {ligne.prenom}'.strip(),
-            'code': ligne.code,
-            'rattache': rattache,
-        }
+        if ligne is not None:
+            return {
+                'nom': f'{ligne.nom} {ligne.postnom} {ligne.prenom}'.strip(),
+                'code': ligne.code,
+                'rattache': True,
+            }
+        # Non rattaché : on n'affiche un nom QUE s'il correspond au NOM COMPLET
+        # du postulant (nom+postnom+prénom identiques). JAMAIS via le code seul :
+        # le code peut appartenir à quelqu'un d'autre (triche). On ne requête que
+        # pour les dossiers signalés « à rattacher » (corresp_nom_complet).
+        if getattr(obj, 'corresp_nom_complet', False) and obj.texte_recherche:
+            lignes = list(
+                ListeEligibilite.objects.filter(texte_recherche=obj.texte_recherche)[:2]
+            )
+            if len(lignes) == 1:
+                ligne = lignes[0]
+                return {
+                    'nom': f'{ligne.nom} {ligne.postnom} {ligne.prenom}'.strip(),
+                    'code': ligne.code,
+                    'rattache': False,
+                }
+        return None
 
     def get_correspondance(self, obj):
         if obj.ligne_eligibilite_id:
