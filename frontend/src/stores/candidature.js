@@ -9,6 +9,8 @@ export const useCandidatureStore = defineStore('candidature', {
     charge: false,
   }),
   getters: {
+    // Au moins un appel encore ouvert (publié) — sinon candidatures clôturées.
+    candidaturesOuvertes: (s) => s.appels.length > 0,
     // Au moins un appel publié non bloqué (multiple, ou unique pas encore postulé).
     peutPostuler: (s) =>
       s.appels.some(

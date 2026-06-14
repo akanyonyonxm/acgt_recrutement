@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import api from '../../api'
 
@@ -9,6 +9,11 @@ const loading = ref(false)
 const q = ref('')
 const page = ref(1)
 const PAR_PAGE = 10
+
+// État des candidatures : ouvertes seulement si au moins un appel est publié.
+// Tant que ce n'est pas connu (null), on n'affiche ni la liste ni le message
+// de clôture (évite le clignotement).
+const candidaturesOuvertes = ref(null)
 
 async function charger() {
   loading.value = true
@@ -20,7 +25,17 @@ async function charger() {
     loading.value = false
   }
 }
-charger()
+
+onMounted(async () => {
+  try {
+    const { data } = await api.get('/appels/')
+    candidaturesOuvertes.value = data.results.some((a) => a.statut === 'publie')
+  } catch {
+    candidaturesOuvertes.value = false
+  }
+  // La liste des éligibles n'est consultable que pendant les candidatures.
+  if (candidaturesOuvertes.value) charger()
+})
 
 let minuteur
 function rechercher() {
@@ -85,9 +100,12 @@ const CALENDRIER = [
           <mark class="surbrillance">au plus tard le 14 juin 2026 à 12h00 (TU+1)</mark>.</strong>
         </p>
         <div class="hero-actions">
-          <RouterLink :to="{ name: 'mes-dossiers' }" class="hero-cta">
+          <RouterLink v-if="candidaturesOuvertes" :to="{ name: 'mes-dossiers' }" class="hero-cta">
             POSTULER EN LIGNE <span class="fleche">→</span>
           </RouterLink>
+          <div v-else-if="candidaturesOuvertes === false" class="hero-cloture">
+            <span class="hero-cloture-ic">🔒</span> Les candidatures sont clôturées
+          </div>
           <RouterLink :to="{ name: 'guide' }" class="hero-guide">
             <span class="hero-guide-ic">📖</span> Besoin d'aide ? Voir le guide « Comment postuler ? »
           </RouterLink>
@@ -96,6 +114,22 @@ const CALENDRIER = [
     </section>
 
     <div class="wrap">
+      <!-- Candidatures clôturées : la liste des éligibles n'est plus affichée -->
+      <div v-if="candidaturesOuvertes === false" class="cloture-bloc">
+        <div class="cloture-ic">🔒</div>
+        <h2 class="cloture-titre">Les candidatures sont clôturées</h2>
+        <p class="cloture-txt">
+          La période de dépôt des candidatures est terminée. La liste des
+          éligibles et le dépôt de dossiers ne sont plus accessibles.
+          Consultez la liste des personnes retenues dès sa publication.
+        </p>
+        <RouterLink :to="{ name: 'retenus-public' }" class="cloture-btn">
+          Voir les personnes retenues
+        </RouterLink>
+      </div>
+
+      <!-- Candidatures ouvertes : liste consultable + recherche -->
+      <template v-else-if="candidaturesOuvertes">
       <!-- Carte recherche flottante -->
       <div class="recherche">
         <div class="rech-input">
@@ -164,12 +198,31 @@ const CALENDRIER = [
           </div>
         </div>
       </section>
+      </template>
 
     </div>
   </div>
 </template>
 
 <style scoped>
+/* Bandeau de clôture (hero) */
+.hero-cloture { display: inline-flex; align-items: center; gap: 10px; padding: 12px 26px;
+  border-radius: 9999px; background: rgba(229,57,53,0.18); border: 1px solid rgba(255,255,255,0.35);
+  color: #fff; font-size: 1rem; font-weight: 800; letter-spacing: 0.02em; }
+.hero-cloture-ic { font-size: 1.1rem; }
+
+/* Bloc de clôture (corps de page, remplace la liste) */
+.cloture-bloc { max-width: 620px; margin: 48px auto; text-align: center; background: #fff;
+  border: 1px solid #e2e6ea; border-radius: 18px; padding: 48px 32px;
+  box-shadow: 0 12px 30px rgba(26,35,126,0.08); }
+.cloture-ic { font-size: 3rem; margin-bottom: 8px; }
+.cloture-titre { color: #1a237e; font-size: 1.6rem; font-weight: 800; margin-bottom: 12px; }
+.cloture-txt { color: #5b5b6b; font-size: 1rem; line-height: 1.6; margin-bottom: 24px; }
+.cloture-btn { display: inline-flex; align-items: center; background: #1a237e; color: #fff;
+  padding: 11px 26px; border-radius: 9999px; font-weight: 700; text-decoration: none;
+  transition: background 0.15s, box-shadow 0.15s; }
+.cloture-btn:hover { background: #0d1b2a; box-shadow: 0 6px 16px rgba(26,35,126,0.3); }
+
 /* HERO centré */
 .hero { background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%); position: relative; overflow: hidden; padding: 56px 24px 64px; }
 .hero-courbes { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }

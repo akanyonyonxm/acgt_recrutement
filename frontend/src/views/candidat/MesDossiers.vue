@@ -34,7 +34,11 @@ async function supprimer(d) {
 }
 const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 const reference = (d) => `ACGT-${new Date(d.cree_le).getFullYear()}-${String(d.id).padStart(3, '0')}`
-const bloque = () => cand.charge && !cand.peutPostuler
+// Candidatures clôturées (aucun appel ouvert) vs déjà postulé (appel ouvert mais
+// candidature unique déjà utilisée). On distingue pour afficher le bon message.
+const cloture = () => cand.charge && !cand.candidaturesOuvertes
+const dejaPostule = () => cand.charge && cand.candidaturesOuvertes && !cand.peutPostuler
+const bloque = () => cloture() || dejaPostule()
 onMounted(charger)
 </script>
 
@@ -55,8 +59,14 @@ onMounted(charger)
       </v-btn>
     </div>
 
+    <!-- Bandeau « candidatures clôturées » -->
+    <v-alert v-if="cloture()" type="warning" variant="tonal" density="comfortable"
+             class="mb-5" icon="mdi-lock-outline">
+      Les candidatures sont clôturées. Le dépôt de nouveaux dossiers n'est plus possible.
+    </v-alert>
+
     <!-- Bandeau « déjà postulé » -->
-    <v-alert v-if="bloque() && dossiers.length" type="info" variant="tonal" density="comfortable"
+    <v-alert v-else-if="dejaPostule() && dossiers.length" type="info" variant="tonal" density="comfortable"
              class="mb-5" icon="mdi-check-circle-outline">
       Vous avez déjà postulé aux appels à candidature disponibles.
     </v-alert>
@@ -106,9 +116,14 @@ onMounted(charger)
     <v-card v-else class="pa-12 text-center" variant="flat" style="border:1px dashed #c6c5d4">
       <v-avatar color="primary" variant="tonal" size="72" class="mb-4"><v-icon size="40">mdi-folder-open-outline</v-icon></v-avatar>
       <h2 class="text-h6 font-weight-bold mb-1">Aucun dossier pour le moment</h2>
-      <p class="text-body-2 text-medium-emphasis mb-5">Déposez votre première candidature pour démarrer.</p>
-      <v-btn color="accent" size="large" rounded="lg" class="text-primary font-weight-bold"
-             prepend-icon="mdi-plus" :to="{ name: 'postuler' }">Déposer un dossier</v-btn>
+      <template v-if="cloture()">
+        <p class="text-body-2 text-medium-emphasis mb-0">Les candidatures sont clôturées.</p>
+      </template>
+      <template v-else>
+        <p class="text-body-2 text-medium-emphasis mb-5">Déposez votre première candidature pour démarrer.</p>
+        <v-btn color="accent" size="large" rounded="lg" class="text-primary font-weight-bold"
+               prepend-icon="mdi-plus" :to="{ name: 'postuler' }">Déposer un dossier</v-btn>
+      </template>
     </v-card>
   </v-container>
 </template>

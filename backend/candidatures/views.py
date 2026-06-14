@@ -466,6 +466,12 @@ class DossierViewSet(viewsets.ModelViewSet):
                 "Vous devez d'abord vérifier votre email avant de déposer un dossier."
             )
         appel = serializer.validated_data['appel']
+        # Candidatures ouvertes uniquement : pas de dépôt sur un appel clôturé
+        # (ou non publié). Garde-fou serveur, en plus du masquage côté front.
+        if not appel.est_ouvert:
+            raise ValidationError(
+                "Les candidatures pour cet appel sont clôturées."
+            )
         # Appel à candidature unique : un seul dossier par compte.
         if appel.candidature_unique and appel.dossiers.filter(deposant=user).exists():
             raise ValidationError(
@@ -643,6 +649,12 @@ class DossierViewSet(viewsets.ModelViewSet):
         dossier = self.get_object()
         if dossier.deposant_id != request.user.id and not request.user.is_superuser:
             raise PermissionDenied("Ce dossier ne vous appartient pas.")
+        # Candidatures clôturées entre la création du brouillon et sa soumission :
+        # on refuse le dépôt (cohérent avec le masquage du bouton « Postuler »).
+        if not dossier.appel.est_ouvert:
+            raise ValidationError(
+                {'detail': "Les candidatures pour cet appel sont clôturées."}
+            )
         manquantes = dossier.pieces_obligatoires_manquantes()
         if manquantes:
             raise ValidationError({

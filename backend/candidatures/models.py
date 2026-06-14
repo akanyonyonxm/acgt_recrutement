@@ -73,6 +73,16 @@ class AppelCandidature(models.Model):
     def __str__(self):
         return self.titre
 
+    @property
+    def est_ouvert(self):
+        """Les candidatures sont-elles ouvertes pour cet appel ?
+
+        Source de vérité unique pour autoriser le dépôt/la soumission : un appel
+        n'accepte des dossiers que s'il est PUBLIÉ. « Clôturé » (ou « Brouillon »)
+        ferme la candidature (bouton « Postuler » masqué, dépôt refusé côté
+        serveur)."""
+        return self.statut == self.Statut.PUBLIE
+
 
 class Dossier(models.Model):
     """Un dossier de candidature déposé sur la plateforme.

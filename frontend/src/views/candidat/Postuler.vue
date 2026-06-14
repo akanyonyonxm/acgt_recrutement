@@ -23,6 +23,10 @@ const enCours = ref(false)
 const enUpload = ref({})       // type_piece.id -> bool
 const soumis = ref(false)
 
+const charge = ref(false)   // true une fois les appels chargés
+// Candidatures ouvertes : au moins un appel publié (les autres sont filtrés).
+const candidaturesOuvertes = computed(() => appels.value.length > 0)
+
 const complet = computed(() => dossier.value && dossier.value.pieces_manquantes?.length === 0)
 const piecesExigees = computed(() => appelSelectionne.value?.pieces_exigees || [])
 const notifier = (text, color = 'success') => (snack.value = { show: true, color, text })
@@ -69,6 +73,7 @@ onMounted(async () => {
     if (route.query.postnom) form.value.postnom = route.query.postnom
     if (route.query.prenom) form.value.prenom = route.query.prenom
   }
+  charge.value = true
 })
 
 function choisirAppel(id) {
@@ -210,6 +215,20 @@ async function soumettre() {
 
 <template>
   <v-container class="py-8 px-6" style="max-width: 880px">
+    <!-- Candidatures clôturées : aucun dépôt possible -->
+    <v-card v-if="charge && !candidaturesOuvertes" flat border class="pa-10 text-center">
+      <v-icon color="grey-darken-1" size="64" class="mb-3">mdi-lock-outline</v-icon>
+      <h2 class="text-h5 font-weight-bold text-primary mb-2">Candidatures clôturées</h2>
+      <p class="text-body-1 text-medium-emphasis mb-6">
+        La période de dépôt des candidatures est terminée. Vous ne pouvez plus
+        déposer de nouveau dossier. Consultez la liste des retenus dès sa publication.
+      </p>
+      <v-btn color="primary" variant="flat" :to="{ name: 'mes-dossiers' }" prepend-icon="mdi-folder-account">
+        Voir mes dossiers
+      </v-btn>
+    </v-card>
+
+    <template v-else>
     <div class="mb-6">
       <h1 class="text-h4 font-weight-bold text-primary">Déposer un dossier</h1>
       <p class="text-body-1 text-medium-emphasis mb-0">
@@ -447,6 +466,8 @@ async function soumettre() {
         </v-btn>
       </v-card>
     </div>
+
+    </template>
 
     <v-snackbar v-model="snack.show" :color="snack.color" timeout="3000">{{ snack.text }}</v-snackbar>
   </v-container>
