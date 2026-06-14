@@ -23,10 +23,12 @@ const sauve = filtresSauvegardes()
 const statut = ref(sauve.statut ?? 'en_attente')
 const appel = ref(sauve.appel ?? null)
 const q = ref(sauve.q ?? '')
+const dossierDepose = ref(sauve.dossierDepose ?? false)
 
-watch([statut, appel, q], () => {
+watch([statut, appel, q, dossierDepose], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, q: q.value,
+    dossierDepose: dossierDepose.value,
   }))
 })
 const appels = ref([])
@@ -84,7 +86,7 @@ async function chargerStats() {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${dossierDepose.value}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25 } = {}) {
   chargement.value = true
@@ -92,6 +94,7 @@ async function charger({ page = 1, itemsPerPage = 25 } = {}) {
     const params = { page, page_size: itemsPerPage > 0 ? itemsPerPage : 25 }
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
+    if (dossierDepose.value) params.dossier_depose = 1
     if (q.value) params.q = q.value
     const { data } = await api.get('/reclamations/', { params })
     reclamations.value = data.results
@@ -107,6 +110,8 @@ function rechercher() { clearTimeout(minuteur); minuteur = setTimeout(() => { q.
 
 const doublonsRec = ref([])
 const doublonEnCours = ref(null)
+const dossiersDeposes = ref([])
+const rejetDossierEnCours = ref(false)
 async function ouvrir(rec) {
   detail.value = rec
   action.value = null
@@ -115,9 +120,31 @@ async function ouvrir(rec) {
   posteChoisi.value = rec.poste || null
   motifRejet.value = ''
   doublonsRec.value = []
+  dossiersDeposes.value = []
   dialog.value = true
   if (rec.a_doublon) {
     try { doublonsRec.value = (await api.get(`/reclamations/${rec.id}/doublons/`)).data } catch { /* ignore */ }
+  }
+  if (rec.a_dossier_depose) {
+    try { dossiersDeposes.value = (await api.get(`/reclamations/${rec.id}/dossiers-deposes/`)).data } catch { /* ignore */ }
+  }
+}
+
+// Rejet en un clic d'une réclamation dont la personne a déjà un dossier déposé.
+async function rejeterCarDossier() {
+  if (!confirm("Rejeter cette réclamation ? La personne a déjà un dossier déposé "
+    + '(elle est déjà candidate). Aucun email ne sera envoyé.')) return
+  rejetDossierEnCours.value = true
+  try {
+    await api.post(`/reclamations/${detail.value.id}/rejeter/`,
+      { motif: 'Candidat déjà inscrit (dossier déposé)' })
+    notifier('Réclamation rejetée (dossier déjà déposé).')
+    dialog.value = false
+    await Promise.all([charger(), chargerStats()])
+  } catch (e) {
+    notifier(e.response?.data?.detail || e.response?.data?.motif || 'Rejet impossible.', 'error')
+  } finally {
+    rejetDossierEnCours.value = false
   }
 }
 
@@ -195,6 +222,10 @@ onMounted(async () => {
                     style="max-width: 260px" @click:clear="q = ''" />
       <v-select v-model="appel" :items="appels" label="Appel" clearable hide-details density="compact"
                 variant="outlined" style="max-width: 220px" />
+      <v-btn :variant="dossierDepose ? 'flat' : 'outlined'" :color="dossierDepose ? 'deep-orange' : 'grey'"
+             prepend-icon="mdi-folder-account-outline" @click="dossierDepose = !dossierDepose">
+        A déjà un dossier
+      </v-btn>
     </div>
 
     <!-- KPI -->
@@ -217,6 +248,8 @@ onMounted(async () => {
           <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
           <v-chip v-if="item.a_doublon" color="warning" size="x-small" label variant="tonal"
                   prepend-icon="mdi-content-duplicate" class="ml-1">Doublon</v-chip>
+          <v-chip v-if="item.a_dossier_depose" color="deep-orange" size="x-small" label variant="tonal"
+                  prepend-icon="mdi-folder-account-outline" class="ml-1">A déjà un dossier</v-chip>
         </template>
         <template #item.statut="{ item }">
           <v-chip :color="COULEUR[item.statut]" size="small" variant="flat" label>{{ item.statut_libelle }}</v-chip>
@@ -269,6 +302,29 @@ onMounted(async () => {
                 Rejeter le doublon
               </v-btn>
             </div>
+          </v-alert>
+
+          <!-- Croisement : la personne a déjà un dossier déposé -->
+          <v-alert v-if="dossiersDeposes.length" type="error" variant="tonal" density="compact"
+                   class="mt-3" icon="mdi-folder-account-outline">
+            <div class="font-weight-bold mb-1">
+              Cette personne a déjà {{ dossiersDeposes.length }} dossier(s) déposé(s) — elle est
+              déjà candidate. Cette réclamation est probablement redondante.
+            </div>
+            <div v-for="d in dossiersDeposes" :key="d.id" class="d-flex align-center ga-2 mt-1">
+              <RouterLink :to="{ name: 'dossier', params: { id: d.id } }" class="font-weight-bold lien-dossier">
+                {{ d.code || ('#' + d.id) }}
+              </RouterLink>
+              <span class="text-caption flex-grow-1" style="min-width:0">
+                <strong>{{ d.nom }} {{ d.postnom }} {{ d.prenom }}</strong>
+                <span class="text-medium-emphasis"> · {{ d.poste_libelle || d.appel_titre }}</span>
+              </span>
+            </div>
+            <v-btn v-if="peutTraiter && detail.statut === 'en_attente'" size="small" color="error" variant="flat"
+                   class="mt-3" prepend-icon="mdi-close-circle-outline"
+                   :loading="rejetDossierEnCours" @click="rejeterCarDossier">
+              Rejeter (déjà un dossier déposé)
+            </v-btn>
           </v-alert>
 
           <div class="text-caption text-medium-emphasis mt-3 mb-1">

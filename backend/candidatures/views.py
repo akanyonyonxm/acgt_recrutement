@@ -1004,6 +1004,15 @@ class ReclamationViewSet(viewsets.ModelViewSet):
                 .filter(texte_recherche=OuterRef('texte_recherche'))
                 .exclude(pk=OuterRef('pk'))
             ),
+            # Croisement : la personne a-t-elle DÉJÀ un dossier DÉPOSÉ (même nom
+            # complet normalisé) ? Sa réclamation est alors redondante (elle est
+            # déjà candidate). Par nom, jamais l'email (cf. règle anti-triche).
+            a_dossier_depose=Exists(
+                Dossier.objects
+                .filter(statut=Dossier.Statut.DEPOSE)
+                .exclude(texte_recherche='')
+                .filter(texte_recherche=OuterRef('texte_recherche'))
+            ),
         )
         statut = self.request.query_params.get('statut')
         if statut:
@@ -1011,6 +1020,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         appel = self.request.query_params.get('appel')
         if appel:
             qs = qs.filter(appel_id=appel)
+        if self.request.query_params.get('dossier_depose') in ('1', 'true', 'oui'):
+            qs = qs.filter(a_dossier_depose=True)
         q = self.request.query_params.get('q')
         if q:
             for token in tokens_recherche(q):
@@ -1042,6 +1053,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         chacun) et au moins un diplôme (plusieurs possibles).
         """
         serializer = self.get_serializer(data=request.data)
+        # `validate_appel` (serializer) refuse déjà un appel non publié : la
+        # réclamation est donc fermée en même temps que les candidatures.
         serializer.is_valid(raise_exception=True)
 
         # Collecte et validation des fichiers.
@@ -1112,6 +1125,36 @@ class ReclamationViewSet(viewsets.ModelViewSet):
                 'statut_libelle': r.get_statut_display(), 'cree_le': r.cree_le,
             }
             for r in autres
+        ])
+
+    @action(detail=True, methods=['get'], url_path='dossiers-deposes')
+    def dossiers_deposes(self, request, pk=None):
+        """Dossiers DÉPOSÉS portant le même nom complet (personne déjà candidate).
+
+        Sert à décider : si la personne a déjà un dossier déposé, sa réclamation
+        est redondante et peut être rejetée. Rapprochement par nom (jamais email).
+        """
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        reclamation = self.get_object()
+        if not reclamation.texte_recherche:
+            return Response([])
+        dossiers = (
+            Dossier.objects
+            .filter(statut=Dossier.Statut.DEPOSE, texte_recherche=reclamation.texte_recherche)
+            .select_related('appel', 'poste')
+            .order_by('cree_le')
+        )
+        return Response([
+            {
+                'id': d.id, 'code': d.code, 'nom': d.nom, 'postnom': d.postnom,
+                'prenom': d.prenom, 'statut': d.statut,
+                'statut_libelle': d.get_statut_display(),
+                'appel_titre': d.appel.titre,
+                'poste_libelle': d.poste.libelle if d.poste else None,
+                'cree_le': d.cree_le,
+            }
+            for d in dossiers
         ])
 
     @action(detail=False, methods=['get'], url_path='doublon-suivant')
