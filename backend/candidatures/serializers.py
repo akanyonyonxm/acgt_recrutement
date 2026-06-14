@@ -349,18 +349,20 @@ class DossierListeSerializer(serializers.ModelSerializer):
         # Nom complet trouvé sur la liste → prêt à rattacher (la personne y est).
         if getattr(obj, 'corresp_nom_complet', False):
             return {'etat': 'a_rattacher', 'champs': []}
-        # Sinon, on liste précisément les champs qui coïncident.
-        champs = []
-        if getattr(obj, 'corresp_code', False):
-            champs.append('code')
+        # Correspondance partielle = au moins un champ de NOM coïncide. Le code
+        # seul (sans aucun champ de nom) ne compte PAS : il peut appartenir à
+        # quelqu'un d'autre (triche) → traité comme « aucune ».
+        champs_nom = []
         if getattr(obj, 'corresp_f_nom', False):
-            champs.append('nom')
+            champs_nom.append('nom')
         if getattr(obj, 'corresp_f_postnom', False):
-            champs.append('postnom')
+            champs_nom.append('postnom')
         if getattr(obj, 'corresp_f_prenom', False):
-            champs.append('prenom')
-        if not champs:
+            champs_nom.append('prenom')
+        if not champs_nom:
             return {'etat': 'aucune', 'champs': []}
+        # Le code est affiché en complément s'il coïncide aussi (info utile).
+        champs = (['code'] if getattr(obj, 'corresp_code', False) else []) + champs_nom
         return {'etat': 'champs', 'champs': champs}
 
 

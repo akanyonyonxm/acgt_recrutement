@@ -428,18 +428,19 @@ class DossierViewSet(viewsets.ModelViewSet):
         elif corr == 'a_rattacher':
             qs = qs.filter(ligne_eligibilite__isnull=True, corresp_nom_complet=True)
         elif corr == 'partielle':
-            # Au moins un champ coïncide, mais ni rattaché ni nom complet.
+            # Au moins un champ de NOM coïncide (ni rattaché ni nom complet). Le
+            # code seul ne compte pas (il peut être celui d'autrui) → « aucune ».
             qs = qs.filter(
                 ligne_eligibilite__isnull=True, corresp_nom_complet=False,
             ).filter(
-                Q(corresp_code=True) | Q(corresp_f_nom=True)
-                | Q(corresp_f_postnom=True) | Q(corresp_f_prenom=True)
+                Q(corresp_f_nom=True) | Q(corresp_f_postnom=True)
+                | Q(corresp_f_prenom=True)
             )
         elif corr == 'aucune':
+            # Aucun champ de NOM ne coïncide (le code éventuel est ignoré).
             qs = qs.filter(
                 ligne_eligibilite__isnull=True, corresp_nom_complet=False,
-                corresp_code=False, corresp_f_nom=False,
-                corresp_f_postnom=False, corresp_f_prenom=False,
+                corresp_f_nom=False, corresp_f_postnom=False, corresp_f_prenom=False,
             )
 
         # Filtre « doublons uniquement » : dossiers ayant au moins un jumeau.
@@ -578,12 +579,13 @@ class DossierViewSet(viewsets.ModelViewSet):
         rattache = deposes.filter(ligne_eligibilite__isnull=False).count()
         reste = deposes.filter(ligne_eligibilite__isnull=True)
         a_rattacher = reste.filter(corresp_nom_complet=True).count()
+        # Partielle = au moins un champ de NOM (le code seul ne compte pas).
         partielle = reste.filter(corresp_nom_complet=False).filter(
-            Q(corresp_code=True) | Q(corresp_f_nom=True)
-            | Q(corresp_f_postnom=True) | Q(corresp_f_prenom=True)
+            Q(corresp_f_nom=True) | Q(corresp_f_postnom=True)
+            | Q(corresp_f_prenom=True)
         ).count()
         aucune = reste.filter(
-            corresp_nom_complet=False, corresp_code=False, corresp_f_nom=False,
+            corresp_nom_complet=False, corresp_f_nom=False,
             corresp_f_postnom=False, corresp_f_prenom=False,
         ).count()
         return Response({
