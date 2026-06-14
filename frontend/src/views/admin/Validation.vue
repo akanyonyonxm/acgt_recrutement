@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../../api'
 import StatutBadge from '../../components/StatutBadge.vue'
@@ -8,11 +8,28 @@ import StatCard from '../../components/StatCard.vue'
 const router = useRouter()
 const dossiers = ref([])
 const appels = ref([])
-const statut = ref('depose')
-const appel = ref(null)
-const eligibilite = ref(null)
-const doublons = ref(false)
-const q = ref('')
+
+// Filtres mémorisés (localStorage) : on les retrouve au retour sur la page,
+// notamment après avoir ouvert un dossier pour le traiter — pas besoin de
+// refiltrer à chaque fois. Survit aussi à un rechargement.
+const STORAGE_FILTRES = 'acgt_filtres_validation'
+function filtresSauvegardes() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_FILTRES)) || {} } catch { return {} }
+}
+const sauve = filtresSauvegardes()
+
+const statut = ref(sauve.statut ?? 'depose')
+const appel = ref(sauve.appel ?? null)
+const eligibilite = ref(sauve.eligibilite ?? null)
+const doublons = ref(sauve.doublons ?? false)
+const q = ref(sauve.q ?? '')
+
+watch([statut, appel, eligibilite, doublons, q], () => {
+  localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
+    statut: statut.value, appel: appel.value, eligibilite: eligibilite.value,
+    doublons: doublons.value, q: q.value,
+  }))
+})
 
 // Options du filtre « Éligibilité » (alignées sur les badges de la colonne).
 const ELIGIBILITE_OPTIONS = [

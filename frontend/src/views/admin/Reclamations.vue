@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import api from '../../api'
 import StatCard from '../../components/StatCard.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -11,9 +11,24 @@ const peutTraiter = computed(() => auth.estAdmin || auth.estValidateur)
 const reclamations = ref([])
 const total = ref(0)
 const chargement = ref(false)
-const statut = ref('en_attente')
-const appel = ref(null)
-const q = ref('')
+
+// Filtres mémorisés (localStorage) : retrouvés au retour sur la page, pour ne
+// pas refiltrer après avoir traité une réclamation. Survit au rechargement.
+const STORAGE_FILTRES = 'acgt_filtres_reclamations'
+function filtresSauvegardes() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_FILTRES)) || {} } catch { return {} }
+}
+const sauve = filtresSauvegardes()
+
+const statut = ref(sauve.statut ?? 'en_attente')
+const appel = ref(sauve.appel ?? null)
+const q = ref(sauve.q ?? '')
+
+watch([statut, appel, q], () => {
+  localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
+    statut: statut.value, appel: appel.value, q: q.value,
+  }))
+})
 const appels = ref([])
 const postes = ref([])
 const stats = ref({ total: 0, par_statut: {} })
