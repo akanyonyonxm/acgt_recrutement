@@ -57,6 +57,19 @@ class InscriptionView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Inscription ouverte seulement pendant les candidatures (au moins un
+        # appel publié). Sinon, refus net (la connexion reste possible pour les
+        # comptes existants). Garde-fou serveur, en plus du masquage côté front.
+        from candidatures.models import AppelCandidature
+
+        if not AppelCandidature.objects.filter(
+            statut=AppelCandidature.Statut.PUBLIE,
+        ).exists():
+            return Response(
+                {'detail': "Les inscriptions sont closes : aucune candidature "
+                           "n'est ouverte actuellement."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = InscriptionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         utilisateur = serializer.save()

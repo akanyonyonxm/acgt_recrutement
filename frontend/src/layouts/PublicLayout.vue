@@ -1,12 +1,19 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useAppelsStore } from '../stores/appels'
 
 const auth = useAuthStore()
+const appels = useAppelsStore()
 const router = useRouter()
 const drawer = ref(false)
 const annee = new Date().getFullYear()
+
+// État de campagne partagé : réclamation + création de compte ne sont proposées
+// que si des candidatures sont ouvertes. La connexion reste toujours possible
+// (un candidat peut consulter ses dossiers même après la clôture).
+onMounted(() => appels.charger())
 
 async function deconnexion() {
   await auth.deconnexion()
@@ -48,7 +55,7 @@ async function deconnexion() {
             </v-list>
           </v-menu>
           <template v-else>
-            <RouterLink :to="{ name: 'reclamation' }" class="btn-reclamation">Réclamation</RouterLink>
+            <RouterLink v-if="appels.ouvertes" :to="{ name: 'reclamation' }" class="btn-reclamation">Réclamation</RouterLink>
             <RouterLink :to="{ name: 'candidat-connexion' }" class="btn-connexion">Connexion</RouterLink>
           </template>
 
@@ -62,7 +69,7 @@ async function deconnexion() {
           <RouterLink :to="{ name: 'guide' }" @click="drawer = false">Comment postuler ?</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" @click="drawer = false">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" @click="drawer = false">Candidats retenus</RouterLink>
-          <RouterLink v-if="!auth.estConnecte" :to="{ name: 'reclamation' }" @click="drawer = false">Réclamation</RouterLink>
+          <RouterLink v-if="!auth.estConnecte && appels.ouvertes" :to="{ name: 'reclamation' }" @click="drawer = false">Réclamation</RouterLink>
           <RouterLink v-if="!auth.estConnecte" :to="{ name: 'candidat-connexion' }" @click="drawer = false">Connexion</RouterLink>
           <a v-else @click="deconnexion(); drawer = false">Déconnexion</a>
         </nav>

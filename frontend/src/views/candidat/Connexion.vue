@@ -1,12 +1,17 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useAppelsStore } from '../../stores/appels'
 import logo from '../../assets/acgt_logo.png'
 
 const auth = useAuthStore()
+const appels = useAppelsStore()
 const router = useRouter()
 const route = useRoute()
+
+// La création de compte n'est proposée que pendant les candidatures ouvertes.
+onMounted(() => appels.charger())
 
 const email = ref('')
 const motDePasse = ref('')
@@ -56,9 +61,14 @@ async function soumettre() {
             Se connecter
           </v-btn>
         </v-form>
-        <div class="text-center mt-6 pt-4 text-body-2" style="border-top: 1px solid #e0e4e9">
+        <div v-if="appels.ouvertes" class="text-center mt-6 pt-4 text-body-2" style="border-top: 1px solid #e0e4e9">
           Pas encore de compte ?
           <RouterLink :to="{ name: 'candidat-inscription' }" class="font-weight-bold">Créer un compte</RouterLink>
+        </div>
+        <div v-else-if="appels.charge" class="text-center mt-6 pt-4 text-body-2 text-medium-emphasis"
+             style="border-top: 1px solid #e0e4e9">
+          Les candidatures sont clôturées : la création de compte est fermée.
+          Connectez-vous pour consulter vos dossiers existants.
         </div>
       </v-card-text>
     </v-card>

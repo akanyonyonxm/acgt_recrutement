@@ -434,7 +434,7 @@ class ReclamationCreationSerializer(serializers.ModelSerializer):
         ]
 
     def validate_appel(self, appel):
-        if appel.statut != AppelCandidature.Statut.PUBLIE:
+        if not appel.est_ouvert:
             raise serializers.ValidationError(
                 "Cet appel à candidature n'est pas ouvert."
             )

@@ -2,6 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import api from '../../api'
+import { useAppelsStore } from '../../stores/appels'
+
+const appels = useAppelsStore()
 
 const items = ref([])
 const total = ref(0)
@@ -13,7 +16,8 @@ const PAR_PAGE = 10
 // État des candidatures : ouvertes seulement si au moins un appel est publié.
 // Tant que ce n'est pas connu (null), on n'affiche ni la liste ni le message
 // de clôture (évite le clignotement).
-const candidaturesOuvertes = ref(null)
+const candidaturesOuvertes = computed(() => (appels.charge ? appels.ouvertes : null))
+const dernierAppel = computed(() => appels.dernierAppel)
 
 async function charger() {
   loading.value = true
@@ -27,14 +31,9 @@ async function charger() {
 }
 
 onMounted(async () => {
-  try {
-    const { data } = await api.get('/appels/')
-    candidaturesOuvertes.value = data.results.some((a) => a.statut === 'publie')
-  } catch {
-    candidaturesOuvertes.value = false
-  }
+  await appels.charger()
   // La liste des éligibles n'est consultable que pendant les candidatures.
-  if (candidaturesOuvertes.value) charger()
+  if (appels.ouvertes) charger()
 })
 
 let minuteur
@@ -92,12 +91,24 @@ const CALENDRIER = [
       </svg>
       <div class="hero-inner">
         <h1 class="hero-titre">Candidats éligibles</h1>
-        <p class="hero-sous">
+        <!-- Candidatures ouvertes : consigne de dépôt -->
+        <p v-if="candidaturesOuvertes" class="hero-sous">
           Consultez la liste officielle des personnes autorisées à postuler
           <mark class="surbrillance-profils">(Ingénieur civil, Ingénieur électromécanicien, Ingénieur BTP,
           Ingénieur géomètre-topographe, Architecte, Urbaniste, Environnementaliste)</mark>.
           <strong>Seuls les candidats dont les noms apparaissent sur la liste publiée sont autorisés à soumettre leur dossier
           <mark class="surbrillance">au plus tard le 14 juin 2026 à 12h00 (TU+1)</mark>.</strong>
+        </p>
+        <!-- Candidatures clôturées : on affiche le dernier appel + son état -->
+        <p v-else-if="candidaturesOuvertes === false" class="hero-sous">
+          <template v-if="dernierAppel">
+            Dernier appel à candidature :
+            <mark class="surbrillance-profils">{{ dernierAppel.titre }}</mark>.
+          </template>
+          <strong>La période de dépôt des candidatures est
+          <mark class="surbrillance">clôturée</mark>.</strong>
+          La liste des éligibles n'est plus consultable. Consultez les candidats retenus
+          dès la publication des résultats.
         </p>
         <div class="hero-actions">
           <RouterLink v-if="candidaturesOuvertes" :to="{ name: 'mes-dossiers' }" class="hero-cta">

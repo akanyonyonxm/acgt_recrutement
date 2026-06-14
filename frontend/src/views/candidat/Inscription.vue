@@ -1,8 +1,12 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import api from '../../api'
+import { useAppelsStore } from '../../stores/appels'
 import logo from '../../assets/acgt_logo.png'
+
+const appels = useAppelsStore()
+onMounted(() => appels.charger())
 
 const email = ref('')
 const motDePasse = ref('')
@@ -39,7 +43,20 @@ async function soumettre() {
       </div>
 
       <v-card-text class="px-6 pb-6">
-        <v-alert v-if="fait" type="success" variant="tonal" icon="mdi-email-check">
+        <!-- Candidatures clôturées : pas de création de compte -->
+        <template v-if="appels.charge && !appels.ouvertes">
+          <v-alert type="warning" variant="tonal" icon="mdi-lock-outline">
+            Les candidatures sont clôturées : la création de compte n'est plus possible.
+            Si vous avez déjà un compte, connectez-vous pour consulter vos dossiers.
+          </v-alert>
+          <div class="text-center mt-4">
+            <v-btn color="primary" variant="flat" :to="{ name: 'candidat-connexion' }" prepend-icon="mdi-login">
+              Aller à la connexion
+            </v-btn>
+          </div>
+        </template>
+
+        <v-alert v-else-if="fait" type="success" variant="tonal" icon="mdi-email-check">
           Compte créé. Un email d'activation vient d'être envoyé à
           <strong>{{ email }}</strong>. Cliquez sur le lien reçu pour activer votre compte,
           puis connectez-vous.
