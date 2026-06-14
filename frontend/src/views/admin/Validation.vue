@@ -273,7 +273,10 @@ onMounted(async () => {
             <span :class="item.eligibilite_nom.rattache ? 'font-weight-medium' : 'nom-code'">
               {{ item.eligibilite_nom.nom }}
             </span>
-            <div v-if="!item.eligibilite_nom.rattache" class="nom-code-hint">
+            <div v-if="item.eligibilite_nom.partiel" class="nom-code-hint">
+              ressemblance partielle (code {{ item.eligibilite_nom.code }})
+            </div>
+            <div v-else-if="!item.eligibilite_nom.rattache" class="nom-code-hint">
               nom identique — à rattacher
             </div>
           </template>

@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import serializers
 
 from .models import (
@@ -289,18 +290,26 @@ class DossierListeSerializer(serializers.ModelSerializer):
             'eligibilite_nom', 'cree_le',
         ]
 
+    @staticmethod
+    def _nb_champs_communs(ligne, obj):
+        """Nombre de champs de nom identiques (insensible casse) entre une ligne
+        d'éligibilité et le dossier — pour choisir le meilleur candidat partiel."""
+        def egal(a, b):
+            return bool(a) and bool(b) and a.strip().lower() == b.strip().lower()
+        return (egal(ligne.nom, obj.nom) + egal(ligne.postnom, obj.postnom)
+                + egal(ligne.prenom, obj.prenom))
+
     def get_eligibilite_nom(self, obj):
         ligne = obj.ligne_eligibilite   # select_related dans get_queryset
         if ligne is not None:
             return {
                 'nom': f'{ligne.nom} {ligne.postnom} {ligne.prenom}'.strip(),
-                'code': ligne.code,
-                'rattache': True,
+                'code': ligne.code, 'rattache': True, 'partiel': False,
             }
-        # Non rattaché : on n'affiche un nom QUE s'il correspond au NOM COMPLET
-        # du postulant (nom+postnom+prénom identiques). JAMAIS via le code seul :
-        # le code peut appartenir à quelqu'un d'autre (triche). On ne requête que
-        # pour les dossiers signalés « à rattacher » (corresp_nom_complet).
+        # Hors rattachement, on s'appuie UNIQUEMENT sur les champs de nom
+        # (nom/postnom/prénom), JAMAIS sur le code seul : le code peut appartenir
+        # à quelqu'un d'autre (triche).
+        # 1) Nom complet identique → « à rattacher » (très probablement la personne).
         if getattr(obj, 'corresp_nom_complet', False) and obj.texte_recherche:
             lignes = list(
                 ListeEligibilite.objects.filter(texte_recherche=obj.texte_recherche)[:2]
@@ -309,9 +318,29 @@ class DossierListeSerializer(serializers.ModelSerializer):
                 ligne = lignes[0]
                 return {
                     'nom': f'{ligne.nom} {ligne.postnom} {ligne.prenom}'.strip(),
-                    'code': ligne.code,
-                    'rattache': False,
+                    'code': ligne.code, 'rattache': False, 'partiel': False,
                 }
+        # 2) Correspondance partielle : on montre le meilleur candidat pour aider
+        # à repérer une coquille, MAIS seulement s'il partage AU MOINS 2 champs de
+        # nom (nom+postnom ou nom+prénom). Un seul champ commun (ex. un prénom
+        # courant) ramènerait n'importe qui → bruit. Jamais via le code.
+        if (getattr(obj, 'corresp_f_nom', False) or getattr(obj, 'corresp_f_postnom', False)
+                or getattr(obj, 'corresp_f_prenom', False)):
+            conds = Q()
+            if obj.nom:
+                conds |= Q(nom__iexact=obj.nom)
+            if obj.postnom:
+                conds |= Q(postnom__iexact=obj.postnom)
+            if obj.prenom:
+                conds |= Q(prenom__iexact=obj.prenom)
+            candidats = list(ListeEligibilite.objects.filter(conds)[:8])
+            if candidats:
+                ligne = max(candidats, key=lambda l: self._nb_champs_communs(l, obj))
+                if self._nb_champs_communs(ligne, obj) >= 2:
+                    return {
+                        'nom': f'{ligne.nom} {ligne.postnom} {ligne.prenom}'.strip(),
+                        'code': ligne.code, 'rattache': False, 'partiel': True,
+                    }
         return None
 
     def get_correspondance(self, obj):
