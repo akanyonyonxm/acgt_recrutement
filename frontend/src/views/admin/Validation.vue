@@ -4,15 +4,19 @@ import { useRouter } from 'vue-router'
 import api from '../../api'
 import StatutBadge from '../../components/StatutBadge.vue'
 import StatCard from '../../components/StatCard.vue'
+import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
+const auth = useAuthStore()
 const dossiers = ref([])
 const appels = ref([])
 
 // Filtres mémorisés (localStorage) : on les retrouve au retour sur la page,
 // notamment après avoir ouvert un dossier pour le traiter — pas besoin de
 // refiltrer à chaque fois. Survit aussi à un rechargement.
-const STORAGE_FILTRES = 'acgt_filtres_validation'
+// Clé SUFFIXÉE par l'id de l'utilisateur connecté : les filtres sont propres à
+// chaque compte et ne fuient pas d'une session à l'autre sur la même machine.
+const STORAGE_FILTRES = `acgt_filtres_validation_${auth.utilisateur?.id ?? 'anon'}`
 function filtresSauvegardes() {
   try { return JSON.parse(localStorage.getItem(STORAGE_FILTRES)) || {} } catch { return {} }
 }
@@ -107,8 +111,9 @@ async function chargerStats() {
 const histo = ref(null)
 // Accordéon : repliable pour gagner de l'espace pendant le traitement. État
 // mémorisé (ouvert par défaut au premier passage).
-const histoOuvert = ref(localStorage.getItem('acgt_histo_ouvert') !== '0')
-watch(histoOuvert, (v) => localStorage.setItem('acgt_histo_ouvert', v ? '1' : '0'))
+const STORAGE_HISTO = `acgt_histo_ouvert_${auth.utilisateur?.id ?? 'anon'}`
+const histoOuvert = ref(localStorage.getItem(STORAGE_HISTO) !== '0')
+watch(histoOuvert, (v) => localStorage.setItem(STORAGE_HISTO, v ? '1' : '0'))
 async function chargerHisto() {
   const params = {}
   if (appel.value) params.appel = appel.value

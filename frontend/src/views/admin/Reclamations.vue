@@ -21,7 +21,9 @@ const chargement = ref(false)
 
 // Filtres mémorisés (localStorage) : retrouvés au retour sur la page, pour ne
 // pas refiltrer après avoir traité une réclamation. Survit au rechargement.
-const STORAGE_FILTRES = 'acgt_filtres_reclamations'
+// Clé SUFFIXÉE par l'id de l'utilisateur connecté : filtres propres à chaque
+// compte, sans fuite d'une session à l'autre sur la même machine.
+const STORAGE_FILTRES = `acgt_filtres_reclamations_${auth.utilisateur?.id ?? 'anon'}`
 function filtresSauvegardes() {
   try { return JSON.parse(localStorage.getItem(STORAGE_FILTRES)) || {} } catch { return {} }
 }
