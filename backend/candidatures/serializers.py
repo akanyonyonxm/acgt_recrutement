@@ -505,6 +505,7 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
     traite_par = serializers.StringRelatedField(read_only=True)
+    affecte_a_nom = serializers.SerializerMethodField()
     dossier_cree_id = serializers.IntegerField(source='dossier_cree.id', read_only=True, default=None)
     documents = DocumentReclamationSerializer(many=True, read_only=True)
     # Doublon probable (autre réclamation du même appel, même nom complet).
@@ -519,5 +520,13 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
             'nom', 'postnom', 'prenom', 'email',
             'telephone', 'message', 'documents', 'statut', 'statut_libelle',
             'motif', 'traite_par', 'traite_le', 'dossier_cree_id',
+            'affecte_a', 'affecte_a_nom',
             'a_doublon', 'a_dossier_depose', 'cree_le',
         ]
+        read_only_fields = ['affecte_a']
+
+    def get_affecte_a_nom(self, obj):
+        u = obj.affecte_a
+        if not u:
+            return None
+        return (u.get_full_name() or u.email)

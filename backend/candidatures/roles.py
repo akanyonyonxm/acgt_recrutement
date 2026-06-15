@@ -66,3 +66,15 @@ def acces_backoffice(user):
 def peut_traiter(user):
     """Peut faire avancer un dossier ou une réclamation (changement d'étape)."""
     return est_admin(user) or est_validateur(user)
+
+
+def peut_decider_affecte(user, affecte_a_id):
+    """Peut trancher un élément (réclamation/dossier) selon l'affectation.
+
+    Un administrateur peut toujours trancher (et réaffecter). Un validateur ne
+    peut trancher que ce qui LUI est affecté — garantit qu'on ne traite jamais
+    le lot d'un collègue. Les autres rôles (lecteur, correcteur) ne peuvent pas.
+    """
+    if est_admin(user):
+        return True
+    return est_validateur(user) and affecte_a_id == user.id

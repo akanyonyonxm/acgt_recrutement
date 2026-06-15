@@ -7,6 +7,13 @@ import { useAuthStore } from '../../stores/auth'
 const auth = useAuthStore()
 // Peut traiter (valider/rejeter) une réclamation : admin ou validateur.
 const peutTraiter = computed(() => auth.estAdmin || auth.estValidateur)
+const monId = computed(() => auth.utilisateur?.id)
+// Décision sur une réclamation précise : un admin peut toujours ; un validateur
+// seulement si elle LUI est affectée (cohérent avec le contrôle serveur).
+function peutDecider(item) {
+  if (auth.estAdmin) return true
+  return auth.estValidateur && item?.affecte_a === monId.value
+}
 
 const reclamations = ref([])
 const total = ref(0)
@@ -24,17 +31,42 @@ const statut = ref(sauve.statut ?? 'en_attente')
 const appel = ref(sauve.appel ?? null)
 const q = ref(sauve.q ?? '')
 const dossierDepose = ref(sauve.dossierDepose ?? false)
+// Filtre d'affectation. Un validateur (non admin) voit par défaut SON lot ;
+// un admin voit tout. '' = tous, 'moi' = mon lot, 'aucune' = non affectées,
+// '<id>' = le lot d'un agent (admin seulement).
+const affecteParDefaut = (auth.estValidateur && !auth.estAdmin) ? 'moi' : ''
+const affecte = ref(sauve.affecte ?? affecteParDefaut)
 
-watch([statut, appel, q, dossierDepose], () => {
+watch([statut, appel, q, dossierDepose, affecte], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, q: q.value,
-    dossierDepose: dossierDepose.value,
+    dossierDepose: dossierDepose.value, affecte: affecte.value,
   }))
+})
+
+// Options du filtre « affecté à ».
+const optionsAffecte = computed(() => {
+  if (!auth.estAdmin) {
+    return [{ value: 'moi', title: 'Les miennes' }, { value: '', title: 'Toutes' }]
+  }
+  return [
+    { value: '', title: 'Tous les agents' },
+    { value: 'moi', title: 'Les miennes' },
+    { value: 'aucune', title: 'Non affectées' },
+    ...agents.value.map((a) => ({ value: String(a.id), title: a.nom })),
+  ]
 })
 const appels = ref([])
 const postes = ref([])
+const agents = ref([])           // agents pouvant traiter (admin/validateur)
 const stats = ref({ total: 0, par_statut: {} })
 const snack = ref({ show: false, color: 'success', text: '' })
+
+// Répartition de la charge (admin)
+const dialogRepartir = ref(false)
+const agentsChoisis = ref([])
+const enRepartition = ref(false)
+const resultatRepartition = ref(null)
 
 // Détail / décision
 const detail = ref(null)
@@ -58,6 +90,7 @@ const ENTETES = [
   { title: 'Personne', key: 'personne', sortable: false },
   { title: 'Appel', key: 'appel_titre', sortable: false },
   { title: 'Contact', key: 'email', sortable: false },
+  { title: 'Affecté à', key: 'affecte_a_nom', sortable: false },
   { title: 'Statut', key: 'statut', sortable: false },
   { title: 'Reçue le', key: 'cree_le', sortable: false },
   { title: '', key: 'actions', sortable: false, align: 'end' },
@@ -86,7 +119,7 @@ async function chargerStats() {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${dossierDepose.value}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${dossierDepose.value}|${affecte.value}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25 } = {}) {
   chargement.value = true
@@ -95,6 +128,7 @@ async function charger({ page = 1, itemsPerPage = 25 } = {}) {
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
     if (dossierDepose.value) params.dossier_depose = 1
+    if (affecte.value) params.affecte = affecte.value
     if (q.value) params.q = q.value
     const { data } = await api.get('/reclamations/', { params })
     reclamations.value = data.results
@@ -181,6 +215,29 @@ async function rejeterDoublonRec(r) {
   }
 }
 
+// Répartit équitablement les réclamations EN ATTENTE non encore affectées
+// entre les agents choisis (round-robin côté serveur).
+async function repartir() {
+  if (!agentsChoisis.value.length) {
+    notifier('Sélectionnez au moins un agent.', 'error'); return
+  }
+  enRepartition.value = true
+  resultatRepartition.value = null
+  try {
+    const { data } = await api.post('/reclamations/repartir/', {
+      agents: agentsChoisis.value,
+      appel: appel.value || undefined,
+    })
+    resultatRepartition.value = data
+    notifier(`${data.total_reparti} réclamation(s) réparties entre ${data.par_agent.length} agent(s).`)
+    await Promise.all([charger(), chargerStats()])
+  } catch (e) {
+    notifier(e.response?.data?.agents || e.response?.data?.detail || 'Répartition impossible.', 'error')
+  } finally {
+    enRepartition.value = false
+  }
+}
+
 async function confirmer() {
   enCours.value = true
   try {
@@ -206,6 +263,15 @@ onMounted(async () => {
   const [a, p] = await Promise.all([api.get('/appels/'), api.get('/postes/')])
   appels.value = a.data.results.map((x) => ({ value: x.id, title: x.titre }))
   postes.value = p.data.results.map((x) => ({ value: x.id, title: x.libelle }))
+  // Liste des agents pouvant traiter (pour répartir / filtrer) — admin seulement.
+  if (auth.estAdmin) {
+    try {
+      const { data } = await api.get('/auth/utilisateurs/')
+      agents.value = data
+        .filter((u) => u.roles.includes('admin') || u.roles.includes('validateur'))
+        .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email }))
+    } catch { /* non bloquant */ }
+  }
   // Le tableau (v-data-table-server) déclenche le 1er chargement via @update:options.
   chargerStats()
 })
@@ -222,9 +288,15 @@ onMounted(async () => {
                     style="max-width: 260px" @click:clear="q = ''" />
       <v-select v-model="appel" :items="appels" label="Appel" clearable hide-details density="compact"
                 variant="outlined" style="max-width: 220px" />
+      <v-select v-model="affecte" :items="optionsAffecte" label="Affecté à" hide-details density="compact"
+                variant="outlined" prepend-inner-icon="mdi-account-arrow-right-outline" style="max-width: 200px" />
       <v-btn :variant="dossierDepose ? 'flat' : 'outlined'" :color="dossierDepose ? 'deep-orange' : 'grey'"
              prepend-icon="mdi-folder-account-outline" @click="dossierDepose = !dossierDepose">
         A déjà un dossier
+      </v-btn>
+      <v-btn v-if="auth.estAdmin" color="primary" variant="flat"
+             prepend-icon="mdi-account-multiple-check-outline" @click="dialogRepartir = true">
+        Répartir
       </v-btn>
     </div>
 
@@ -250,6 +322,12 @@ onMounted(async () => {
                   prepend-icon="mdi-content-duplicate" class="ml-1">Doublon</v-chip>
           <v-chip v-if="item.a_dossier_depose" color="deep-orange" size="x-small" label variant="tonal"
                   prepend-icon="mdi-folder-account-outline" class="ml-1">A déjà un dossier</v-chip>
+        </template>
+        <template #item.affecte_a_nom="{ item }">
+          <v-chip v-if="item.affecte_a_nom" size="small" variant="tonal"
+                  :color="item.affecte_a === monId ? 'primary' : 'grey'"
+                  prepend-icon="mdi-account-outline">{{ item.affecte_a_nom }}</v-chip>
+          <span v-else class="text-medium-emphasis">—</span>
         </template>
         <template #item.statut="{ item }">
           <v-chip :color="COULEUR[item.statut]" size="small" variant="flat" label>{{ item.statut_libelle }}</v-chip>
@@ -284,6 +362,7 @@ onMounted(async () => {
           <div class="info-l"><span>Téléphone</span><strong>{{ detail.telephone || '—' }}</strong></div>
           <div v-if="detail.message" class="info-l"><span>Message</span><strong>{{ detail.message }}</strong></div>
           <div class="info-l"><span>Reçue le</span><strong>{{ dateFr(detail.cree_le) }}</strong></div>
+          <div class="info-l"><span>Affecté à</span><strong>{{ detail.affecte_a_nom || 'Non affectée' }}</strong></div>
 
           <!-- Doublons : autres réclamations de la même personne -->
           <v-alert v-if="doublonsRec.length" type="warning" variant="tonal" density="compact"
@@ -320,7 +399,7 @@ onMounted(async () => {
                 <span class="text-medium-emphasis"> · {{ d.poste_libelle || d.appel_titre }}</span>
               </span>
             </div>
-            <v-btn v-if="peutTraiter && detail.statut === 'en_attente'" size="small" color="error" variant="flat"
+            <v-btn v-if="peutDecider(detail) && detail.statut === 'en_attente'" size="small" color="error" variant="flat"
                    class="mt-3" prepend-icon="mdi-close-circle-outline"
                    :loading="rejetDossierEnCours" @click="rejeterCarDossier">
               Rejeter (déjà un dossier déposé)
@@ -343,7 +422,15 @@ onMounted(async () => {
             </a>
           </div>
 
-          <template v-if="detail.statut === 'en_attente' && peutTraiter">
+          <!-- Réclamation affectée à un autre agent : consultation seule -->
+          <v-alert v-if="detail.statut === 'en_attente' && peutTraiter && !peutDecider(detail)"
+                   type="info" variant="tonal" density="compact" class="mt-4"
+                   icon="mdi-account-lock-outline">
+            Cette réclamation est affectée à <strong>{{ detail.affecte_a_nom }}</strong>.
+            Seul l'agent affecté (ou un administrateur) peut la traiter.
+          </v-alert>
+
+          <template v-if="detail.statut === 'en_attente' && peutDecider(detail)">
             <v-divider class="my-4" />
             <!-- Choix de l'action -->
             <div v-if="!action" class="d-flex ga-3">
@@ -381,6 +468,50 @@ onMounted(async () => {
           </v-btn>
           <v-btn v-else-if="action === 'rejeter'" color="error" variant="flat" :loading="enCours" @click="confirmer">
             Confirmer le rejet
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Répartition de la charge entre agents (admin) -->
+    <v-dialog v-model="dialogRepartir" max-width="560">
+      <v-card flat border rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 py-4">
+          <v-icon color="primary">mdi-account-multiple-check-outline</v-icon>
+          <span class="font-weight-bold">Répartir les réclamations</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text>
+          <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+            Les réclamations <strong>en attente non encore affectées</strong>
+            <span v-if="appel"> de l'appel sélectionné</span>
+            seront distribuées <strong>équitablement</strong> entre les agents choisis.
+            Les réclamations déjà affectées ne sont pas touchées.
+          </v-alert>
+          <v-select v-model="agentsChoisis" :items="agents" item-title="nom" item-value="id"
+                    label="Agents" multiple chips closable-chips
+                    prepend-inner-icon="mdi-account-group-outline"
+                    hint="Sélectionnez les 6–7 agents qui traiteront les réclamations." persistent-hint />
+
+          <!-- Résultat de la dernière répartition -->
+          <div v-if="resultatRepartition" class="mt-4">
+            <v-divider class="mb-3" />
+            <div class="font-weight-bold mb-2">
+              {{ resultatRepartition.total_reparti }} réclamation(s) réparties :
+            </div>
+            <div v-for="p in resultatRepartition.par_agent" :key="p.agent_id"
+                 class="d-flex align-center justify-space-between py-1">
+              <span><v-icon size="18" class="mr-1">mdi-account</v-icon>{{ p.agent }}</span>
+              <v-chip size="small" color="primary" variant="tonal">{{ p.attribuees }}</v-chip>
+            </div>
+          </div>
+        </v-card-text>
+        <v-card-actions class="px-4 pb-4">
+          <v-btn variant="text" @click="dialogRepartir = false">Fermer</v-btn>
+          <v-spacer />
+          <v-btn color="primary" variant="flat" :loading="enRepartition"
+                 :disabled="!agentsChoisis.length" @click="repartir">
+            Répartir maintenant
           </v-btn>
         </v-card-actions>
       </v-card>

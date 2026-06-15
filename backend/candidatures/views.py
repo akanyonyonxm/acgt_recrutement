@@ -1041,7 +1041,7 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         if not roles.acces_backoffice(self.request.user):
             return ReclamationEligibilite.objects.none()
         qs = ReclamationEligibilite.objects.select_related(
-            'appel', 'poste', 'traite_par', 'dossier_cree',
+            'appel', 'poste', 'traite_par', 'affecte_a', 'dossier_cree',
         ).prefetch_related('documents').annotate(
             # Doublon probable : une AUTRE réclamation du même appel, même nom
             # complet (normalisé), pas encore rejetée. Indicatif.
@@ -1071,6 +1071,15 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             qs = qs.filter(appel_id=appel)
         if self.request.query_params.get('dossier_depose') in ('1', 'true', 'oui'):
             qs = qs.filter(a_dossier_depose=True)
+        # Filtre d'affectation : « moi » = mon lot, « aucune » = non affectées,
+        # un id = le lot d'un agent (pour l'admin qui supervise la répartition).
+        affecte = self.request.query_params.get('affecte')
+        if affecte == 'moi':
+            qs = qs.filter(affecte_a=self.request.user)
+        elif affecte == 'aucune':
+            qs = qs.filter(affecte_a__isnull=True)
+        elif affecte and affecte.isdigit():
+            qs = qs.filter(affecte_a_id=int(affecte))
         q = self.request.query_params.get('q')
         if q:
             for token in tokens_recherche(q):
@@ -1258,12 +1267,18 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             reponse['X-Frame-Options'] = 'SAMEORIGIN'
         return reponse
 
+    def _verifier_peut_decider(self, user, reclamation):
+        """Trancher = être admin, ou être le validateur à qui c'est affecté."""
+        if not roles.peut_traiter(user):
+            raise PermissionDenied("Réservé aux administrateurs et validateurs.")
+        if not roles.peut_decider_affecte(user, reclamation.affecte_a_id):
+            raise PermissionDenied("Cette réclamation est affectée à un autre agent.")
+
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):
         """Valide la réclamation : crée un dossier et le conduit jusqu'à RETENU."""
-        if not roles.peut_traiter(request.user):
-            raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         reclamation = self.get_object()
+        self._verifier_peut_decider(request.user, reclamation)
 
         # Poste : celui choisi par l'admin à la validation, sinon celui déclaré
         # par le réclamant dans le formulaire (absent sur les anciennes
@@ -1309,9 +1324,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def rejeter(self, request, pk=None):
         """Rejette la réclamation (motif obligatoire)."""
-        if not roles.peut_traiter(request.user):
-            raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         reclamation = self.get_object()
+        self._verifier_peut_decider(request.user, reclamation)
         motif = (request.data.get('motif') or '').strip()
         if not motif:
             raise ValidationError({'motif': "Un motif est obligatoire."})
@@ -1333,6 +1347,95 @@ class ReclamationViewSet(viewsets.ModelViewSet):
 
         # Aucun email pendant le traitement (un rejet de réclamation ne notifie pas).
         return Response(ReclamationAdminSerializer(reclamation).data)
+
+    # --- Répartition de la charge entre agents -------------------------
+
+    @action(detail=False, methods=['post'])
+    def repartir(self, request):
+        """Répartit équitablement des réclamations entre des agents (admin).
+
+        Corps : {agents: [id, …], appel?: id, seulement_non_affectees?: bool}.
+        Prend le pool des réclamations EN ATTENTE (par défaut seulement celles
+        non encore affectées), et les distribue en round-robin entre les agents
+        choisis (parts égales, ±1). Seuls les agents pouvant traiter (admin /
+        validateur) sont retenus. Opération additive : ne change que `affecte_a`.
+        """
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        agent_ids = request.data.get('agents') or []
+        if not isinstance(agent_ids, list) or not agent_ids:
+            raise ValidationError({'agents': "Sélectionnez au moins un agent."})
+
+        User = get_user_model()
+        trouves = {u.id: u for u in User.objects.filter(id__in=agent_ids, is_active=True)}
+        # Garder l'ordre demandé, ne retenir que ceux qui peuvent traiter.
+        agents = [trouves[i] for i in agent_ids if i in trouves and roles.peut_traiter(trouves[i])]
+        if not agents:
+            raise ValidationError({'agents': "Aucun agent valide (admin ou validateur actif)."})
+
+        qs = ReclamationEligibilite.objects.filter(
+            statut=ReclamationEligibilite.Statut.EN_ATTENTE,
+        )
+        appel = request.data.get('appel')
+        if appel:
+            qs = qs.filter(appel_id=appel)
+        if request.data.get('seulement_non_affectees', True):
+            qs = qs.filter(affecte_a__isnull=True)
+        ids = list(qs.order_by('cree_le').values_list('id', flat=True))
+
+        par_agent = {u.id: [] for u in agents}
+        for i, rid in enumerate(ids):
+            par_agent[agents[i % len(agents)].id].append(rid)
+
+        with transaction.atomic():
+            for u in agents:
+                lot = par_agent[u.id]
+                if lot:
+                    (ReclamationEligibilite.objects
+                     .filter(id__in=lot).update(affecte_a=u))
+
+        return Response({
+            'total_reparti': len(ids),
+            'par_agent': [
+                {'agent_id': u.id, 'agent': (u.get_full_name() or u.email),
+                 'attribuees': len(par_agent[u.id])}
+                for u in agents
+            ],
+        })
+
+    @action(detail=False, methods=['get'])
+    def repartition(self, request):
+        """Charge par agent : total affecté, en attente, traitées (back-office)."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        lignes = (
+            ReclamationEligibilite.objects
+            .filter(affecte_a__isnull=False)
+            .values('affecte_a_id', 'affecte_a__first_name',
+                    'affecte_a__last_name', 'affecte_a__email')
+            .annotate(
+                total=Count('id'),
+                en_attente=Count('id', filter=Q(statut=ReclamationEligibilite.Statut.EN_ATTENTE)),
+            )
+            .order_by('affecte_a__first_name', 'affecte_a__last_name')
+        )
+        resultat = []
+        for l in lignes:
+            nom = f"{l['affecte_a__first_name']} {l['affecte_a__last_name']}".strip()
+            resultat.append({
+                'agent_id': l['affecte_a_id'],
+                'agent': nom or l['affecte_a__email'],
+                'total': l['total'],
+                'en_attente': l['en_attente'],
+                'traitees': l['total'] - l['en_attente'],
+            })
+        non_affectees = (
+            ReclamationEligibilite.objects
+            .filter(affecte_a__isnull=True,
+                    statut=ReclamationEligibilite.Statut.EN_ATTENTE)
+            .count()
+        )
+        return Response({'par_agent': resultat, 'non_affectees': non_affectees})
 
     # --- Emails (best-effort : n'annulent jamais l'opération) ----------
 

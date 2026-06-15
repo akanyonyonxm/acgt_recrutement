@@ -656,6 +656,18 @@ class ReclamationEligibilite(models.Model):
         choices=Statut.choices, default=Statut.EN_ATTENTE, db_index=True,
     )
     motif = models.TextField('motif de la décision', blank=True)
+    # Agent chargé de traiter cette réclamation (répartition de la charge entre
+    # plusieurs validateurs). Affectation = qui DOIT la traiter ; `traite_par` =
+    # qui l'a effectivement tranchée. Un admin peut toujours trancher ;
+    # un validateur seulement les réclamations qui lui sont affectées.
+    affecte_a = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reclamations_affectees',
+        verbose_name='affectée à',
+        db_index=True,
+    )
     traite_par = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
