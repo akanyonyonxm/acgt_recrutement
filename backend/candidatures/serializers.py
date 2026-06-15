@@ -125,6 +125,8 @@ class DossierSerializer(serializers.ModelSerializer):
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
     ligne_eligibilite = serializers.StringRelatedField(read_only=True)
+    # Agent chargé du dossier (répartition) ; nom lisible pour l'affichage.
+    affecte_a_nom = serializers.SerializerMethodField()
     pieces = PieceJointeSerializer(many=True, read_only=True)
     # Pièces obligatoires encore manquantes (libellés) — pilote le bouton
     # « soumettre » côté front.
@@ -152,13 +154,20 @@ class DossierSerializer(serializers.ModelSerializer):
             'nom', 'postnom', 'prenom', 'email', 'statut', 'statut_libelle',
             'transitions_possibles', 'ligne_eligibilite', 'suggestion_eligibilite',
             'candidats_eligibilite', 'doublons', 'pieces', 'pieces_manquantes',
+            'affecte_a', 'affecte_a_nom',
             'est_complet', 'modifiable', 'cree_le', 'modifie_le',
         ]
         # Le statut ne se change jamais par PATCH direct : il passe par les
         # actions dédiées (soumettre / approuver / rejeter / retenir / …).
+        # `affecte_a` se change via l'action `repartir` (jamais par PATCH).
         read_only_fields = [
-            'statut', 'deposant', 'ligne_eligibilite', 'cree_le', 'modifie_le',
+            'statut', 'deposant', 'ligne_eligibilite', 'affecte_a',
+            'cree_le', 'modifie_le',
         ]
+
+    def get_affecte_a_nom(self, obj):
+        u = obj.affecte_a
+        return (u.get_full_name() or u.email) if u else None
 
     def get_transitions_possibles(self, obj):
         return sorted(obj.transitions_possibles())
@@ -243,6 +252,7 @@ class DossierSerializer(serializers.ModelSerializer):
                 'id': d.id, 'code': d.code, 'nom': d.nom, 'postnom': d.postnom,
                 'prenom': d.prenom, 'email': d.email, 'statut': d.statut,
                 'statut_libelle': d.get_statut_display(),
+                'affecte_a': d.affecte_a_id,
                 'meme_email': (d.email or '').strip().lower() == (obj.email or '').strip().lower(),
             }
             for d in autres
@@ -281,14 +291,21 @@ class DossierListeSerializer(serializers.ModelSerializer):
     #     (révèle un éventuel décalage nom saisi / nom de la liste — triche).
     # `rattache` indique lequel des deux cas (pour l'affichage côté front).
     eligibilite_nom = serializers.SerializerMethodField()
+    # Agent affecté au dossier (répartition de la charge).
+    affecte_a = serializers.IntegerField(source='affecte_a_id', read_only=True, default=None)
+    affecte_a_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Dossier
         fields = [
             'id', 'code', 'appel', 'appel_titre', 'poste_libelle', 'nom', 'postnom', 'prenom',
             'statut', 'statut_libelle', 'correspondance', 'a_doublon',
-            'eligibilite_nom', 'cree_le',
+            'eligibilite_nom', 'affecte_a', 'affecte_a_nom', 'cree_le',
         ]
+
+    def get_affecte_a_nom(self, obj):
+        u = obj.affecte_a
+        return (u.get_full_name() or u.email) if u else None
 
     @staticmethod
     def _nb_champs_communs(ligne, obj):

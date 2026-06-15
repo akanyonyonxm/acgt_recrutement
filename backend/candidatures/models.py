@@ -139,6 +139,20 @@ class Dossier(models.Model):
         verbose_name='déposant',
     )
 
+    # Agent chargé de traiter ce dossier (répartition de la charge entre
+    # validateurs). L'affectation suit le dossier sur tout son cycle
+    # (approuver → retenir/non-retenir) : c'est le même agent qui le mène à
+    # terme. Un admin peut toujours trancher (et réaffecter) ; un validateur
+    # seulement les dossiers qui lui sont affectés.
+    affecte_a = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='dossiers_affectes',
+        verbose_name='affecté à',
+        db_index=True,
+    )
+
     # Code du dossier = code public de la liste d'éligibilité (4 caractères).
     # Récupéré au clic sur « Postuler » depuis la liste, ou saisi à la main.
     code = models.CharField('code du dossier', max_length=50, blank=True, db_index=True)

@@ -13,6 +13,18 @@ const auth = useAuthStore()
 const peutModifier = computed(() => auth.estAdmin || auth.estCorrecteur)
 // Peut faire changer les étapes (approuver, rejeter, retenir…) : admin ou validateur.
 const peutTraiter = computed(() => auth.estAdmin || auth.estValidateur)
+const monId = computed(() => auth.utilisateur?.id)
+// Verrou d'affectation : un validateur ne traite que les dossiers qui lui sont
+// affectés ; un admin peut toujours. Évite d'afficher des boutons qui
+// renverraient 403 (le serveur applique la même règle).
+const peutTrancher = computed(() => {
+  if (!dossier.value) return false
+  if (auth.estAdmin) return true
+  return auth.estValidateur && dossier.value.affecte_a === monId.value
+})
+// Un validateur voit le dossier mais n'y est pas affecté (consultation seule).
+const affecteAutre = computed(() =>
+  peutTraiter.value && !peutTrancher.value)
 // id réactif : permet de naviguer entre dossiers (doublons) sans recharger la page.
 const id = computed(() => route.params.id)
 
@@ -235,6 +247,10 @@ watch(() => route.params.id, (nouvel, ancien) => {
             <template v-if="dossier.poste_libelle">
               <span class="sep">·</span><v-icon size="14">mdi-briefcase-outline</v-icon>{{ dossier.poste_libelle }}
             </template>
+            <template v-if="dossier.affecte_a_nom">
+              <span class="sep">·</span><v-icon size="14">mdi-account-arrow-right-outline</v-icon>
+              affecté à {{ dossier.affecte_a_nom }}
+            </template>
           </div>
         </div>
         <StatutBadge :statut="dossier.statut" :libelle="dossier.statut_libelle" />
@@ -265,7 +281,8 @@ watch(() => route.params.id, (nouvel, ancien) => {
             <v-icon size="12" color="warning">mdi-account</v-icon> même nom
             <template v-if="d.meme_email"> · <v-icon size="12" color="warning">mdi-email</v-icon> même email</template>
           </div>
-          <v-btn v-if="peutTraiter && d.statut === 'depose'" size="x-small" color="error" variant="tonal"
+          <v-btn v-if="(auth.estAdmin || (auth.estValidateur && d.affecte_a === monId)) && d.statut === 'depose'"
+                 size="x-small" color="error" variant="tonal"
                  class="mt-2" prepend-icon="mdi-content-duplicate" :loading="doublonEnCours === d.id"
                  @click="rejeterDoublon(d)">
             Rejeter comme doublon
@@ -421,7 +438,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
             </v-list>
           </v-card-text>
           <v-divider />
-          <template v-if="peutTraiter">
+          <template v-if="peutTrancher">
             <v-alert v-if="!peutDecider" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
               Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir décider.
             </v-alert>
@@ -437,6 +454,11 @@ watch(() => route.params.id, (nouvel, ancien) => {
               </v-btn>
             </v-card-actions>
           </template>
+          <v-alert v-else-if="affecteAutre" type="info" variant="tonal" density="compact"
+                   class="ma-4 mb-4" icon="mdi-account-lock-outline">
+            Ce dossier est affecté à <strong>{{ dossier.affecte_a_nom || 'un autre agent' }}</strong>.
+            Seul l'agent affecté (ou un administrateur) peut le traiter.
+          </v-alert>
           <v-alert v-else type="info" variant="tonal" density="compact" class="ma-4 mb-4">
             Votre profil ne permet pas de valider ce dossier (consultation seule).
           </v-alert>
@@ -474,8 +496,8 @@ watch(() => route.params.id, (nouvel, ancien) => {
           </v-card-text>
         </v-card>
 
-        <!-- EN EXAMEN : décision finale (admin ou validateur) -->
-        <v-card v-if="estEnExamen && peutTraiter" flat border class="mb-4">
+        <!-- EN EXAMEN : décision finale (admin ou validateur affecté) -->
+        <v-card v-if="estEnExamen && peutTrancher" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-gavel</v-icon> Décision finale
           </v-card-title>
@@ -494,6 +516,11 @@ watch(() => route.params.id, (nouvel, ancien) => {
                    @click="dialogNonRetenir = true">Non retenir</v-btn>
           </v-card-actions>
         </v-card>
+        <v-alert v-else-if="estEnExamen && affecteAutre" type="info" variant="tonal"
+                 density="compact" class="mb-4" icon="mdi-account-lock-outline">
+          Décision réservée à <strong>{{ dossier.affecte_a_nom || 'l\'agent affecté' }}</strong>
+          (ou à un administrateur).
+        </v-alert>
 
         <!-- Avis -->
         <v-card v-if="evaluations.length" flat border class="mb-4">

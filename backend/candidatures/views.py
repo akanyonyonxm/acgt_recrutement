@@ -381,53 +381,23 @@ class DossierViewSet(viewsets.ModelViewSet):
             .exclude(pk=OuterRef('pk'))
         )
 
-    def get_queryset(self):
-        """Scoping par rôle :
+    def _filtrer_liste(self, qs, params):
+        """Filtres de la liste sur un queryset DÉJÀ annoté (corresp_* + a_doublon).
 
-        - admin : tous les dossiers ;
-        - évaluateur : uniquement les dossiers où il est désigné (+ les siens
-          s'il a aussi déposé) ;
-        - candidat : uniquement ses propres dossiers.
+        Partagé par `get_queryset` (affichage) et `repartir` (répartition du
+        MÊME sous-ensemble) → les buckets de correspondance restent identiques.
+        `params` accepte un QueryDict (GET) comme un dict (corps JSON) : `.get`
+        fonctionne dans les deux cas.
         """
-        # Correspondance avec la liste d'éligibilité (badge indicatif, jamais
-        # bloquant) : on indique précisément quels champs coïncident (code, nom,
-        # postnom, prénom). Comparaison insensible à la casse (`iexact`) ;
-        # l'insensibilité aux accents viendra avec `unaccent` en prod (cf.
-        # CLAUDE.md). Un champ ne compte que s'il est renseigné des deux côtés
-        # (jamais de faux match sur un champ vide). Calcul en SQL (Exists) pour
-        # éviter tout N+1.
-        qs = self._annoter_correspondance(
-            Dossier.objects
-            .select_related('appel', 'deposant', 'ligne_eligibilite')
-            .prefetch_related('pieces__type_piece')
-        ).annotate(
-            # Doublon probable : un AUTRE dossier SOUMIS (hors brouillon) du
-            # même appel a le même NOM COMPLET (nom+postnom+prénom normalisé).
-            # On n'utilise PAS l'email : un proche peut déposer plusieurs
-            # dossiers (personnes différentes) depuis la même adresse. On
-            # ignore les brouillons (non traités). Indicatif : l'admin tranche.
-            a_doublon=self._doublon_exists(),
-        )
-        user = self.request.user
-        if roles.acces_backoffice(user):
-            pass  # tout rôle back-office (admin, validateur, correcteur, lecteur) voit tout
-        elif roles.est_evaluateur(user):
-            qs = qs.filter(
-                Q(affectations__evaluateur=user) | Q(deposant=user)
-            ).distinct()
-        else:
-            qs = qs.filter(deposant=user)
-
-        statut = self.request.query_params.get('statut')
-        appel = self.request.query_params.get('appel')
+        statut = params.get('statut')
+        appel = params.get('appel')
         if statut:
             qs = qs.filter(statut=statut)
         if appel:
             qs = qs.filter(appel_id=appel)
 
-        # Filtre par correspondance avec la liste d'éligibilité (buckets alignés
-        # sur les badges de la colonne « Éligibilité »).
-        corr = self.request.query_params.get('correspondance')
+        # Correspondance avec la liste d'éligibilité (alignée sur les badges).
+        corr = params.get('correspondance')
         if corr == 'rattache':
             qs = qs.filter(ligne_eligibilite__isnull=False)
         elif corr == 'a_rattacher':
@@ -448,12 +418,12 @@ class DossierViewSet(viewsets.ModelViewSet):
                 corresp_f_nom=False, corresp_f_postnom=False, corresp_f_prenom=False,
             )
 
-        # Filtre « doublons uniquement » : dossiers ayant au moins un jumeau.
-        if self.request.query_params.get('doublons') in ('1', 'true', 'oui'):
+        # Doublons uniquement : dossiers ayant au moins un jumeau.
+        if params.get('doublons') in ('1', 'true', 'oui', True, 1):
             qs = qs.filter(a_doublon=True)
 
-        # Recherche tolérante par nom (accents/casse/ordre indifférents) OU par code.
-        q = self.request.query_params.get('q', '').strip()
+        # Recherche tolérante par nom (accents/casse/ordre) OU par code.
+        q = (params.get('q') or '').strip()
         if q:
             tokens = tokens_recherche(q)
             if tokens:
@@ -463,6 +433,58 @@ class DossierViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(nom_q | Q(code__icontains=q))
             else:
                 qs = qs.filter(code__icontains=q)
+        return qs
+
+    def get_queryset(self):
+        """Scoping par rôle :
+
+        - admin : tous les dossiers ;
+        - évaluateur : uniquement les dossiers où il est désigné (+ les siens
+          s'il a aussi déposé) ;
+        - candidat : uniquement ses propres dossiers.
+        """
+        # Correspondance avec la liste d'éligibilité (badge indicatif, jamais
+        # bloquant) : on indique précisément quels champs coïncident (code, nom,
+        # postnom, prénom). Comparaison insensible à la casse (`iexact`) ;
+        # l'insensibilité aux accents viendra avec `unaccent` en prod (cf.
+        # CLAUDE.md). Un champ ne compte que s'il est renseigné des deux côtés
+        # (jamais de faux match sur un champ vide). Calcul en SQL (Exists) pour
+        # éviter tout N+1.
+        qs = self._annoter_correspondance(
+            Dossier.objects
+            .select_related('appel', 'deposant', 'ligne_eligibilite', 'affecte_a')
+            .prefetch_related('pieces__type_piece')
+        ).annotate(
+            # Doublon probable : un AUTRE dossier SOUMIS (hors brouillon) du
+            # même appel a le même NOM COMPLET (nom+postnom+prénom normalisé).
+            # On n'utilise PAS l'email : un proche peut déposer plusieurs
+            # dossiers (personnes différentes) depuis la même adresse. On
+            # ignore les brouillons (non traités). Indicatif : l'admin tranche.
+            a_doublon=self._doublon_exists(),
+        )
+        user = self.request.user
+        if roles.acces_backoffice(user):
+            pass  # tout rôle back-office (admin, validateur, correcteur, lecteur) voit tout
+        elif roles.est_evaluateur(user):
+            qs = qs.filter(
+                Q(affectations__evaluateur=user) | Q(deposant=user)
+            ).distinct()
+        else:
+            qs = qs.filter(deposant=user)
+
+        # Filtre d'affectation : « moi » = mon lot, « aucune » = non affectés,
+        # un id = le lot d'un agent (pour l'admin qui supervise la répartition).
+        affecte = self.request.query_params.get('affecte')
+        if affecte == 'moi':
+            qs = qs.filter(affecte_a=user)
+        elif affecte == 'aucune':
+            qs = qs.filter(affecte_a__isnull=True)
+        elif affecte and affecte.isdigit():
+            qs = qs.filter(affecte_a_id=int(affecte))
+
+        # Filtres de liste (statut, appel, correspondance, doublons, recherche),
+        # factorisés pour être réutilisés à l'identique par `repartir`.
+        qs = self._filtrer_liste(qs, self.request.query_params)
 
         # Tri demandé par le tableau (sinon : plus récents d'abord).
         ordering = self.request.query_params.get('ordering', '')
@@ -770,13 +792,16 @@ class DossierViewSet(viewsets.ModelViewSet):
             pass
 
     def _transition(self, request, vers, exige_role, motif_obligatoire=False,
-                    lier_eligibilite=False, verif_validateur=False, email=None):
+                    lier_eligibilite=False, verif_validateur=False,
+                    verif_affecte=False, email=None):
         """Factorise les actions de transition.
 
         :param lier_eligibilite: si True, rattache le dossier à la ligne de la
             liste d'éligibilité passée en `eligibilite_id` (traçabilité admin).
         :param verif_validateur: si True, exige que l'utilisateur soit désigné
             ET autorisé à valider ce dossier précis.
+        :param verif_affecte: si True, exige que le dossier soit affecté à
+            l'utilisateur (sauf admin) — verrou de répartition.
         :param email: tuple (sujet, template) à notifier au candidat après la
             transition (best-effort, n'annule pas la transition en cas d'échec).
         """
@@ -795,6 +820,8 @@ class DossierViewSet(viewsets.ModelViewSet):
 
         if verif_validateur:
             self._verifier_validateur(dossier)
+        if verif_affecte:
+            self._verifier_affecte(dossier)
 
         # Verrou ligne par ligne : deux décisions simultanées sur le MÊME
         # dossier (double-clic, deux agents) se sérialisent ; la seconde relit
@@ -847,7 +874,7 @@ class DossierViewSet(viewsets.ModelViewSet):
         """
         return self._transition(
             request, Dossier.Statut.EN_EXAMEN, roles.peut_traiter,
-            lier_eligibilite=True,
+            lier_eligibilite=True, verif_affecte=True,
         )
 
     @action(detail=True, methods=['post'])
@@ -855,7 +882,7 @@ class DossierViewSet(viewsets.ModelViewSet):
         """DÉPOSÉ → REJETÉ (admin ou validateur, motif obligatoire). Aucun email."""
         return self._transition(
             request, Dossier.Statut.REJETE, roles.peut_traiter,
-            motif_obligatoire=True,
+            motif_obligatoire=True, verif_affecte=True,
         )
 
     @action(detail=True, methods=['post'], url_path='rejeter-doublon')
@@ -868,6 +895,7 @@ class DossierViewSet(viewsets.ModelViewSet):
         if not roles.peut_traiter(request.user):
             raise PermissionDenied("Réservé aux administrateurs et validateurs.")
         dossier = self.get_object()
+        self._verifier_affecte(dossier)
         try:
             with transaction.atomic():
                 dossier = Dossier.objects.select_for_update().get(pk=dossier.pk)
@@ -931,19 +959,36 @@ class DossierViewSet(viewsets.ModelViewSet):
         if not dossier.affectations.filter(evaluateur=user).exists():
             raise PermissionDenied("Vous n'êtes pas désigné sur ce dossier.")
 
-    def _verifier_validateur(self, dossier):
-        """Qui peut trancher retenir/non-retenir : l'admin ou un validateur,
-        ou un évaluateur désigné ET autorisé (peut_valider) sur ce dossier."""
+    def _verifier_affecte(self, dossier):
+        """Verrou d'affectation pour traiter un dossier (approuver/rejeter).
+
+        Admin : toujours. Validateur : seulement si le dossier LUI est affecté
+        (évite de traiter le lot d'un collègue). Cohérent avec `peut_traiter`
+        qui garde déjà l'accès à l'action."""
         user = self.request.user
-        if roles.peut_traiter(user):
+        if roles.est_admin(user):
             return
-        autorise = dossier.affectations.filter(
-            evaluateur=user, peut_valider=True,
-        ).exists()
-        if not autorise:
+        if dossier.affecte_a_id != user.id:
             raise PermissionDenied(
-                "Vous devez être désigné ET autorisé à valider ce dossier."
+                "Ce dossier est affecté à un autre agent (ou pas encore affecté)."
             )
+
+    def _verifier_validateur(self, dossier):
+        """Qui peut trancher retenir/non-retenir : l'admin (toujours), un
+        évaluateur désigné ET autorisé (peut_valider), ou le validateur à qui
+        le dossier est affecté."""
+        user = self.request.user
+        if roles.est_admin(user):
+            return
+        # Évaluateur désigné et autorisé : indépendant de l'affectation.
+        if dossier.affectations.filter(evaluateur=user, peut_valider=True).exists():
+            return
+        # Validateur : seulement son propre lot.
+        if roles.est_validateur(user) and dossier.affecte_a_id == user.id:
+            return
+        raise PermissionDenied(
+            "Vous devez être l'agent affecté à ce dossier, ou un évaluateur autorisé."
+        )
 
     @action(detail=True, methods=['get', 'post'])
     def evaluations(self, request, pk=None):
@@ -1006,6 +1051,96 @@ class DossierViewSet(viewsets.ModelViewSet):
             dossier.historique.all(), many=True,
         ).data
         return Response(data)
+
+    # --- Répartition de la charge entre agents --------------------------
+
+    @action(detail=False, methods=['post'])
+    def repartir(self, request):
+        """Répartit équitablement les dossiers FILTRÉS entre des agents (admin).
+
+        Corps : {agents: [id…], statut?, appel?, correspondance?, doublons?, q?,
+        seulement_non_affectes?: bool}. Reprend EXACTEMENT les filtres de la
+        liste (mêmes buckets d'éligibilité via `_filtrer_liste`) : on peut donc
+        répartir une seule catégorie (ex. « aucune correspondance ») entre les
+        agents. Par défaut statut = DÉPOSÉ (la file à valider) et seuls les
+        dossiers non encore affectés sont distribués. L'agent affecté mènera le
+        dossier de l'approbation à la décision (retenir / non-retenir).
+        Opération additive : ne change que `affecte_a`."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        agent_ids = request.data.get('agents') or []
+        if not isinstance(agent_ids, list) or not agent_ids:
+            raise ValidationError({'agents': "Sélectionnez au moins un agent."})
+
+        trouves = {u.id: u for u in User.objects.filter(id__in=agent_ids, is_active=True)}
+        agents = [trouves[i] for i in agent_ids if i in trouves and roles.peut_traiter(trouves[i])]
+        if not agents:
+            raise ValidationError({'agents': "Aucun agent valide (admin ou validateur actif)."})
+
+        qs = self._annoter_correspondance(Dossier.objects.all()).annotate(
+            a_doublon=self._doublon_exists(),
+        )
+        filtres = {
+            'statut': request.data.get('statut') or Dossier.Statut.DEPOSE,
+            'appel': request.data.get('appel'),
+            'correspondance': request.data.get('correspondance'),
+            'doublons': request.data.get('doublons'),
+            'q': request.data.get('q'),
+        }
+        qs = self._filtrer_liste(qs, filtres)
+        if request.data.get('seulement_non_affectes', True):
+            qs = qs.filter(affecte_a__isnull=True)
+        ids = list(qs.order_by('cree_le').values_list('id', flat=True))
+
+        par_agent = {u.id: [] for u in agents}
+        for i, did in enumerate(ids):
+            par_agent[agents[i % len(agents)].id].append(did)
+
+        with transaction.atomic():
+            for u in agents:
+                lot = par_agent[u.id]
+                if lot:
+                    Dossier.objects.filter(id__in=lot).update(affecte_a=u)
+
+        return Response({
+            'total_reparti': len(ids),
+            'par_agent': [
+                {'agent_id': u.id, 'agent': (u.get_full_name() or u.email),
+                 'attribues': len(par_agent[u.id])}
+                for u in agents
+            ],
+        })
+
+    @action(detail=False, methods=['get'])
+    def repartition(self, request):
+        """Charge par agent : total affecté + non encore tranché (back-office).
+
+        « a_traiter » = dossiers affectés encore DÉPOSÉ ou EN_EXAMEN (en cours)."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        en_cours = [Dossier.Statut.DEPOSE, Dossier.Statut.EN_EXAMEN]
+        lignes = (
+            Dossier.objects
+            .filter(affecte_a__isnull=False)
+            .values('affecte_a_id', 'affecte_a__first_name',
+                    'affecte_a__last_name', 'affecte_a__email')
+            .annotate(
+                total=Count('id'),
+                a_traiter=Count('id', filter=Q(statut__in=en_cours)),
+            )
+            .order_by('affecte_a__first_name', 'affecte_a__last_name')
+        )
+        resultat = []
+        for l in lignes:
+            nom = f"{l['affecte_a__first_name']} {l['affecte_a__last_name']}".strip()
+            resultat.append({
+                'agent_id': l['affecte_a_id'],
+                'agent': nom or l['affecte_a__email'],
+                'total': l['total'],
+                'a_traiter': l['a_traiter'],
+                'traites': l['total'] - l['a_traiter'],
+            })
+        return Response({'par_agent': resultat})
 
 
 class ReclamationThrottle(AnonRateThrottle):

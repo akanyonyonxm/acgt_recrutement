@@ -10,6 +10,20 @@ const router = useRouter()
 const auth = useAuthStore()
 const dossiers = ref([])
 const appels = ref([])
+const agents = ref([])           // agents pouvant traiter (admin/validateur)
+const monId = computed(() => auth.utilisateur?.id)
+// Décision sur un dossier précis : un admin peut toujours ; un validateur
+// seulement si le dossier LUI est affecté (cohérent avec le contrôle serveur).
+function peutDecider(d) {
+  if (auth.estAdmin) return true
+  return auth.estValidateur && d?.affecte_a === monId.value
+}
+
+// Répartition de la charge (admin)
+const dialogRepartir = ref(false)
+const agentsChoisis = ref([])
+const enRepartition = ref(false)
+const resultatRepartition = ref(null)
 
 // Filtres mémorisés (localStorage) : on les retrouve au retour sur la page,
 // notamment après avoir ouvert un dossier pour le traiter — pas besoin de
@@ -27,12 +41,29 @@ const appel = ref(sauve.appel ?? null)
 const eligibilite = ref(sauve.eligibilite ?? null)
 const doublons = ref(sauve.doublons ?? false)
 const q = ref(sauve.q ?? '')
+// Filtre d'affectation. Un validateur (non admin) voit son lot par défaut ;
+// un admin voit tout. '' = tous, 'moi', 'aucune', '<id>' (admin).
+const affecteParDefaut = (auth.estValidateur && !auth.estAdmin) ? 'moi' : ''
+const affecte = ref(sauve.affecte ?? affecteParDefaut)
 
-watch([statut, appel, eligibilite, doublons, q], () => {
+watch([statut, appel, eligibilite, doublons, q, affecte], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, eligibilite: eligibilite.value,
-    doublons: doublons.value, q: q.value,
+    doublons: doublons.value, q: q.value, affecte: affecte.value,
   }))
+})
+
+// Options du filtre « affecté à ».
+const optionsAffecte = computed(() => {
+  if (!auth.estAdmin) {
+    return [{ value: 'moi', title: 'Les miens' }, { value: '', title: 'Tous' }]
+  }
+  return [
+    { value: '', title: 'Tous les agents' },
+    { value: 'moi', title: 'Les miens' },
+    { value: 'aucune', title: 'Non affectés' },
+    ...agents.value.map((a) => ({ value: String(a.id), title: a.nom })),
+  ]
 })
 
 // Options du filtre « Éligibilité » (alignées sur les badges de la colonne).
@@ -45,6 +76,8 @@ const ELIGIBILITE_OPTIONS = [
 const chargement = ref(false)
 const total = ref(0)
 const stats = ref({ total: 0, par_statut: {} })
+const snack = ref({ show: false, color: 'success', text: '' })
+const notifier = (text, color = 'success') => (snack.value = { show: true, color, text })
 
 const KPIS = [
   { key: '', label: 'Total', desc: 'Tous les dossiers', icon: 'mdi-folder-multiple', color: '#1a237e' },
@@ -62,6 +95,7 @@ const ENTETES = [
   { title: 'Éligibilité', key: 'correspondance', sortable: false },
   { title: 'Nom sur la liste', key: 'eligibilite_nom', sortable: false },
   { title: 'Poste', key: 'poste_libelle' },
+  { title: 'Affecté à', key: 'affecte_a_nom', sortable: false },
   { title: 'Statut', key: 'statut' },
   { title: 'Déposé le', key: 'cree_le' },
   { title: '', key: 'actions', sortable: false, align: 'end' },
@@ -78,7 +112,7 @@ const TRI = {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${affecte.value}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
   chargement.value = true
@@ -88,6 +122,7 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
     if (appel.value) params.appel = appel.value
     if (eligibilite.value) params.correspondance = eligibilite.value
     if (doublons.value) params.doublons = 1
+    if (affecte.value) params.affecte = affecte.value
     if (q.value) params.q = q.value
     if (sortBy.length && TRI[sortBy[0].key]) {
       params.ordering = (sortBy[0].order === 'desc' ? '-' : '') + TRI[sortBy[0].key]
@@ -144,6 +179,32 @@ function filtrerBarre(b) {
 function filtrer(key) { statut.value = key }     // -> cle change -> tableau rechargé
 function changerAppel() { chargerStats(); chargerHisto() }   // le tableau se recharge via cle
 
+// Répartit le sous-ensemble FILTRÉ (statut + éligibilité + appel + doublons +
+// recherche), non encore affecté, entre les agents choisis (round-robin serveur).
+async function repartir() {
+  if (!agentsChoisis.value.length) {
+    notifier('Sélectionnez au moins un agent.', 'error'); return
+  }
+  enRepartition.value = true
+  resultatRepartition.value = null
+  try {
+    const corps = { agents: agentsChoisis.value }
+    if (statut.value) corps.statut = statut.value
+    if (appel.value) corps.appel = appel.value
+    if (eligibilite.value) corps.correspondance = eligibilite.value
+    if (doublons.value) corps.doublons = 1
+    if (q.value) corps.q = q.value
+    const { data } = await api.post('/dossiers/repartir/', corps)
+    resultatRepartition.value = data
+    notifier(`${data.total_reparti} dossier(s) répartis entre ${data.par_agent.length} agent(s).`)
+    await Promise.all([charger(), chargerStats()])
+  } catch (e) {
+    notifier(e.response?.data?.agents || e.response?.data?.detail || 'Répartition impossible.', 'error')
+  } finally {
+    enRepartition.value = false
+  }
+}
+
 let minuteur
 function rechercher() {
   clearTimeout(minuteur)
@@ -156,6 +217,15 @@ const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR')
 onMounted(async () => {
   const { data } = await api.get('/appels/')
   appels.value = data.results.map((a) => ({ value: a.id, title: a.titre }))
+  // Agents pouvant traiter (pour répartir / filtrer) — admin seulement.
+  if (auth.estAdmin) {
+    try {
+      const { data: us } = await api.get('/auth/utilisateurs/')
+      agents.value = us
+        .filter((u) => u.roles.includes('admin') || u.roles.includes('validateur'))
+        .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email }))
+    } catch { /* non bloquant */ }
+  }
   chargerStats()
   chargerHisto()
 })
@@ -178,9 +248,16 @@ onMounted(async () => {
       <v-select v-model="appel" :items="appels" label="Filtrer par appel" clearable hide-details
                 density="compact" variant="outlined" style="max-width: 240px"
                 @update:modelValue="changerAppel" />
+      <v-select v-model="affecte" :items="optionsAffecte" label="Affecté à" hide-details
+                density="compact" variant="outlined" style="max-width: 190px"
+                prepend-inner-icon="mdi-account-arrow-right-outline" />
       <v-btn :variant="doublons ? 'flat' : 'outlined'" :color="doublons ? 'warning' : 'grey'"
              prepend-icon="mdi-content-duplicate" @click="doublons = !doublons">
         Doublons
+      </v-btn>
+      <v-btn v-if="auth.estAdmin" color="primary" variant="flat"
+             prepend-icon="mdi-account-multiple-check-outline" @click="dialogRepartir = true">
+        Répartir
       </v-btn>
     </div>
 
@@ -288,6 +365,12 @@ onMounted(async () => {
           <span v-else class="text-medium-emphasis">—</span>
         </template>
         <template #item.poste_libelle="{ item }">{{ item.poste_libelle || '—' }}</template>
+        <template #item.affecte_a_nom="{ item }">
+          <v-chip v-if="item.affecte_a_nom" size="small" variant="tonal"
+                  :color="item.affecte_a === monId ? 'primary' : 'grey'"
+                  prepend-icon="mdi-account-outline">{{ item.affecte_a_nom }}</v-chip>
+          <span v-else class="text-medium-emphasis">—</span>
+        </template>
         <template #item.statut="{ item }">
           <StatutBadge :statut="item.statut" :libelle="item.statut_libelle" />
         </template>
@@ -300,6 +383,60 @@ onMounted(async () => {
         </template>
       </v-data-table-server>
     </v-card>
+
+    <!-- Répartition de la charge entre agents (admin) -->
+    <v-dialog v-model="dialogRepartir" max-width="580">
+      <v-card flat border rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 py-4">
+          <v-icon color="primary">mdi-account-multiple-check-outline</v-icon>
+          <span class="font-weight-bold">Répartir les dossiers à traiter</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text>
+          <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+            Les dossiers <strong>du filtre actuel</strong> non encore affectés seront
+            distribués <strong>équitablement</strong> entre les agents choisis.
+            L'agent affecté approuvera puis tranchera (retenir / non-retenir).
+            <div class="mt-2 text-caption">
+              Filtre :
+              <strong>{{ (KPIS.find((k) => k.key === statut) || {}).label || 'Tous statuts' }}</strong>
+              <template v-if="eligibilite">
+                · éligibilité « {{ (ELIGIBILITE_OPTIONS.find((o) => o.value === eligibilite) || {}).title }} »
+              </template>
+              <template v-if="appel"> · 1 appel</template>
+              <template v-if="doublons"> · doublons</template>
+              <template v-if="q"> · recherche « {{ q }} »</template>
+            </div>
+          </v-alert>
+          <v-select v-model="agentsChoisis" :items="agents" item-title="nom" item-value="id"
+                    label="Agents" multiple chips closable-chips
+                    prepend-inner-icon="mdi-account-group-outline"
+                    hint="Sélectionnez les agents qui traiteront ces dossiers." persistent-hint />
+
+          <div v-if="resultatRepartition" class="mt-4">
+            <v-divider class="mb-3" />
+            <div class="font-weight-bold mb-2">
+              {{ resultatRepartition.total_reparti }} dossier(s) répartis :
+            </div>
+            <div v-for="p in resultatRepartition.par_agent" :key="p.agent_id"
+                 class="d-flex align-center justify-space-between py-1">
+              <span><v-icon size="18" class="mr-1">mdi-account</v-icon>{{ p.agent }}</span>
+              <v-chip size="small" color="primary" variant="tonal">{{ p.attribues }}</v-chip>
+            </div>
+          </div>
+        </v-card-text>
+        <v-card-actions class="px-4 pb-4">
+          <v-btn variant="text" @click="dialogRepartir = false">Fermer</v-btn>
+          <v-spacer />
+          <v-btn color="primary" variant="flat" :loading="enRepartition"
+                 :disabled="!agentsChoisis.length" @click="repartir">
+            Répartir maintenant
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-snackbar v-model="snack.show" :color="snack.color" timeout="3500">{{ snack.text }}</v-snackbar>
   </div>
 </template>
 
