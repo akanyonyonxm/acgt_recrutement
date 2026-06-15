@@ -11,19 +11,20 @@ from candidatures.roles import (
     GROUPE_CORRECTEUR,
     GROUPE_EVALUATEUR,
     GROUPE_LECTEUR,
+    GROUPE_SUPERVISEUR,
     GROUPE_VALIDATEUR,
 )
 
 
 class Command(BaseCommand):
     help = (
-        "Crée les groupes de rôles Administrateurs, Évaluateurs, Correcteurs, "
-        "Validateurs et Lecteurs."
+        "Crée les groupes de rôles Administrateurs, Superviseurs, Évaluateurs, "
+        "Correcteurs, Validateurs et Lecteurs."
     )
 
     def handle(self, *args, **options):
-        for nom in (GROUPE_ADMIN, GROUPE_EVALUATEUR, GROUPE_CORRECTEUR,
-                    GROUPE_VALIDATEUR, GROUPE_LECTEUR):
+        for nom in (GROUPE_ADMIN, GROUPE_SUPERVISEUR, GROUPE_EVALUATEUR,
+                    GROUPE_CORRECTEUR, GROUPE_VALIDATEUR, GROUPE_LECTEUR):
             groupe, cree = Group.objects.get_or_create(name=nom)
             etat = 'créé' if cree else 'déjà présent'
             self.stdout.write(self.style.SUCCESS(f'Groupe « {nom} » : {etat}'))

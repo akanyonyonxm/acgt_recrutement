@@ -9,15 +9,19 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     estConnecte: (s) => !!s.utilisateur,
     estAdmin: (s) => s.utilisateur?.roles?.includes('admin') ?? false,
+    estSuperviseur: (s) => s.utilisateur?.roles?.includes('superviseur') ?? false,
     estEvaluateur: (s) => s.utilisateur?.roles?.includes('evaluateur') ?? false,
     estCorrecteur: (s) => s.utilisateur?.roles?.includes('correcteur') ?? false,
     estValidateur: (s) => s.utilisateur?.roles?.includes('validateur') ?? false,
     estLecteur: (s) => s.utilisateur?.roles?.includes('lecteur') ?? false,
     // Peut faire changer les étapes (approuver/rejeter, valider une réclamation…).
-    peutTraiter() { return this.estAdmin || this.estValidateur },
+    peutTraiter() { return this.estAdmin || this.estSuperviseur || this.estValidateur },
+    // Actions de supervision : répartir, publier les retenus, désigner.
+    peutSuperviser() { return this.estAdmin || this.estSuperviseur },
     // Accès au back-office (en lecture au minimum).
     accesBackoffice() {
-      return this.estAdmin || this.estValidateur || this.estCorrecteur || this.estLecteur
+      return this.estAdmin || this.estSuperviseur || this.estValidateur
+        || this.estCorrecteur || this.estLecteur
     },
   },
   actions: {

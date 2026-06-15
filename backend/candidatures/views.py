@@ -234,9 +234,13 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
     # surtout en Django Admin.
     permission_classes = [EstAdminOuLectureSeule]
 
-    @action(detail=True, methods=['post'], url_path='publier-retenus')
+    # Publier/dépublier les retenus est une action de SUPERVISION (pas de la
+    # config d'appel) : on lève la restriction admin-écriture du ViewSet et le
+    # corps vérifie `peut_superviser`. Créer/éditer un appel reste admin.
+    @action(detail=True, methods=['post'], url_path='publier-retenus',
+            permission_classes=[IsAuthenticated])
     def publier_retenus(self, request, pk=None):
-        """Publie la liste des retenus (admin) → affichage public.
+        """Publie la liste des retenus (admin/superviseur) → affichage public.
 
         C'est le SEUL moment où des emails partent : aucun email n'est envoyé
         pendant le traitement. On met en file (`EmailQueue`) l'email de
@@ -245,8 +249,8 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         `python manage.py envoyer_emails_en_attente --limite N` (cron), pour
         respecter la limite quotidienne de Resend.
         """
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
         appel = self.get_object()
         appel.liste_retenus_publiee = True
         appel.save(update_fields=['liste_retenus_publiee'])
@@ -279,11 +283,12 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             'emails_en_file': len(a_creer),
         })
 
-    @action(detail=True, methods=['post'], url_path='depublier-retenus')
+    @action(detail=True, methods=['post'], url_path='depublier-retenus',
+            permission_classes=[IsAuthenticated])
     def depublier_retenus(self, request, pk=None):
-        """Retire la liste des retenus de l'affichage public (admin)."""
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        """Retire la liste des retenus de l'affichage public (admin/superviseur)."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
         appel = self.get_object()
         appel.liste_retenus_publiee = False
         appel.save(update_fields=['liste_retenus_publiee'])
@@ -888,8 +893,8 @@ class DossierViewSet(viewsets.ModelViewSet):
                 AffectationSerializer(dossier.affectations.all(), many=True).data
             )
 
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Seul un administrateur peut désigner un évaluateur.")
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Seul un administrateur ou un superviseur peut désigner un évaluateur.")
         evaluateur = get_object_or_404(User, pk=request.data.get('evaluateur_id'))
         if not roles.est_evaluateur(evaluateur):
             raise ValidationError(
@@ -906,10 +911,10 @@ class DossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['delete'],
             url_path=r'affectations/(?P<evaluateur_id>[^/.]+)')
     def retirer_affectation(self, request, pk=None, evaluateur_id=None):
-        """Retire la désignation d'un évaluateur (admin)."""
+        """Retire la désignation d'un évaluateur (admin/superviseur)."""
         dossier = self.get_object()
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Seul un administrateur peut retirer une désignation.")
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Seul un administrateur ou un superviseur peut retirer une désignation.")
         affectation = get_object_or_404(
             AffectationEvaluateur, dossier=dossier, evaluateur_id=evaluateur_id,
         )
@@ -919,9 +924,9 @@ class DossierViewSet(viewsets.ModelViewSet):
     # --- Évaluation (évaluateur désigné) --------------------------------
 
     def _verifier_designe(self, dossier):
-        """L'utilisateur est-il désigné sur ce dossier (ou admin/superuser) ?"""
+        """L'utilisateur est-il désigné sur ce dossier (ou admin/superviseur) ?"""
         user = self.request.user
-        if roles.est_admin(user):
+        if roles.peut_superviser(user):
             return
         if not dossier.affectations.filter(evaluateur=user).exists():
             raise PermissionDenied("Vous n'êtes pas désigné sur ce dossier.")
@@ -1360,8 +1365,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         choisis (parts égales, ±1). Seuls les agents pouvant traiter (admin /
         validateur) sont retenus. Opération additive : ne change que `affecte_a`.
         """
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
         agent_ids = request.data.get('agents') or []
         if not isinstance(agent_ids, list) or not agent_ids:
             raise ValidationError({'agents': "Sélectionnez au moins un agent."})

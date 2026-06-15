@@ -11,7 +11,7 @@ const monId = computed(() => auth.utilisateur?.id)
 // Décision sur une réclamation précise : un admin peut toujours ; un validateur
 // seulement si elle LUI est affectée (cohérent avec le contrôle serveur).
 function peutDecider(item) {
-  if (auth.estAdmin) return true
+  if (auth.peutSuperviser) return true
   return auth.estValidateur && item?.affecte_a === monId.value
 }
 
@@ -46,7 +46,7 @@ watch([statut, appel, q, dossierDepose, affecte], () => {
 
 // Options du filtre « affecté à ».
 const optionsAffecte = computed(() => {
-  if (!auth.estAdmin) {
+  if (!auth.peutSuperviser) {
     return [{ value: 'moi', title: 'Les miennes' }, { value: '', title: 'Toutes' }]
   }
   return [
@@ -264,11 +264,12 @@ onMounted(async () => {
   appels.value = a.data.results.map((x) => ({ value: x.id, title: x.titre }))
   postes.value = p.data.results.map((x) => ({ value: x.id, title: x.libelle }))
   // Liste des agents pouvant traiter (pour répartir / filtrer) — admin seulement.
-  if (auth.estAdmin) {
+  if (auth.peutSuperviser) {
     try {
       const { data } = await api.get('/auth/utilisateurs/')
       agents.value = data
-        .filter((u) => u.roles.includes('admin') || u.roles.includes('validateur'))
+        .filter((u) => u.roles.includes('admin') || u.roles.includes('superviseur')
+          || u.roles.includes('validateur'))
         .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email }))
     } catch { /* non bloquant */ }
   }
@@ -294,7 +295,7 @@ onMounted(async () => {
              prepend-icon="mdi-folder-account-outline" @click="dossierDepose = !dossierDepose">
         A déjà un dossier
       </v-btn>
-      <v-btn v-if="auth.estAdmin" color="primary" variant="flat"
+      <v-btn v-if="auth.peutSuperviser" color="primary" variant="flat"
              prepend-icon="mdi-account-multiple-check-outline" @click="dialogRepartir = true">
         Répartir
       </v-btn>

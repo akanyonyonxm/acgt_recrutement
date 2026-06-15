@@ -4,6 +4,12 @@ Groupes :
   - « Administrateurs » : accès complet — valident, modifient les informations
                           (noms, codes), importent la liste, publient, gèrent
                           les comptes.
+  - « Superviseurs »    : accès à TOUT sauf le domaine réservé à
+                          l'Administrateur. Voient tout, traitent (valider /
+                          rejeter / retenir…), répartissent la charge,
+                          publient les retenus, désignent les évaluateurs.
+                          Ne gèrent PAS les comptes, n'importent PAS la liste
+                          et ne modifient PAS les noms/codes (identité).
   - « Validateurs »     : traitent les dossiers et réclamations — font changer
                           les étapes (approuver / rejeter / retenir / non
                           retenir, valider / rejeter une réclamation). Ne
@@ -20,6 +26,7 @@ Un superuser cumule tous les droits.
 """
 
 GROUPE_ADMIN = 'Administrateurs'
+GROUPE_SUPERVISEUR = 'Superviseurs'
 GROUPE_EVALUATEUR = 'Évaluateurs'
 GROUPE_CORRECTEUR = 'Correcteurs'
 GROUPE_VALIDATEUR = 'Validateurs'
@@ -28,6 +35,12 @@ GROUPE_LECTEUR = 'Lecteurs'
 
 def est_admin(user):
     return user.is_superuser or user.groups.filter(name=GROUPE_ADMIN).exists()
+
+
+def est_superviseur(user):
+    """Accès à tout sauf le domaine réservé à l'Administrateur (comptes,
+    import de la liste, modification des noms/codes)."""
+    return user.is_superuser or user.groups.filter(name=GROUPE_SUPERVISEUR).exists()
 
 
 def est_evaluateur(user):
@@ -58,23 +71,33 @@ def acces_backoffice(user):
     tout ; ce que chacun peut FAIRE est contrôlé action par action
     (`peut_traiter`, `est_admin or est_correcteur`, `est_admin`)."""
     return (
-        est_admin(user) or est_validateur(user)
+        est_admin(user) or est_superviseur(user) or est_validateur(user)
         or est_correcteur(user) or est_lecteur(user)
     )
 
 
 def peut_traiter(user):
     """Peut faire avancer un dossier ou une réclamation (changement d'étape)."""
-    return est_admin(user) or est_validateur(user)
+    return est_admin(user) or est_superviseur(user) or est_validateur(user)
+
+
+def peut_superviser(user):
+    """Actions de supervision : répartir la charge, publier les retenus,
+    désigner des évaluateurs. Admin et superviseur ; PAS un simple validateur.
+
+    Reste réservé au seul Administrateur : la gestion des comptes, l'import de
+    la liste d'éligibilité et la modification des noms/codes (identité)."""
+    return est_admin(user) or est_superviseur(user)
 
 
 def peut_decider_affecte(user, affecte_a_id):
     """Peut trancher un élément (réclamation/dossier) selon l'affectation.
 
-    Un administrateur peut toujours trancher (et réaffecter). Un validateur ne
-    peut trancher que ce qui LUI est affecté — garantit qu'on ne traite jamais
-    le lot d'un collègue. Les autres rôles (lecteur, correcteur) ne peuvent pas.
+    Un administrateur ou un superviseur peut toujours trancher (et réaffecter).
+    Un validateur ne peut trancher que ce qui LUI est affecté — garantit qu'on
+    ne traite jamais le lot d'un collègue. Les autres rôles (lecteur,
+    correcteur) ne peuvent pas.
     """
-    if est_admin(user):
+    if est_admin(user) or est_superviseur(user):
         return True
     return est_validateur(user) and affecte_a_id == user.id

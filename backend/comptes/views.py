@@ -230,7 +230,12 @@ class GestionUtilisateursView(APIView):
         }
 
     def get(self, request):
-        self._verifier_admin(request)
+        # Lecture ouverte à la supervision (besoin de la liste pour répartir la
+        # charge) ; la création/modification de comptes reste réservée à l'admin.
+        from candidatures import roles
+
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
         agents = (
             User.objects
             .filter(

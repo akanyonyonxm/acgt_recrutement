@@ -23,6 +23,8 @@ class UserSerializer(serializers.ModelSerializer):
         r = []
         if roles.est_admin(obj):
             r.append('admin')
+        if roles.est_superviseur(obj):
+            r.append('superviseur')
         if roles.est_validateur(obj):
             r.append('validateur')
         if roles.est_evaluateur(obj):
@@ -70,6 +72,7 @@ class ConnexionSerializer(serializers.Serializer):
 # Rôles attribuables depuis la page « Utilisateurs » (clé API → groupe Django).
 ROLES_ATTRIBUABLES = {
     'admin': roles.GROUPE_ADMIN,
+    'superviseur': roles.GROUPE_SUPERVISEUR,
     'validateur': roles.GROUPE_VALIDATEUR,
     'correcteur': roles.GROUPE_CORRECTEUR,
     'lecteur': roles.GROUPE_LECTEUR,

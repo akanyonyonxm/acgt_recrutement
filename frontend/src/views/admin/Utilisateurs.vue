@@ -22,13 +22,16 @@ const ROLES = [
   { value: 'evaluateur', titre: 'Évaluateur', couleur: 'deep-purple', hex: '#5E35B1',
     icone: 'mdi-clipboard-text-search-outline',
     description: 'Examine les dossiers où il est désigné (espace évaluateur).' },
+  { value: 'superviseur', titre: 'Supervision', couleur: 'deep-orange', hex: '#E65100',
+    icone: 'mdi-shield-star-outline',
+    description: 'Accès à tout sauf l’administration : traite, répartit la charge, publie les retenus, désigne les évaluateurs. Ne gère pas les comptes, n’importe pas la liste, ne modifie pas les noms/codes.' },
   { value: 'admin', titre: 'Administrateur', couleur: 'primary', hex: '#1a237e',
     icone: 'mdi-shield-crown-outline',
-    description: 'Accès complet : validation, modifications, import, publication, utilisateurs.' },
+    description: 'Accès complet : validation, modifications (noms/codes), import, publication, comptes utilisateurs.' },
 ]
 const ROLE_PAR_CLE = Object.fromEntries(ROLES.map((r) => [r.value, r]))
 // Ordre d'importance pour choisir le rôle « principal » (couleur de l'avatar).
-const PRIORITE = ['admin', 'validateur', 'correcteur', 'evaluateur', 'lecteur']
+const PRIORITE = ['admin', 'superviseur', 'validateur', 'correcteur', 'evaluateur', 'lecteur']
 function libelleRole(cle) { return ROLE_PAR_CLE[cle]?.titre || cle }
 function couleurRole(cle) { return ROLE_PAR_CLE[cle]?.couleur || 'grey' }
 function hexRole(cle) { return ROLE_PAR_CLE[cle]?.hex || '#90A4AE' }
