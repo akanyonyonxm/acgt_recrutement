@@ -78,6 +78,17 @@ const motifRejet = ref('')
 const action = ref(null)         // 'valider' | 'rejeter'
 const enCours = ref(false)
 
+// Grille de critères (cases à cocher à la validation)
+const criteres = ref([])           // critères actifs (portée réclamation)
+const criteresCoches = ref([])     // ids cochés pour la réclamation courante
+const derogation = ref('')         // justification admin si critères manquants
+const criteresManquants = computed(() =>
+  criteres.value.filter((c) => !criteresCoches.value.includes(c.id)))
+// Validation possible : tous cochés, ou admin avec dérogation justifiée.
+const grilleSatisfaite = computed(() =>
+  criteresManquants.value.length === 0
+  || (auth.estAdmin && derogation.value.trim().length > 0))
+
 const KPIS = [
   { key: '', label: 'Total', desc: 'Toutes', icon: 'mdi-account-alert-outline', color: '#1a237e' },
   { key: 'en_attente', label: 'En attente', desc: 'À traiter', icon: 'mdi-clock-outline', color: '#EF6C00' },
@@ -86,6 +97,11 @@ const KPIS = [
 ]
 const compte = (k) => (k === '' ? stats.value.total : stats.value.par_statut[k] || 0)
 const COULEUR = { en_attente: 'warning', validee: 'success', rejetee: 'error' }
+// Couleurs des statuts de DOSSIER (pour les dossiers liés affichés ici).
+const COULEUR_DOSSIER = {
+  brouillon: 'grey', depose: 'warning', en_examen: 'info',
+  retenu: 'success', non_retenu: 'blue-grey', rejete: 'error',
+}
 
 const ENTETES = [
   { title: '#', key: 'id', width: 60, sortable: false },
@@ -146,8 +162,23 @@ function rechercher() { clearTimeout(minuteur); minuteur = setTimeout(() => { q.
 
 const doublonsRec = ref([])
 const doublonEnCours = ref(null)
+const docsDoublonOuverts = ref([])   // ids des doublons dont on affiche les justificatifs
+function basculerDocsDoublon(id) {
+  docsDoublonOuverts.value = docsDoublonOuverts.value.includes(id)
+    ? docsDoublonOuverts.value.filter((x) => x !== id)
+    : [...docsDoublonOuverts.value, id]
+}
 const dossiersDeposes = ref([])
 const rejetDossierEnCours = ref(false)
+const dossierLieEnCours = ref(null)
+const docsDossierOuverts = ref([])   // ids des dossiers liés dont on affiche les pièces
+function basculerDocsDossier(id) {
+  docsDossierOuverts.value = docsDossierOuverts.value.includes(id)
+    ? docsDossierOuverts.value.filter((x) => x !== id)
+    : [...docsDossierOuverts.value, id]
+}
+// Téléchargement protégé d'une pièce de dossier (même origine via le proxy).
+const lienPiece = (dossierId, pieceId) => `/api/dossiers/${dossierId}/pieces/${pieceId}/telecharger/`
 async function ouvrir(rec) {
   detail.value = rec
   action.value = null
@@ -155,8 +186,12 @@ async function ouvrir(rec) {
   // anciennes réclamations) ; l'admin peut le changer avant de valider.
   posteChoisi.value = rec.poste || null
   motifRejet.value = ''
+  criteresCoches.value = []        // grille remise à zéro à chaque ouverture
+  derogation.value = ''
   doublonsRec.value = []
+  docsDoublonOuverts.value = []
   dossiersDeposes.value = []
+  docsDossierOuverts.value = []
   dialog.value = true
   if (rec.a_doublon) {
     try { doublonsRec.value = (await api.get(`/reclamations/${rec.id}/doublons/`)).data } catch { /* ignore */ }
@@ -184,6 +219,26 @@ async function rejeterCarDossier() {
   }
 }
 
+// Rejet du DOSSIER lié (et non de la réclamation) — utile si c'est le dossier
+// qui fait doublon. Le serveur applique le verrou d'affectation (admin, ou
+// validateur affecté à ce dossier). La réclamation en cours n'est pas touchée.
+async function rejeterDossierLie(d) {
+  if (!confirm(`Rejeter le dossier ${d.code || '#' + d.id} de ${d.nom} ${d.prenom} ? `
+    + 'La réclamation en cours reste ouverte. Aucun email ne sera envoyé.')) return
+  dossierLieEnCours.value = d.id
+  try {
+    await api.post(`/dossiers/${d.id}/rejeter/`, { motif: 'Dossier en double (réclamation en parallèle)' })
+    notifier('Dossier lié rejeté.')
+    // Met à jour l'affichage local du dossier (statut → rejeté, bouton retiré).
+    dossiersDeposes.value = dossiersDeposes.value.map((x) =>
+      x.id === d.id ? { ...x, statut: 'rejete', statut_libelle: 'Rejeté' } : x)
+  } catch (e) {
+    notifier(e.response?.data?.detail || e.response?.data?.motif?.[0] || 'Rejet impossible.', 'error')
+  } finally {
+    dossierLieEnCours.value = null
+  }
+}
+
 // Navigation : passer à la prochaine réclamation en attente ayant un doublon.
 const enNavRec = ref(false)
 async function doublonSuivantRec() {
@@ -198,6 +253,17 @@ async function doublonSuivantRec() {
     }
   } finally {
     enNavRec.value = false
+  }
+}
+
+// Ouvre une réclamation (un doublon, p. ex.) dans la fiche pour l'examiner
+// — justificatifs compris — avant de décider de la rejeter.
+async function examinerReclamation(id) {
+  try {
+    const { data } = await api.get(`/reclamations/${id}/`)
+    await ouvrir(data)
+  } catch {
+    notifier("Impossible d'ouvrir cette réclamation.", 'error')
   }
 }
 
@@ -244,12 +310,19 @@ async function confirmer() {
   enCours.value = true
   try {
     if (action.value === 'valider') {
-      await api.post(`/reclamations/${detail.value.id}/valider/`,
-        posteChoisi.value ? { poste_id: posteChoisi.value } : {})
+      if (!grilleSatisfaite.value) {
+        notifier('Cochez tous les critères (ou justifiez une dérogation).', 'error')
+        enCours.value = false; return
+      }
+      const corps = { criteres: criteresCoches.value }
+      if (posteChoisi.value) corps.poste_id = posteChoisi.value
+      if (derogation.value.trim()) corps.derogation = derogation.value.trim()
+      await api.post(`/reclamations/${detail.value.id}/valider/`, corps)
       notifier('Réclamation validée — la personne est désormais retenue.')
     } else {
       if (!motifRejet.value.trim()) { notifier('Le motif est obligatoire.', 'error'); enCours.value = false; return }
-      await api.post(`/reclamations/${detail.value.id}/rejeter/`, { motif: motifRejet.value })
+      await api.post(`/reclamations/${detail.value.id}/rejeter/`,
+        { motif: motifRejet.value, criteres: criteresCoches.value })
       notifier('Réclamation rejetée.')
     }
     dialog.value = false
@@ -275,6 +348,10 @@ onMounted(async () => {
         .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email }))
     } catch { /* non bloquant */ }
   }
+  // Grille de critères actifs (portée réclamation) pour la validation.
+  try {
+    criteres.value = (await api.get('/criteres/', { params: { portee: 'reclamation' } })).data
+  } catch { /* non bloquant */ }
   // Le tableau (v-data-table-server) déclenche le 1er chargement via @update:options.
   chargerStats()
 })
@@ -373,16 +450,46 @@ onMounted(async () => {
             <div class="font-weight-bold mb-1">
               {{ doublonsRec.length }} autre(s) réclamation(s) de cette personne (même nom).
             </div>
-            <div v-for="r in doublonsRec" :key="r.id" class="d-flex align-center ga-2 mt-1">
-              <v-chip :color="COULEUR[r.statut]" size="x-small" variant="flat" label>{{ r.statut_libelle }}</v-chip>
-              <span class="text-caption flex-grow-1" style="min-width:0">
-                <strong>{{ r.nom }} {{ r.postnom }} {{ r.prenom }}</strong>
-                <span class="text-medium-emphasis"> · #{{ r.id }} · {{ r.email }}</span>
-              </span>
-              <v-btn v-if="peutTraiter && r.statut === 'en_attente'" size="x-small" color="error" variant="tonal"
-                     :loading="doublonEnCours === r.id" @click="rejeterDoublonRec(r)">
-                Rejeter le doublon
-              </v-btn>
+            <div v-for="r in doublonsRec" :key="r.id" class="doublon-bloc mt-1">
+              <div class="d-flex align-center flex-wrap ga-2">
+                <v-chip :color="COULEUR[r.statut]" size="x-small" variant="flat" label>{{ r.statut_libelle }}</v-chip>
+                <span class="text-caption flex-grow-1" style="min-width:0">
+                  <strong>{{ r.nom }} {{ r.postnom }} {{ r.prenom }}</strong>
+                  <span class="text-medium-emphasis"> · #{{ r.id }} · {{ r.email }}</span>
+                </span>
+                <v-btn size="x-small" color="primary" variant="text"
+                       :prepend-icon="docsDoublonOuverts.includes(r.id) ? 'mdi-chevron-up' : 'mdi-paperclip'"
+                       @click="basculerDocsDoublon(r.id)">
+                  Documents ({{ r.documents?.length || 0 }})
+                </v-btn>
+                <v-btn size="x-small" color="primary" variant="text" prepend-icon="mdi-eye-outline"
+                       @click="examinerReclamation(r.id)">Examiner</v-btn>
+                <v-btn v-if="peutTraiter && r.statut === 'en_attente'" size="x-small" color="error" variant="tonal"
+                       :loading="doublonEnCours === r.id" @click="rejeterDoublonRec(r)">
+                  Rejeter le doublon
+                </v-btn>
+              </div>
+              <!-- Justificatifs du doublon (dépliable) : pour vérifier avant de rejeter -->
+              <v-expand-transition>
+                <div v-show="docsDoublonOuverts.includes(r.id)" class="mt-1">
+                  <div v-if="!r.documents?.length" class="text-caption text-medium-emphasis pl-2">
+                    Aucun justificatif joint.
+                  </div>
+                  <div v-for="doc in r.documents" :key="doc.id" class="doc-l">
+                    <v-icon size="18" color="primary" class="mr-2">{{ ICONE_DOC[doc.type] || 'mdi-file' }}</v-icon>
+                    <span class="flex-grow-1" style="min-width:0">
+                      <strong>{{ doc.type_libelle }}</strong>
+                      <span class="text-medium-emphasis"> — {{ doc.nom_original }} · {{ kos(doc.taille) }}</span>
+                    </span>
+                    <a :href="`${lienDoc(r.id, doc.id)}?inline=1`" target="_blank" @click.stop>
+                      <v-btn icon="mdi-eye-outline" variant="text" size="x-small" color="primary" />
+                    </a>
+                    <a :href="lienDoc(r.id, doc.id)" target="_blank" @click.stop>
+                      <v-btn icon="mdi-download" variant="text" size="x-small" color="primary" />
+                    </a>
+                  </div>
+                </div>
+              </v-expand-transition>
             </div>
           </v-alert>
 
@@ -393,19 +500,58 @@ onMounted(async () => {
               Cette personne a déjà {{ dossiersDeposes.length }} dossier(s) déposé(s) — elle est
               déjà candidate. Cette réclamation est probablement redondante.
             </div>
-            <div v-for="d in dossiersDeposes" :key="d.id" class="d-flex align-center ga-2 mt-1">
-              <RouterLink :to="{ name: 'dossier', params: { id: d.id } }" class="font-weight-bold lien-dossier">
-                {{ d.code || ('#' + d.id) }}
-              </RouterLink>
-              <span class="text-caption flex-grow-1" style="min-width:0">
-                <strong>{{ d.nom }} {{ d.postnom }} {{ d.prenom }}</strong>
-                <span class="text-medium-emphasis"> · {{ d.poste_libelle || d.appel_titre }}</span>
-              </span>
+            <div v-for="d in dossiersDeposes" :key="d.id" class="doublon-bloc mt-1">
+              <div class="d-flex align-center flex-wrap ga-2">
+                <RouterLink :to="{ name: 'dossier', params: { id: d.id } }" class="font-weight-bold lien-dossier">
+                  {{ d.code || ('#' + d.id) }}
+                </RouterLink>
+                <v-chip :color="COULEUR_DOSSIER[d.statut] || 'grey'" size="x-small" variant="flat" label>
+                  {{ d.statut_libelle }}
+                </v-chip>
+                <span class="text-caption flex-grow-1" style="min-width:0">
+                  <strong>{{ d.nom }} {{ d.postnom }} {{ d.prenom }}</strong>
+                  <span class="text-medium-emphasis"> · {{ d.poste_libelle || d.appel_titre }}</span>
+                  <span v-if="d.affecte_a_nom" class="text-medium-emphasis"> · affecté à {{ d.affecte_a_nom }}</span>
+                </span>
+                <v-btn size="x-small" color="primary" variant="text"
+                       :prepend-icon="docsDossierOuverts.includes(d.id) ? 'mdi-chevron-up' : 'mdi-paperclip'"
+                       @click="basculerDocsDossier(d.id)">
+                  Documents ({{ d.pieces?.length || 0 }})
+                </v-btn>
+                <!-- Rejeter le DOSSIER lié (et non la réclamation) -->
+                <v-btn v-if="d.statut === 'depose' && (auth.estAdmin || (auth.estValidateur && d.affecte_a === monId))"
+                       size="x-small" color="error" variant="tonal" prepend-icon="mdi-folder-remove-outline"
+                       :loading="dossierLieEnCours === d.id" @click="rejeterDossierLie(d)">
+                  Rejeter ce dossier
+                </v-btn>
+              </div>
+              <!-- Pièces du dossier (dépliable) : pour décider sans ouvrir le dossier -->
+              <v-expand-transition>
+                <div v-show="docsDossierOuverts.includes(d.id)" class="mt-1">
+                  <div v-if="!d.pieces?.length" class="text-caption text-medium-emphasis pl-2">
+                    Aucune pièce jointe.
+                  </div>
+                  <div v-for="p in d.pieces" :key="p.id" class="doc-l">
+                    <v-icon size="18" color="primary" class="mr-2">mdi-file-document-outline</v-icon>
+                    <span class="flex-grow-1" style="min-width:0">
+                      <strong>{{ p.type_libelle }}</strong>
+                      <span class="text-medium-emphasis"> — {{ p.nom_original }} · {{ kos(p.taille) }}</span>
+                    </span>
+                    <a :href="`${lienPiece(d.id, p.id)}?inline=1`" target="_blank" @click.stop>
+                      <v-btn icon="mdi-eye-outline" variant="text" size="x-small" color="primary" />
+                    </a>
+                    <a :href="lienPiece(d.id, p.id)" target="_blank" @click.stop>
+                      <v-btn icon="mdi-download" variant="text" size="x-small" color="primary" />
+                    </a>
+                  </div>
+                </div>
+              </v-expand-transition>
             </div>
+            <!-- Rejeter la RÉCLAMATION en cours (redondante car déjà candidate) -->
             <v-btn v-if="peutDecider(detail) && detail.statut === 'en_attente'" size="small" color="error" variant="flat"
                    class="mt-3" prepend-icon="mdi-close-circle-outline"
                    :loading="rejetDossierEnCours" @click="rejeterCarDossier">
-              Rejeter (déjà un dossier déposé)
+              Rejeter cette réclamation
             </v-btn>
           </v-alert>
 
@@ -435,6 +581,19 @@ onMounted(async () => {
 
           <template v-if="detail.statut === 'en_attente' && peutDecider(detail)">
             <v-divider class="my-4" />
+
+            <!-- Grille de critères (commune) : ce que la personne a / n'a pas -->
+            <template v-if="criteres.length">
+              <div class="text-caption font-weight-bold text-medium-emphasis mb-1">
+                Grille de critères — cochez ce que la personne remplit
+              </div>
+              <v-checkbox v-for="c in criteres" :key="c.id" v-model="criteresCoches" :value="c.id"
+                          :label="c.libelle" density="compact" hide-details color="success" />
+              <div class="text-caption text-medium-emphasis mb-3">
+                Coché = rempli · non coché = manquant. Enregistré quelle que soit la décision.
+              </div>
+            </template>
+
             <!-- Choix de l'action -->
             <div v-if="!action" class="d-flex ga-3">
               <v-btn color="success" variant="flat" prepend-icon="mdi-check" @click="action = 'valider'">Valider</v-btn>
@@ -445,7 +604,21 @@ onMounted(async () => {
               <v-alert type="info" variant="tonal" density="compact" class="mb-3">
                 La personne sera ajoutée aux <strong>retenus</strong> (un dossier est créé et marqué retenu).
               </v-alert>
-              <v-select v-model="posteChoisi" :items="postes" label="Poste visé" clearable
+              <!-- Critères manquants : blocage (ou dérogation admin) -->
+              <template v-if="criteresManquants.length">
+                <v-alert v-if="!auth.estAdmin" type="warning" variant="tonal" density="compact" class="mb-2">
+                  Cochez tous les critères pour valider (sinon un administrateur peut accorder une dérogation).
+                </v-alert>
+                <template v-else>
+                  <v-alert type="warning" variant="tonal" density="compact" class="mb-2">
+                    {{ criteresManquants.length }} critère(s) non rempli(s). En tant qu'administrateur,
+                    vous pouvez valider <strong>par dérogation</strong> en justifiant ci-dessous.
+                  </v-alert>
+                  <v-textarea v-model="derogation" label="Justification de la dérogation (obligatoire)"
+                              rows="2" hide-details />
+                </template>
+              </template>
+              <v-select v-model="posteChoisi" :items="postes" label="Poste visé" clearable class="mt-3"
                         :hint="detail.poste ? 'Pré-rempli avec le poste déclaré par le réclamant.' : 'Non déclaré par le réclamant : choisissez-le si possible.'"
                         persistent-hint />
             </div>
@@ -456,8 +629,27 @@ onMounted(async () => {
           </template>
           <template v-else-if="detail.statut !== 'en_attente'">
             <v-divider class="my-4" />
-            <div v-if="detail.motif" class="info-l"><span>Motif</span><strong>{{ detail.motif }}</strong></div>
+            <!-- Réclamation rejetée : motif bien visible en rouge -->
+            <v-alert v-if="detail.statut === 'rejetee'" type="error" variant="tonal"
+                     density="compact" border="start" icon="mdi-cancel" class="mb-3">
+              <div class="font-weight-bold">Réclamation rejetée</div>
+              <div v-if="detail.motif" class="mt-1">
+                <span class="font-weight-medium">Motif :</span> {{ detail.motif }}
+              </div>
+              <div v-else class="mt-1 text-medium-emphasis">Aucun motif enregistré.</div>
+            </v-alert>
+            <div v-else-if="detail.motif" class="info-l"><span>Motif</span><strong>{{ detail.motif }}</strong></div>
             <div class="info-l"><span>Traité par</span><strong>{{ detail.traite_par || '—' }}</strong></div>
+            <!-- Grille de critères telle que cochée à la décision -->
+            <div v-if="detail.controles?.length" class="mt-3">
+              <div class="text-caption font-weight-bold text-medium-emphasis mb-1">Grille de validation</div>
+              <div v-for="ctrl in detail.controles" :key="ctrl.id" class="d-flex align-center ga-2 py-1">
+                <v-icon size="18" :color="ctrl.rempli ? 'success' : 'error'">
+                  {{ ctrl.rempli ? 'mdi-check-circle' : 'mdi-close-circle' }}
+                </v-icon>
+                <span class="text-body-2">{{ ctrl.libelle_snapshot }}</span>
+              </div>
+            </div>
           </template>
         </v-card-text>
         <v-card-actions class="px-4 pb-4">
@@ -466,7 +658,8 @@ onMounted(async () => {
                  prepend-icon="mdi-content-duplicate" append-icon="mdi-arrow-right"
                  :loading="enNavRec" @click="doublonSuivantRec">Doublon suivant</v-btn>
           <v-spacer />
-          <v-btn v-if="action === 'valider'" color="success" variant="flat" :loading="enCours" @click="confirmer">
+          <v-btn v-if="action === 'valider'" color="success" variant="flat" :loading="enCours"
+                 :disabled="!grilleSatisfaite" @click="confirmer">
             Confirmer la validation
           </v-btn>
           <v-btn v-else-if="action === 'rejeter'" color="error" variant="flat" :loading="enCours" @click="confirmer">
@@ -558,6 +751,8 @@ onMounted(async () => {
 .info-l strong { color: #1f2933; text-align: right; }
 .doc-l { display: flex; align-items: center; gap: 4px; padding: 9px 12px; margin-bottom: 6px; border: 1px solid #e4e1ea; border-radius: 10px; text-decoration: none; color: inherit; font-size: 0.85rem; transition: background 0.15s, border-color 0.15s; }
 .doc-l:hover { background: #f0f3fb; border-color: #c9d4ee; }
+.doublon-bloc { padding-top: 6px; }
+.doublon-bloc + .doublon-bloc { border-top: 1px dashed #e7d9a8; margin-top: 6px; }
 .apercu-zone { position: relative; background: #2b2b2b; display: flex; align-items: center; justify-content: center; height: 72vh; overflow: auto; }
 .apercu-iframe { width: 100%; height: 100%; border: none; background: #fff; }
 .apercu-img { max-width: 100%; max-height: 100%; object-fit: contain; }

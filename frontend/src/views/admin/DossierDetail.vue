@@ -115,10 +115,24 @@ const peutValider = ref(true)
 
 const estDepose = computed(() => dossier.value?.statut === 'depose')
 const estEnExamen = computed(() => dossier.value?.statut === 'en_examen')
+// L'étape « examen » n'est plus utilisée : DÉPOSÉ et EN_EXAMEN sont tous deux
+// « à valider » (validation directe). Drapeau pour réactiver l'examen un jour.
+const EXAMEN_ACTIF = false
+const estAValider = computed(() => ['depose', 'en_examen'].includes(dossier.value?.statut))
 // La décision est possible dès qu'un rattachement existe : soit fait ici par
 // l'agent (ligneChoisie), soit déjà en place (rattachement automatique par
 // code à la soumission, ou rattachement antérieur).
 const peutDecider = computed(() => !!(ligneChoisie.value || dossier.value?.ligne_eligibilite))
+
+const estRejete = computed(() => dossier.value?.statut === 'rejete')
+const estNonRetenu = computed(() => dossier.value?.statut === 'non_retenu')
+// Motif de la décision négative (rejet / non-retenu), pris dans la dernière
+// entrée d'historique menant au statut courant — pour l'afficher bien en vue.
+const motifDecision = computed(() => {
+  if (!estRejete.value && !estNonRetenu.value) return ''
+  const h = historique.value.find((x) => x.nouveau_statut === dossier.value.statut)
+  return h?.motif || ''
+})
 
 function notifier(text, color = 'success') {
   snack.value = { show: true, color, text }
@@ -170,6 +184,9 @@ async function action(verbe, corps) {
   }
 }
 
+// Validation directe (1 clic) : DÉPOSÉ → RETENU côté serveur. Rattache la
+// personne choisie si une ligne est sélectionnée (sinon best-effort par nom).
+const valider = () => action('valider', ligneChoisie.value ? { eligibilite_id: ligneChoisie.value } : {})
 const approuver = () => action('approuver', ligneChoisie.value ? { eligibilite_id: ligneChoisie.value } : {})
 function rejeter() {
   if (!motifRejet.value.trim()) return notifier('Le motif est obligatoire.', 'error')
@@ -256,6 +273,19 @@ watch(() => route.params.id, (nouvel, ancien) => {
         <StatutBadge :statut="dossier.statut" :libelle="dossier.statut_libelle" />
       </div>
     </v-card>
+
+    <!-- Motif de la décision négative, bien visible en rouge -->
+    <v-alert v-if="(estRejete || estNonRetenu)" type="error" variant="tonal"
+             class="mb-6" border="start"
+             :icon="estRejete ? 'mdi-cancel' : 'mdi-close-circle-outline'">
+      <div class="font-weight-bold">
+        {{ estRejete ? 'Dossier rejeté' : 'Candidat non retenu' }}
+      </div>
+      <div v-if="motifDecision" class="mt-1">
+        <span class="font-weight-medium">Motif :</span> {{ motifDecision }}
+      </div>
+      <div v-else class="mt-1 text-medium-emphasis">Aucun motif enregistré.</div>
+    </v-alert>
 
     <!-- Doublons probables : autres dossiers de la même personne (même appel) -->
     <v-alert v-if="dossier.doublons?.length" type="warning" variant="tonal"
@@ -362,7 +392,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
       <!-- Colonne droite : actions selon statut -->
       <v-col cols="12" md="6">
         <!-- DÉPOSÉ -->
-        <v-card v-if="estDepose" flat border class="mb-4">
+        <v-card v-if="estAValider" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-account-search</v-icon> Vérifier l'éligibilité
           </v-card-title>
@@ -440,15 +470,17 @@ watch(() => route.params.id, (nouvel, ancien) => {
           <v-divider />
           <template v-if="peutTrancher">
             <v-alert v-if="!peutDecider" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
-              Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir décider.
+              Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir
+              <strong>valider (retenir)</strong>. Le <strong>rejet</strong> reste possible sans
+              correspondance (candidat absent de la liste, code erroné…).
             </v-alert>
             <v-card-actions class="pa-4">
-              <v-btn color="success" variant="flat" prepend-icon="mdi-check" :disabled="!peutDecider"
-                     @click="demanderConfirmation('Approuver le dossier', 'Le dossier passera en examen et le candidat sera notifié par email.', approuver, 'success')">
-                Approuver → examen
+              <v-btn color="success" variant="flat" prepend-icon="mdi-check-bold" :disabled="!peutDecider"
+                     @click="demanderConfirmation('Valider le candidat', 'Décision : le candidat sera RETENU (il sera notifié à la publication de la liste).', valider, 'success')">
+                Valider (retenir)
               </v-btn>
               <v-spacer />
-              <v-btn color="error" variant="outlined" prepend-icon="mdi-close" :disabled="!peutDecider"
+              <v-btn color="error" variant="outlined" prepend-icon="mdi-close"
                      @click="dialogRejet = true">
                 Rejeter
               </v-btn>
@@ -465,7 +497,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
         </v-card>
 
         <!-- EN EXAMEN : désignation (réservée aux administrateurs) -->
-        <v-card v-if="estEnExamen && auth.estAdmin" flat border class="mb-4">
+        <v-card v-if="EXAMEN_ACTIF && estEnExamen && auth.estAdmin" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-account-tie</v-icon> Évaluateurs désignés
           </v-card-title>
@@ -497,7 +529,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
         </v-card>
 
         <!-- EN EXAMEN : décision finale (admin ou validateur affecté) -->
-        <v-card v-if="estEnExamen && peutTrancher" flat border class="mb-4">
+        <v-card v-if="EXAMEN_ACTIF && estEnExamen && peutTrancher" flat border class="mb-4">
           <v-card-title class="text-subtitle-1 font-weight-bold d-flex align-center">
             <v-icon color="primary" class="mr-2">mdi-gavel</v-icon> Décision finale
           </v-card-title>
@@ -516,7 +548,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
                    @click="dialogNonRetenir = true">Non retenir</v-btn>
           </v-card-actions>
         </v-card>
-        <v-alert v-else-if="estEnExamen && affecteAutre" type="info" variant="tonal"
+        <v-alert v-else-if="EXAMEN_ACTIF && estEnExamen && affecteAutre" type="info" variant="tonal"
                  density="compact" class="mb-4" icon="mdi-account-lock-outline">
           Décision réservée à <strong>{{ dossier.affecte_a_nom || 'l\'agent affecté' }}</strong>
           (ou à un administrateur).

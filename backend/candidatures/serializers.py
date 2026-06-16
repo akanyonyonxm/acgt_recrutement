@@ -5,6 +5,8 @@ from .models import (
     TAILLE_MAX_PIECE,
     AffectationEvaluateur,
     AppelCandidature,
+    ControleCritere,
+    CritereValidation,
     Dossier,
     Evaluation,
     HistoriqueStatut,
@@ -16,6 +18,22 @@ from .models import (
     ReclamationEligibilite,
     TypePiece,
 )
+
+
+class CritereValidationSerializer(serializers.ModelSerializer):
+    """Critère de la grille de validation (lecture pour le front)."""
+
+    class Meta:
+        model = CritereValidation
+        fields = ['id', 'libelle', 'portee', 'ordre']
+
+
+class ControleCritereSerializer(serializers.ModelSerializer):
+    """Contrôle enregistré d'un critère (affiché sur une réclamation décidée)."""
+
+    class Meta:
+        model = ControleCritere
+        fields = ['id', 'critere', 'libelle_snapshot', 'rempli']
 
 
 class TypePieceSerializer(serializers.ModelSerializer):
@@ -523,6 +541,7 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
     traite_par = serializers.StringRelatedField(read_only=True)
     affecte_a_nom = serializers.SerializerMethodField()
+    controles = ControleCritereSerializer(many=True, read_only=True)
     dossier_cree_id = serializers.IntegerField(source='dossier_cree.id', read_only=True, default=None)
     documents = DocumentReclamationSerializer(many=True, read_only=True)
     # Doublon probable (autre réclamation du même appel, même nom complet).
@@ -537,7 +556,7 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
             'nom', 'postnom', 'prenom', 'email',
             'telephone', 'message', 'documents', 'statut', 'statut_libelle',
             'motif', 'traite_par', 'traite_le', 'dossier_cree_id',
-            'affecte_a', 'affecte_a_nom',
+            'affecte_a', 'affecte_a_nom', 'controles',
             'a_doublon', 'a_dossier_depose', 'cree_le',
         ]
         read_only_fields = ['affecte_a']

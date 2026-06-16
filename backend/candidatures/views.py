@@ -26,6 +26,8 @@ from .models import (
     TAILLE_MAX_PIECE,
     AffectationEvaluateur,
     AppelCandidature,
+    ControleCritere,
+    CritereValidation,
     DocumentReclamation,
     Dossier,
     EmailQueue,
@@ -42,6 +44,7 @@ from .serializers import (
     AffectationSerializer,
     AppelCandidatureSerializer,
     ChangementStatutSerializer,
+    CritereValidationSerializer,
     DossierListeSerializer,
     DossierSerializer,
     EligibiliteAdminSerializer,
@@ -392,7 +395,9 @@ class DossierViewSet(viewsets.ModelViewSet):
         statut = params.get('statut')
         appel = params.get('appel')
         if statut:
-            qs = qs.filter(statut=statut)
+            # Statut composite possible (« depose,en_examen » = À valider).
+            statuts = [s for s in str(statut).split(',') if s]
+            qs = qs.filter(statut__in=statuts) if len(statuts) > 1 else qs.filter(statut=statuts[0])
         if appel:
             qs = qs.filter(appel_id=appel)
 
@@ -866,11 +871,51 @@ class DossierViewSet(viewsets.ModelViewSet):
     # --- Actions ADMIN (dossier DÉPOSÉ) ---------------------------------
 
     @action(detail=True, methods=['post'])
+    def valider(self, request, pk=None):
+        """DÉPOSÉ → RETENU en une étape (validation directe back-office).
+
+        Enchaîne DÉPOSÉ → EN_EXAMEN → RETENU via `changer_statut` (la machine à
+        états et l'audit sont préservés : deux entrées d'historique). C'est le
+        circuit en 1 clic demandé pour le traitement courant (l'étape « examen »
+        n'est pas utilisée). Réservé à l'agent affecté ou à un admin.
+
+        `eligibilite_id` optionnel : rattache la ligne d'éligibilité choisie ;
+        à défaut, rattachement best-effort par nom complet. Aucun email pendant
+        le traitement (le retenu est notifié à la publication de la liste)."""
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et validateurs.")
+        dossier = self.get_object()
+        self._verifier_affecte(dossier)
+        try:
+            with transaction.atomic():
+                dossier = Dossier.objects.select_for_update().get(pk=dossier.pk)
+                # À valider = DÉPOSÉ ou EN_EXAMEN (l'examen n'étant plus une
+                # étape distincte, on accepte les deux comme point de départ).
+                if dossier.statut not in (Dossier.Statut.DEPOSE, Dossier.Statut.EN_EXAMEN):
+                    raise ValidationError("Ce dossier n'est plus en attente de validation.")
+                eid = request.data.get('eligibilite_id')
+                if eid:
+                    ligne = get_object_or_404(ListeEligibilite, pk=eid)
+                    dossier.ligne_eligibilite = ligne
+                    dossier.save(update_fields=['ligne_eligibilite'])
+                elif not dossier.ligne_eligibilite_id:
+                    self._rattacher_par_nom(dossier)
+                # Passe par EN_EXAMEN seulement si on part de DÉPOSÉ (audit).
+                if dossier.statut == Dossier.Statut.DEPOSE:
+                    dossier.changer_statut(Dossier.Statut.EN_EXAMEN, par=request.user,
+                                           motif='Validation directe (back-office)')
+                dossier.changer_statut(Dossier.Statut.RETENU, par=request.user,
+                                       motif='Validation directe (back-office)')
+        except DjangoValidationError as exc:
+            raise ValidationError({'detail': exc.messages})
+        return Response(self.get_serializer(dossier).data)
+
+    @action(detail=True, methods=['post'])
     def approuver(self, request, pk=None):
         """DÉPOSÉ → EN_EXAMEN (admin ou validateur). `eligibilite_id` optionnel.
 
-        Aucun email pendant le traitement : les candidats retenus sont notifiés
-        seulement à la publication de la liste (voir `publier_retenus`).
+        Conservé pour le circuit en 2 étapes (examen évaluateur). Le traitement
+        courant passe par `valider` (1 clic). Aucun email pendant le traitement.
         """
         return self._transition(
             request, Dossier.Statut.EN_EXAMEN, roles.peut_traiter,
@@ -1149,6 +1194,29 @@ class ReclamationThrottle(AnonRateThrottle):
     scope = 'reclamation'
 
 
+class CritereValidationViewSet(viewsets.ReadOnlyModelViewSet):
+    """Grille de critères de validation (lecture, back-office).
+
+    La configuration (ajout/édition/suppression) se fait dans la console
+    Django. Le front ne fait que lister les critères ACTIFS, filtrables par
+    portée : `GET /api/criteres/?portee=reclamation`.
+    """
+
+    serializer_class = CritereValidationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None   # petite liste de config : tableau simple
+
+    def get_queryset(self):
+        if not roles.acces_backoffice(self.request.user):
+            return CritereValidation.objects.none()
+        qs = CritereValidation.objects.filter(actif=True)
+        portee = self.request.query_params.get('portee')
+        if portee:
+            # Inclut les critères « les deux ».
+            qs = qs.filter(portee__in=[portee, CritereValidation.Portee.LES_DEUX])
+        return qs
+
+
 class ReclamationViewSet(viewsets.ModelViewSet):
     """Réclamations d'éligibilité (personne absente de la liste).
 
@@ -1182,7 +1250,7 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             return ReclamationEligibilite.objects.none()
         qs = ReclamationEligibilite.objects.select_related(
             'appel', 'poste', 'traite_par', 'affecte_a', 'dossier_cree',
-        ).prefetch_related('documents').annotate(
+        ).prefetch_related('documents', 'controles').annotate(
             # Doublon probable : une AUTRE réclamation du même appel, même nom
             # complet (normalisé), pas encore rejetée. Indicatif.
             a_doublon=Exists(
@@ -1314,6 +1382,7 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             .filter(appel_id=reclamation.appel_id, texte_recherche=reclamation.texte_recherche)
             .exclude(statut=ReclamationEligibilite.Statut.REJETEE)
             .exclude(pk=reclamation.pk)
+            .prefetch_related('documents')
             .order_by('cree_le')
         )
         return Response([
@@ -1321,6 +1390,15 @@ class ReclamationViewSet(viewsets.ModelViewSet):
                 'id': r.id, 'nom': r.nom, 'postnom': r.postnom, 'prenom': r.prenom,
                 'email': r.email, 'statut': r.statut,
                 'statut_libelle': r.get_statut_display(), 'cree_le': r.cree_le,
+                # Justificatifs du doublon : permet de vérifier avant de rejeter.
+                'documents': [
+                    {
+                        'id': d.id, 'type': d.type,
+                        'type_libelle': d.get_type_display(),
+                        'nom_original': d.nom_original, 'taille': d.taille,
+                    }
+                    for d in r.documents.all()
+                ],
             }
             for r in autres
         ])
@@ -1340,7 +1418,8 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         dossiers = (
             Dossier.objects
             .filter(statut=Dossier.Statut.DEPOSE, texte_recherche=reclamation.texte_recherche)
-            .select_related('appel', 'poste')
+            .select_related('appel', 'poste', 'affecte_a')
+            .prefetch_related('pieces__type_piece')
             .order_by('cree_le')
         )
         return Response([
@@ -1350,7 +1429,19 @@ class ReclamationViewSet(viewsets.ModelViewSet):
                 'statut_libelle': d.get_statut_display(),
                 'appel_titre': d.appel.titre,
                 'poste_libelle': d.poste.libelle if d.poste else None,
+                'affecte_a': d.affecte_a_id,
+                'affecte_a_nom': (d.affecte_a.get_full_name() or d.affecte_a.email)
+                if d.affecte_a else None,
                 'cree_le': d.cree_le,
+                # Pièces du dossier : permet de décider sans ouvrir le dossier.
+                'pieces': [
+                    {
+                        'id': p.id,
+                        'type_libelle': p.type_piece.libelle if p.type_piece else 'Pièce',
+                        'nom_original': p.nom_original, 'taille': p.taille,
+                    }
+                    for p in d.pieces.all()
+                ],
             }
             for d in dossiers
         ])
@@ -1414,9 +1505,46 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         if not roles.peut_decider_affecte(user, reclamation.affecte_a_id):
             raise PermissionDenied("Cette réclamation est affectée à un autre agent.")
 
+    @staticmethod
+    def _criteres_reclamation():
+        """Critères actifs applicables aux réclamations (réclamation + les deux)."""
+        return list(CritereValidation.objects.filter(
+            actif=True,
+            portee__in=[CritereValidation.Portee.RECLAMATION,
+                        CritereValidation.Portee.LES_DEUX],
+        ))
+
+    @staticmethod
+    def _ids_coches(request):
+        """Ids de critères cochés, envoyés par le front (tolérant aux types)."""
+        coches = set()
+        for x in (request.data.get('criteres') or []):
+            try:
+                coches.add(int(x))
+            except (TypeError, ValueError):
+                pass
+        return coches
+
+    @staticmethod
+    def _enregistrer_grille(reclamation, actifs, coches, par):
+        """Photographie de la grille (audit), avec copie du libellé. Utilisé
+        aussi bien à la validation qu'au rejet : on garde la trace de ce que la
+        personne remplit ou non, quelle que soit la décision."""
+        for c in actifs:
+            ControleCritere.objects.update_or_create(
+                reclamation=reclamation, critere=c,
+                defaults={'libelle_snapshot': c.libelle,
+                          'rempli': c.id in coches, 'par': par},
+            )
+
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):
-        """Valide la réclamation : crée un dossier et le conduit jusqu'à RETENU."""
+        """Valide la réclamation : crée un dossier et le conduit jusqu'à RETENU.
+
+        Contrôle d'abord la grille de critères (portée réclamation) : tous les
+        critères actifs doivent être cochés. Sinon, seul un administrateur peut
+        forcer avec une dérogation justifiée (`derogation`). Les contrôles sont
+        enregistrés (audit), avec copie du libellé."""
         reclamation = self.get_object()
         self._verifier_peut_decider(request.user, reclamation)
 
@@ -1425,6 +1553,18 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         # réclamations, d'où le repli sur None).
         poste_id = request.data.get('poste_id')
         poste = get_object_or_404(Poste, pk=poste_id) if poste_id else reclamation.poste
+
+        # Grille de validation (bloquant avec dérogation admin).
+        actifs = self._criteres_reclamation()
+        coches = self._ids_coches(request)
+        manquants = [c for c in actifs if c.id not in coches]
+        derogation = (request.data.get('derogation') or '').strip()
+        if manquants and not (roles.est_admin(request.user) and derogation):
+            raise ValidationError({
+                'criteres_manquants': [c.libelle for c in manquants],
+                'detail': "Critères non remplis : cochez-les, ou faites valider "
+                          "par un administrateur avec une dérogation justifiée.",
+            })
 
         with transaction.atomic():
             # Verrou + re-contrôle du statut SOUS verrou : deux validations
@@ -1455,7 +1595,13 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             reclamation.traite_par = request.user
             reclamation.traite_le = timezone.now()
             reclamation.dossier_cree = dossier
-            reclamation.save(update_fields=['statut', 'traite_par', 'traite_le', 'dossier_cree'])
+            champs = ['statut', 'traite_par', 'traite_le', 'dossier_cree']
+            if derogation:
+                reclamation.motif = f'Validé par dérogation (critères non remplis) : {derogation}'
+                champs.append('motif')
+            reclamation.save(update_fields=champs)
+            # Enregistre la grille telle que cochée (audit, avec copie du libellé).
+            self._enregistrer_grille(reclamation, actifs, coches, request.user)
 
         # Aucun email pendant le traitement : la personne (désormais RETENUE via
         # le dossier créé) sera notifiée à la publication de la liste.
@@ -1484,6 +1630,11 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             reclamation.traite_par = request.user
             reclamation.traite_le = timezone.now()
             reclamation.save(update_fields=['statut', 'motif', 'traite_par', 'traite_le'])
+            # Trace la grille (ce que la personne a / n'a pas) même au rejet.
+            self._enregistrer_grille(
+                reclamation, self._criteres_reclamation(),
+                self._ids_coches(request), request.user,
+            )
 
         # Aucun email pendant le traitement (un rejet de réclamation ne notifie pas).
         return Response(ReclamationAdminSerializer(reclamation).data)

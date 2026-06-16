@@ -107,7 +107,11 @@ class Dossier(models.Model):
     TRANSITIONS = {
         Statut.BROUILLON: {Statut.DEPOSE},
         Statut.DEPOSE: {Statut.EN_EXAMEN, Statut.REJETE},
-        Statut.EN_EXAMEN: {Statut.RETENU, Statut.NON_RETENU},
+        # L'étape « examen » n'est plus utilisée dans le traitement courant
+        # (validation directe DÉPOSÉ → RETENU). On garde EN_EXAMEN dans la
+        # machine à états (les dossiers le traversent), et on autorise le rejet
+        # depuis cet état pour pouvoir traiter ceux qui y séjournent encore.
+        Statut.EN_EXAMEN: {Statut.RETENU, Statut.NON_RETENU, Statut.REJETE},
         Statut.RETENU: set(),
         Statut.NON_RETENU: set(),
         Statut.REJETE: set(),
@@ -754,3 +758,78 @@ class DocumentReclamation(models.Model):
 
     def __str__(self):
         return f'{self.get_type_display()} — réclamation #{self.reclamation_id}'
+
+
+class CritereValidation(models.Model):
+    """Critère d'une grille de validation, configurable dans la console.
+
+    Sert de checklist manuelle à cocher avant de valider (réclamation et/ou
+    dossier). Les libellés peuvent changer ; `actif=False` retire le critère
+    sans casser l'historique (les contrôles passés gardent une copie du libellé).
+    """
+
+    class Portee(models.TextChoices):
+        RECLAMATION = 'reclamation', 'Réclamation'
+        DOSSIER = 'dossier', 'Dossier'
+        LES_DEUX = 'les_deux', 'Les deux'
+
+    libelle = models.CharField('libellé', max_length=255)
+    portee = models.CharField(
+        'portée', max_length=20, choices=Portee.choices,
+        default=Portee.RECLAMATION,
+        help_text="À quel flux ce critère s'applique (l'accusé : réclamation).",
+    )
+    actif = models.BooleanField('actif', default=True, db_index=True)
+    ordre = models.PositiveIntegerField('ordre', default=0)
+    cree_le = models.DateTimeField('créé le', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'critère de validation'
+        verbose_name_plural = 'critères de validation'
+        ordering = ['ordre', 'id']
+
+    def __str__(self):
+        return self.libelle
+
+    def s_applique_a(self, portee):
+        """Le critère s'applique-t-il à cette portée ('reclamation'/'dossier') ?"""
+        return self.portee in (portee, self.Portee.LES_DEUX)
+
+
+class ControleCritere(models.Model):
+    """Trace d'un critère évalué lors de la validation d'une réclamation.
+
+    Photographie à la décision : quel critère, rempli ou non, par qui. On
+    conserve une copie du libellé (`libelle_snapshot`) pour rester lisible même
+    si le critère est renommé ou supprimé ensuite.
+    """
+
+    reclamation = models.ForeignKey(
+        ReclamationEligibilite, on_delete=models.CASCADE,
+        related_name='controles', verbose_name='réclamation',
+    )
+    critere = models.ForeignKey(
+        CritereValidation, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='controles', verbose_name='critère',
+    )
+    libelle_snapshot = models.CharField('libellé (copie)', max_length=255)
+    rempli = models.BooleanField('rempli', default=False)
+    par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, verbose_name='contrôlé par',
+    )
+    le = models.DateTimeField('le', auto_now=True)
+
+    class Meta:
+        verbose_name = 'contrôle de critère'
+        verbose_name_plural = 'contrôles de critères'
+        ordering = ['id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['reclamation', 'critere'],
+                name='unique_controle_reclamation_critere',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.libelle_snapshot} : {"oui" if self.rempli else "non"}'

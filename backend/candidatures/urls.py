@@ -2,6 +2,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AppelCandidatureViewSet,
+    CritereValidationViewSet,
     DossierViewSet,
     EligibiliteViewSet,
     PosteViewSet,
@@ -18,5 +19,6 @@ router.register('retenus', RetenusViewSet, basename='retenu')
 router.register('appels', AppelCandidatureViewSet, basename='appel')
 router.register('dossiers', DossierViewSet, basename='dossier')
 router.register('reclamations', ReclamationViewSet, basename='reclamation')
+router.register('criteres', CritereValidationViewSet, basename='critere')
 
 urlpatterns = router.urls

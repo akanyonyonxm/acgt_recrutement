@@ -1,7 +1,10 @@
-"""Admin Django — réservé à la configuration et à l'inspection technique.
+"""Admin Django — configuration, inspection technique et CORRECTION d'erreurs.
 
-Le traitement métier des dossiers (validation, examen) se fait dans l'espace
-Vue dédié, pas ici. Les dossiers et leur historique sont donc en lecture seule.
+Le traitement métier courant (validation, examen) se fait dans l'espace Vue
+dédié. La console reste cependant le lieu où un administrateur peut **corriger
+une erreur** : modifier un dossier ou une réclamation (identité, code, poste,
+statut…). Toute correction de **statut** d'un dossier faite ici est journalisée
+dans `HistoriqueStatut` (l'audit RGPD est préservé même hors `changer_statut`).
 """
 
 from django.contrib import admin
@@ -9,6 +12,9 @@ from django.contrib import admin
 from .models import (
     AffectationEvaluateur,
     AppelCandidature,
+    ControleCritere,
+    CritereValidation,
+    DocumentReclamation,
     Dossier,
     EmailQueue,
     Evaluation,
@@ -17,8 +23,22 @@ from .models import (
     PieceExigee,
     PieceJointe,
     Poste,
+    ReclamationEligibilite,
     TypePiece,
 )
+
+
+@admin.register(CritereValidation)
+class CritereValidationAdmin(admin.ModelAdmin):
+    """Grille de critères de validation — configurable (ajout/édition/suppression).
+
+    Décocher « actif » retire le critère de la grille sans casser l'historique
+    (les contrôles déjà enregistrés gardent une copie du libellé)."""
+
+    list_display = ('libelle', 'portee', 'actif', 'ordre')
+    list_editable = ('portee', 'actif', 'ordre')
+    list_filter = ('actif', 'portee')
+    search_fields = ('libelle',)
 
 
 @admin.register(Poste)
@@ -129,17 +149,88 @@ class EvaluationInline(admin.TabularInline):
 
 @admin.register(Dossier)
 class DossierAdmin(admin.ModelAdmin):
+    """Dossier MODIFIABLE pour correction d'erreurs (identité, code, poste,
+    rattachement, affectation, statut). Le changement de statut effectué ici
+    est tracé dans l'historique (voir `save_model`)."""
+
     list_display = ('id', 'code', 'nom', 'postnom', 'prenom', 'appel', 'statut',
-                    'deposant', 'cree_le')
+                    'affecte_a', 'deposant', 'cree_le')
     list_filter = ('statut', 'appel')
     search_fields = ('code', 'nom', 'postnom', 'prenom', 'email')
-    readonly_fields = ('code', 'appel', 'deposant', 'nom', 'postnom', 'prenom', 'email',
-                       'statut', 'ligne_eligibilite', 'cree_le', 'modifie_le')
+    # FK volumineuses (utilisateurs, liste d'éligibilité) en sélecteur « loupe ».
+    raw_id_fields = ('deposant', 'affecte_a', 'ligne_eligibilite')
+    # Seuls les champs calculés/horodatages restent en lecture seule.
+    readonly_fields = ('texte_recherche', 'cree_le', 'modifie_le')
     inlines = [PieceJointeInline, AffectationInline, EvaluationInline,
                HistoriqueStatutInline]
 
+    def save_model(self, request, obj, form, change):
+        """Enregistre la correction et, si le statut change, le journalise.
+
+        On contourne volontairement `changer_statut` (qui refuserait une
+        transition « interdite ») : une correction d'erreur doit pouvoir
+        remettre un dossier dans n'importe quel état. La traçabilité reste
+        assurée par une entrée d'historique dédiée."""
+        ancien = None
+        if change and 'statut' in form.changed_data:
+            ancien = (Dossier.objects.filter(pk=obj.pk)
+                      .values_list('statut', flat=True).first())
+        super().save_model(request, obj, form, change)
+        if ancien is not None and ancien != obj.statut:
+            HistoriqueStatut.objects.create(
+                dossier=obj, ancien_statut=ancien, nouveau_statut=obj.statut,
+                par=request.user,
+                motif='Correction administrative via la console',
+            )
+
     def has_add_permission(self, request):
+        # Les dossiers naissent du dépôt candidat / d'une réclamation, pas de la
+        # console : on n'en crée pas ici (on corrige l'existant).
         return False
 
-    def has_delete_permission(self, request, obj=None):
+
+class DocumentReclamationInline(admin.TabularInline):
+    """Justificatifs joints à une réclamation (consultation seule)."""
+    model = DocumentReclamation
+    extra = 0
+    can_delete = False
+    readonly_fields = ('type', 'nom_original', 'taille', 'fichier', 'cree_le')
+    fields = ('type', 'nom_original', 'taille', 'fichier', 'cree_le')
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class ControleCritereInline(admin.TabularInline):
+    """Grille de critères telle que cochée à la validation (consultation)."""
+    model = ControleCritere
+    extra = 0
+    can_delete = False
+    readonly_fields = ('libelle_snapshot', 'rempli', 'par', 'le')
+    fields = ('libelle_snapshot', 'rempli', 'par', 'le')
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ReclamationEligibilite)
+class ReclamationEligibiliteAdmin(admin.ModelAdmin):
+    """Réclamation MODIFIABLE pour correction d'erreurs (identité, poste,
+    statut, affectation). Les justificatifs sont consultables en bas de fiche.
+
+    Note : modifier le statut ici ne reproduit PAS l'effet métier de la
+    validation via l'app (qui crée le dossier RETENU). C'est un outil de
+    correction, pas le circuit de traitement normal."""
+
+    list_display = ('id', 'nom', 'postnom', 'prenom', 'appel', 'statut',
+                    'affecte_a', 'traite_par', 'cree_le')
+    list_filter = ('statut', 'appel')
+    search_fields = ('nom', 'postnom', 'prenom', 'email')
+    raw_id_fields = ('affecte_a', 'traite_par', 'dossier_cree')
+    readonly_fields = ('texte_recherche', 'cree_le')
+    inlines = [DocumentReclamationInline, ControleCritereInline]
+
+    def has_add_permission(self, request):
+        # Les réclamations sont déposées via le formulaire public ; ici on
+        # corrige l'existant, on n'en crée pas.
         return False

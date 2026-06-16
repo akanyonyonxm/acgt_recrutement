@@ -36,7 +36,7 @@ function filtresSauvegardes() {
 }
 const sauve = filtresSauvegardes()
 
-const statut = ref(sauve.statut ?? 'depose')
+const statut = ref(sauve.statut ?? 'depose,en_examen')
 const appel = ref(sauve.appel ?? null)
 const eligibilite = ref(sauve.eligibilite ?? null)
 const doublons = ref(sauve.doublons ?? false)
@@ -79,15 +79,19 @@ const stats = ref({ total: 0, par_statut: {} })
 const snack = ref({ show: false, color: 'success', text: '' })
 const notifier = (text, color = 'success') => (snack.value = { show: true, color, text })
 
+// « À valider » regroupe DÉPOSÉ et EN_EXAMEN (l'étape examen n'est plus
+// utilisée : les dossiers qui y restent sont traités comme « à valider »).
 const KPIS = [
   { key: '', label: 'Total', desc: 'Tous les dossiers', icon: 'mdi-folder-multiple', color: '#1a237e' },
-  { key: 'depose', label: 'À valider', desc: 'En attente', icon: 'mdi-inbox-arrow-down', color: '#EF6C00' },
-  { key: 'en_examen', label: 'En examen', desc: 'En cours', icon: 'mdi-magnify-scan', color: '#0288D1' },
+  { key: 'depose,en_examen', label: 'À valider', desc: 'En attente', icon: 'mdi-inbox-arrow-down', color: '#EF6C00' },
   { key: 'retenu', label: 'Retenus', desc: 'Candidats retenus', icon: 'mdi-check-circle', color: '#2E7D32' },
   { key: 'non_retenu', label: 'Non retenus', desc: 'Écartés', icon: 'mdi-close-circle', color: '#C62828' },
   { key: 'rejete', label: 'Rejetés', desc: 'Refusés', icon: 'mdi-cancel', color: '#607D8B' },
 ]
-const compte = (key) => (key === '' ? stats.value.total : stats.value.par_statut[key] || 0)
+// Clé éventuellement composite (« depose,en_examen ») → somme des statuts.
+const compte = (key) => (key === ''
+  ? stats.value.total
+  : key.split(',').reduce((n, k) => n + (stats.value.par_statut[k] || 0), 0))
 
 const ENTETES = [
   { title: 'Code', key: 'code', width: 110 },
