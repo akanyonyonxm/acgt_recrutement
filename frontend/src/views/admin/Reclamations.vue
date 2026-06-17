@@ -5,8 +5,8 @@ import StatCard from '../../components/StatCard.vue'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
-// Peut traiter (valider/rejeter) une réclamation : admin ou validateur.
-const peutTraiter = computed(() => auth.estAdmin || auth.estValidateur)
+// Peut traiter (valider/rejeter) une réclamation : admin, superviseur ou validateur.
+const peutTraiter = computed(() => auth.peutTraiter)
 const monId = computed(() => auth.utilisateur?.id)
 // Décision sur une réclamation précise : un admin peut toujours ; un validateur
 // seulement si elle LUI est affectée (cohérent avec le contrôle serveur).
@@ -69,6 +69,15 @@ const dialogRepartir = ref(false)
 const agentsChoisis = ref([])
 const enRepartition = ref(false)
 const resultatRepartition = ref(null)
+const reequilibrer = ref(false)   // réaffecter aussi les déjà affectées
+// Catégorie déjà décidée (validées / rejetées) : révision réservée aux
+// superviseurs. « En attente » (et défaut) : agents de traitement.
+const categorieDecidee = computed(() => !['', 'en_attente'].includes(statut.value))
+// Agents proposés selon la catégorie filtrée.
+const agentsEligibles = computed(() => agents.value.filter((a) =>
+  categorieDecidee.value
+    ? (a.roles.includes('admin') || a.roles.includes('superviseur'))
+    : true))
 
 // Détail / décision
 const detail = ref(null)
@@ -283,8 +292,8 @@ async function rejeterDoublonRec(r) {
   }
 }
 
-// Répartit équitablement les réclamations EN ATTENTE non encore affectées
-// entre les agents choisis (round-robin côté serveur).
+// Répartit équitablement la catégorie filtrée entre les agents choisis.
+// Rééquilibrage possible (réaffecte aussi les déjà affectées).
 async function repartir() {
   if (!agentsChoisis.value.length) {
     notifier('Sélectionnez au moins un agent.', 'error'); return
@@ -292,10 +301,14 @@ async function repartir() {
   enRepartition.value = true
   resultatRepartition.value = null
   try {
-    const { data } = await api.post('/reclamations/repartir/', {
+    const corps = {
       agents: agentsChoisis.value,
-      appel: appel.value || undefined,
-    })
+      seulement_non_affectees: !reequilibrer.value,
+    }
+    if (statut.value) corps.statut = statut.value
+    if (appel.value) corps.appel = appel.value
+    if (q.value) corps.q = q.value
+    const { data } = await api.post('/reclamations/repartir/', corps)
     resultatRepartition.value = data
     notifier(`${data.total_reparti} réclamation(s) réparties entre ${data.par_agent.length} agent(s).`)
     await Promise.all([charger(), chargerStats()])
@@ -345,7 +358,7 @@ onMounted(async () => {
       agents.value = data
         .filter((u) => u.roles.includes('admin') || u.roles.includes('superviseur')
           || u.roles.includes('validateur'))
-        .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email }))
+        .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email, roles: u.roles }))
     } catch { /* non bloquant */ }
   }
   // Grille de critères actifs (portée réclamation) pour la validation.
@@ -519,7 +532,7 @@ onMounted(async () => {
                   Documents ({{ d.pieces?.length || 0 }})
                 </v-btn>
                 <!-- Rejeter le DOSSIER lié (et non la réclamation) -->
-                <v-btn v-if="d.statut === 'depose' && (auth.estAdmin || (auth.estValidateur && d.affecte_a === monId))"
+                <v-btn v-if="d.statut === 'depose' && (auth.peutSuperviser || (auth.estValidateur && d.affecte_a === monId))"
                        size="x-small" color="error" variant="tonal" prepend-icon="mdi-folder-remove-outline"
                        :loading="dossierLieEnCours === d.id" @click="rejeterDossierLie(d)">
                   Rejeter ce dossier
@@ -678,16 +691,26 @@ onMounted(async () => {
         </v-card-title>
         <v-divider />
         <v-card-text>
-          <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-            Les réclamations <strong>en attente non encore affectées</strong>
-            <span v-if="appel"> de l'appel sélectionné</span>
-            seront distribuées <strong>équitablement</strong> entre les agents choisis.
-            Les réclamations déjà affectées ne sont pas touchées.
+          <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+            Catégorie répartie :
+            <strong>{{ (KPIS.find((k) => k.key === statut) || {}).label || 'En attente' }}</strong>
+            <span v-if="appel"> · appel sélectionné</span><span v-if="q"> · recherche « {{ q }} »</span>.
+            Distribution <strong>équitable</strong> entre les agents.
+            <template v-if="reequilibrer"> <strong>Rééquilibrage</strong> : les déjà affectées sont aussi redistribuées.</template>
+            <template v-else> Les déjà affectées ne sont pas touchées.</template>
           </v-alert>
-          <v-select v-model="agentsChoisis" :items="agents" item-title="nom" item-value="id"
+          <!-- Catégorie décidée : révision réservée aux superviseurs -->
+          <v-alert v-if="categorieDecidee" type="warning" variant="tonal" density="compact" class="mb-3"
+                   icon="mdi-shield-account-outline">
+            Catégorie déjà décidée : seuls les <strong>superviseurs</strong> peuvent être affectés (révision).
+          </v-alert>
+          <v-switch v-model="reequilibrer" color="primary" density="compact" hide-details class="mb-1"
+                    label="Rééquilibrer (réaffecter aussi les déjà affectées)" />
+          <v-select v-model="agentsChoisis" :items="agentsEligibles" item-title="nom" item-value="id"
                     label="Agents" multiple chips closable-chips
                     prepend-inner-icon="mdi-account-group-outline"
-                    hint="Sélectionnez les 6–7 agents qui traiteront les réclamations." persistent-hint />
+                    :hint="categorieDecidee ? 'Superviseurs uniquement pour cette catégorie.' : 'Agents qui traiteront ces réclamations.'"
+                    persistent-hint />
 
           <!-- Résultat de la dernière répartition -->
           <div v-if="resultatRepartition" class="mt-4">

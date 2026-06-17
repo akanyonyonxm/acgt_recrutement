@@ -11,15 +11,15 @@ const router = useRouter()
 const auth = useAuthStore()
 // Administrateurs et correcteurs peuvent corriger l'identité du dossier.
 const peutModifier = computed(() => auth.estAdmin || auth.estCorrecteur)
-// Peut faire changer les étapes (approuver, rejeter, retenir…) : admin ou validateur.
-const peutTraiter = computed(() => auth.estAdmin || auth.estValidateur)
+// Peut faire changer les étapes (approuver, rejeter, retenir…) : admin, superviseur ou validateur.
+const peutTraiter = computed(() => auth.peutTraiter)
 const monId = computed(() => auth.utilisateur?.id)
 // Verrou d'affectation : un validateur ne traite que les dossiers qui lui sont
 // affectés ; un admin peut toujours. Évite d'afficher des boutons qui
 // renverraient 403 (le serveur applique la même règle).
 const peutTrancher = computed(() => {
   if (!dossier.value) return false
-  if (auth.estAdmin) return true
+  if (auth.peutSuperviser) return true     // admin ou superviseur : toujours
   return auth.estValidateur && dossier.value.affecte_a === monId.value
 })
 // Un validateur voit le dossier mais n'y est pas affecté (consultation seule).
@@ -311,7 +311,7 @@ watch(() => route.params.id, (nouvel, ancien) => {
             <v-icon size="12" color="warning">mdi-account</v-icon> même nom
             <template v-if="d.meme_email"> · <v-icon size="12" color="warning">mdi-email</v-icon> même email</template>
           </div>
-          <v-btn v-if="(auth.estAdmin || (auth.estValidateur && d.affecte_a === monId)) && d.statut === 'depose'"
+          <v-btn v-if="(auth.peutSuperviser || (auth.estValidateur && d.affecte_a === monId)) && d.statut === 'depose'"
                  size="x-small" color="error" variant="tonal"
                  class="mt-2" prepend-icon="mdi-content-duplicate" :loading="doublonEnCours === d.id"
                  @click="rejeterDoublon(d)">

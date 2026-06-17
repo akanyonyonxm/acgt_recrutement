@@ -15,7 +15,7 @@ const monId = computed(() => auth.utilisateur?.id)
 // Décision sur un dossier précis : un admin peut toujours ; un validateur
 // seulement si le dossier LUI est affecté (cohérent avec le contrôle serveur).
 function peutDecider(d) {
-  if (auth.estAdmin) return true
+  if (auth.peutSuperviser) return true     // admin ou superviseur : toujours
   return auth.estValidateur && d?.affecte_a === monId.value
 }
 
@@ -24,6 +24,15 @@ const dialogRepartir = ref(false)
 const agentsChoisis = ref([])
 const enRepartition = ref(false)
 const resultatRepartition = ref(null)
+const reequilibrer = ref(false)   // réaffecter aussi les déjà affectés
+// Catégorie déjà décidée (retenus / non-retenus / rejetés) : révision réservée
+// aux superviseurs. File « à valider » (déposé/examen) : agents de traitement.
+const categorieDecidee = computed(() =>
+  statut.value.split(',').some((s) => ['retenu', 'non_retenu', 'rejete'].includes(s)))
+const agentsEligibles = computed(() => agents.value.filter((a) =>
+  categorieDecidee.value
+    ? (a.roles.includes('admin') || a.roles.includes('superviseur'))
+    : true))
 
 // Filtres mémorisés (localStorage) : on les retrouve au retour sur la page,
 // notamment après avoir ouvert un dossier pour le traiter — pas besoin de
@@ -192,7 +201,7 @@ async function repartir() {
   enRepartition.value = true
   resultatRepartition.value = null
   try {
-    const corps = { agents: agentsChoisis.value }
+    const corps = { agents: agentsChoisis.value, seulement_non_affectes: !reequilibrer.value }
     if (statut.value) corps.statut = statut.value
     if (appel.value) corps.appel = appel.value
     if (eligibilite.value) corps.correspondance = eligibilite.value
@@ -221,13 +230,14 @@ const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR')
 onMounted(async () => {
   const { data } = await api.get('/appels/')
   appels.value = data.results.map((a) => ({ value: a.id, title: a.titre }))
-  // Agents pouvant traiter (pour répartir / filtrer) — admin seulement.
-  if (auth.estAdmin) {
+  // Agents pouvant traiter (pour répartir / filtrer) — admin et superviseur.
+  if (auth.peutSuperviser) {
     try {
       const { data: us } = await api.get('/auth/utilisateurs/')
       agents.value = us
-        .filter((u) => u.roles.includes('admin') || u.roles.includes('validateur'))
-        .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email }))
+        .filter((u) => u.roles.includes('admin') || u.roles.includes('superviseur')
+          || u.roles.includes('validateur'))
+        .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email, roles: u.roles }))
     } catch { /* non bloquant */ }
   }
   chargerStats()
@@ -397,10 +407,11 @@ onMounted(async () => {
         </v-card-title>
         <v-divider />
         <v-card-text>
-          <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-            Les dossiers <strong>du filtre actuel</strong> non encore affectés seront
-            distribués <strong>équitablement</strong> entre les agents choisis.
-            L'agent affecté approuvera puis tranchera (retenir / non-retenir).
+          <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+            Les dossiers <strong>du filtre actuel</strong> seront distribués
+            <strong>équitablement</strong> entre les agents choisis.
+            <template v-if="reequilibrer"> <strong>Rééquilibrage</strong> : les déjà affectés sont aussi redistribués.</template>
+            <template v-else> Les déjà affectés ne sont pas touchés.</template>
             <div class="mt-2 text-caption">
               Filtre :
               <strong>{{ (KPIS.find((k) => k.key === statut) || {}).label || 'Tous statuts' }}</strong>
@@ -412,10 +423,18 @@ onMounted(async () => {
               <template v-if="q"> · recherche « {{ q }} »</template>
             </div>
           </v-alert>
-          <v-select v-model="agentsChoisis" :items="agents" item-title="nom" item-value="id"
+          <!-- Catégorie décidée : révision réservée aux superviseurs -->
+          <v-alert v-if="categorieDecidee" type="warning" variant="tonal" density="compact" class="mb-3"
+                   icon="mdi-shield-account-outline">
+            Catégorie déjà décidée : seuls les <strong>superviseurs</strong> peuvent être affectés (révision).
+          </v-alert>
+          <v-switch v-model="reequilibrer" color="primary" density="compact" hide-details class="mb-1"
+                    label="Rééquilibrer (réaffecter aussi les déjà affectés)" />
+          <v-select v-model="agentsChoisis" :items="agentsEligibles" item-title="nom" item-value="id"
                     label="Agents" multiple chips closable-chips
                     prepend-inner-icon="mdi-account-group-outline"
-                    hint="Sélectionnez les agents qui traiteront ces dossiers." persistent-hint />
+                    :hint="categorieDecidee ? 'Superviseurs uniquement pour cette catégorie.' : 'Agents qui traiteront ces dossiers.'"
+                    persistent-hint />
 
           <div v-if="resultatRepartition" class="mt-4">
             <v-divider class="mb-3" />

@@ -1007,11 +1007,11 @@ class DossierViewSet(viewsets.ModelViewSet):
     def _verifier_affecte(self, dossier):
         """Verrou d'affectation pour traiter un dossier (approuver/rejeter).
 
-        Admin : toujours. Validateur : seulement si le dossier LUI est affecté
-        (évite de traiter le lot d'un collègue). Cohérent avec `peut_traiter`
-        qui garde déjà l'accès à l'action."""
+        Admin et superviseur : toujours (ils tranchent et réaffectent, comme
+        pour les réclamations). Validateur : seulement si le dossier LUI est
+        affecté (évite de traiter le lot d'un collègue)."""
         user = self.request.user
-        if roles.est_admin(user):
+        if roles.peut_superviser(user):
             return
         if dossier.affecte_a_id != user.id:
             raise PermissionDenied(
@@ -1019,11 +1019,11 @@ class DossierViewSet(viewsets.ModelViewSet):
             )
 
     def _verifier_validateur(self, dossier):
-        """Qui peut trancher retenir/non-retenir : l'admin (toujours), un
-        évaluateur désigné ET autorisé (peut_valider), ou le validateur à qui
-        le dossier est affecté."""
+        """Qui peut trancher retenir/non-retenir : l'admin ou le superviseur
+        (toujours), un évaluateur désigné ET autorisé (peut_valider), ou le
+        validateur à qui le dossier est affecté."""
         user = self.request.user
-        if roles.est_admin(user):
+        if roles.peut_superviser(user):
             return
         # Évaluateur désigné et autorisé : indépendant de l'affectation.
         if dossier.affectations.filter(evaluateur=user, peut_valider=True).exists():
@@ -1108,25 +1108,38 @@ class DossierViewSet(viewsets.ModelViewSet):
         liste (mêmes buckets d'éligibilité via `_filtrer_liste`) : on peut donc
         répartir une seule catégorie (ex. « aucune correspondance ») entre les
         agents. Par défaut statut = DÉPOSÉ (la file à valider) et seuls les
-        dossiers non encore affectés sont distribués. L'agent affecté mènera le
-        dossier de l'approbation à la décision (retenir / non-retenir).
+        dossiers non encore affectés sont distribués ; `seulement_non_affectes`
+        à False = RÉÉQUILIBRAGE (réaffecte aussi les déjà affectés). L'agent
+        affecté mène le dossier de l'approbation à la décision.
         Opération additive : ne change que `affecte_a`."""
-        if not roles.est_admin(request.user):
-            raise PermissionDenied("Réservé aux administrateurs.")
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
         agent_ids = request.data.get('agents') or []
         if not isinstance(agent_ids, list) or not agent_ids:
             raise ValidationError({'agents': "Sélectionnez au moins un agent."})
 
+        # Catégorie déjà décidée (retenu/non-retenu/rejeté) → révision réservée
+        # aux superviseurs ; file « à valider » (déposé/examen) → agents de
+        # traitement (validateur/superviseur).
+        statut_param = request.data.get('statut') or Dossier.Statut.DEPOSE
+        statuts = [s for s in str(statut_param).split(',') if s]
+        en_cours = {Dossier.Statut.DEPOSE, Dossier.Statut.EN_EXAMEN}
+        cible_decidee = any(s not in en_cours for s in statuts)
+        eligible = roles.peut_superviser if cible_decidee else roles.peut_traiter
+
         trouves = {u.id: u for u in User.objects.filter(id__in=agent_ids, is_active=True)}
-        agents = [trouves[i] for i in agent_ids if i in trouves and roles.peut_traiter(trouves[i])]
+        agents = [trouves[i] for i in agent_ids if i in trouves and eligible(trouves[i])]
         if not agents:
-            raise ValidationError({'agents': "Aucun agent valide (admin ou validateur actif)."})
+            raise ValidationError({'agents': (
+                "Pour une catégorie déjà décidée (retenus / non-retenus / rejetés), "
+                "seuls des superviseurs peuvent être affectés." if cible_decidee else
+                "Aucun agent valide (validateur ou superviseur actif).")})
 
         qs = self._annoter_correspondance(Dossier.objects.all()).annotate(
             a_doublon=self._doublon_exists(),
         )
         filtres = {
-            'statut': request.data.get('statut') or Dossier.Statut.DEPOSE,
+            'statut': statut_param,
             'appel': request.data.get('appel'),
             'correspondance': request.data.get('correspondance'),
             'doublons': request.data.get('doublons'),
@@ -1641,35 +1654,51 @@ class ReclamationViewSet(viewsets.ModelViewSet):
 
     # --- Répartition de la charge entre agents -------------------------
 
+    # Réclamations « en attente » = en cours de traitement ; les autres
+    # (validée / rejetée) sont déjà décidées (révision = supervision).
+    STATUTS_EN_COURS = {ReclamationEligibilite.Statut.EN_ATTENTE}
+
     @action(detail=False, methods=['post'])
     def repartir(self, request):
-        """Répartit équitablement des réclamations entre des agents (admin).
+        """Répartit équitablement des réclamations entre des agents (supervision).
 
-        Corps : {agents: [id, …], appel?: id, seulement_non_affectees?: bool}.
-        Prend le pool des réclamations EN ATTENTE (par défaut seulement celles
-        non encore affectées), et les distribue en round-robin entre les agents
-        choisis (parts égales, ±1). Seuls les agents pouvant traiter (admin /
-        validateur) sont retenus. Opération additive : ne change que `affecte_a`.
-        """
+        Corps : {agents: [id, …], statut?, appel?, q?, seulement_non_affectees?}.
+        - `statut` : la catégorie filtrée à répartir (défaut : en attente). On
+          peut répartir aussi les VALIDÉES / REJETÉES pour révision.
+        - `seulement_non_affectees` (défaut True) : à False = RÉÉQUILIBRAGE
+          (réaffecte aussi les déjà affectées pour équilibrer la charge).
+
+        Éligibilité des agents selon la catégorie : « en attente » → agents de
+        traitement (validateur/superviseur) ; catégorie DÉJÀ DÉCIDÉE → seuls les
+        SUPERVISEURS (révision). Round-robin (parts égales ±1). Additif."""
         if not roles.peut_superviser(request.user):
             raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
         agent_ids = request.data.get('agents') or []
         if not isinstance(agent_ids, list) or not agent_ids:
             raise ValidationError({'agents': "Sélectionnez au moins un agent."})
 
+        statuts = [s for s in str(request.data.get('statut') or '').split(',') if s]
+        if not statuts:
+            statuts = [ReclamationEligibilite.Statut.EN_ATTENTE]
+        # Catégorie déjà décidée si un statut hors « en cours » est visé.
+        cible_decidee = any(s not in self.STATUTS_EN_COURS for s in statuts)
+        eligible = roles.peut_superviser if cible_decidee else roles.peut_traiter
+
         User = get_user_model()
         trouves = {u.id: u for u in User.objects.filter(id__in=agent_ids, is_active=True)}
-        # Garder l'ordre demandé, ne retenir que ceux qui peuvent traiter.
-        agents = [trouves[i] for i in agent_ids if i in trouves and roles.peut_traiter(trouves[i])]
+        agents = [trouves[i] for i in agent_ids if i in trouves and eligible(trouves[i])]
         if not agents:
-            raise ValidationError({'agents': "Aucun agent valide (admin ou validateur actif)."})
+            raise ValidationError({'agents': (
+                "Pour une catégorie déjà décidée (validées / rejetées), seuls des "
+                "superviseurs peuvent être affectés." if cible_decidee else
+                "Aucun agent valide (validateur ou superviseur actif).")})
 
-        qs = ReclamationEligibilite.objects.filter(
-            statut=ReclamationEligibilite.Statut.EN_ATTENTE,
-        )
+        qs = ReclamationEligibilite.objects.filter(statut__in=statuts)
         appel = request.data.get('appel')
         if appel:
             qs = qs.filter(appel_id=appel)
+        for token in tokens_recherche(request.data.get('q') or ''):
+            qs = qs.filter(texte_recherche__contains=token)
         if request.data.get('seulement_non_affectees', True):
             qs = qs.filter(affecte_a__isnull=True)
         ids = list(qs.order_by('cree_le').values_list('id', flat=True))
