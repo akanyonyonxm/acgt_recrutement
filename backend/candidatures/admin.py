@@ -190,15 +190,15 @@ class DossierAdmin(admin.ModelAdmin):
 
 
 class DocumentReclamationInline(admin.TabularInline):
-    """Justificatifs joints à une réclamation (consultation seule)."""
-    model = DocumentReclamation
-    extra = 0
-    can_delete = False
-    readonly_fields = ('type', 'nom_original', 'taille', 'fichier', 'cree_le')
-    fields = ('type', 'nom_original', 'taille', 'fichier', 'cree_le')
+    """Justificatifs joints à une réclamation : consultables ET ajoutables.
 
-    def has_add_permission(self, request, obj=None):
-        return False
+    On choisit le type et on téléverse le fichier ; le nom d'origine et la
+    taille sont remplis automatiquement à l'enregistrement (cf. `save_formset`)."""
+    model = DocumentReclamation
+    extra = 1
+    can_delete = True
+    fields = ('type', 'fichier', 'nom_original', 'taille', 'cree_le')
+    readonly_fields = ('nom_original', 'taille', 'cree_le')
 
 
 class ControleCritereInline(admin.TabularInline):
@@ -231,3 +231,22 @@ class ReclamationEligibiliteAdmin(admin.ModelAdmin):
     raw_id_fields = ('affecte_a', 'traite_par', 'dossier_cree')
     readonly_fields = ('texte_recherche', 'cree_le')
     inlines = [DocumentReclamationInline, ControleCritereInline]
+
+    def save_formset(self, request, form, formset, change):
+        """Remplit nom d'origine + taille des justificatifs téléversés ici."""
+        instances = formset.save(commit=False)
+        for obj in instances:
+            if isinstance(obj, DocumentReclamation) and obj.fichier:
+                # Avant save() : `fichier.name` est le nom client, pas encore le
+                # nom UUID de stockage (renommé par upload_to à l'écriture).
+                if not obj.nom_original:
+                    obj.nom_original = obj.fichier.name[:255]
+                if not obj.taille:
+                    try:
+                        obj.taille = obj.fichier.size
+                    except (ValueError, OSError):
+                        pass
+            obj.save()
+        for obj in formset.deleted_objects:
+            obj.delete()
+        formset.save_m2m()
