@@ -215,12 +215,14 @@ class ControleCritereInline(admin.TabularInline):
 
 @admin.register(ReclamationEligibilite)
 class ReclamationEligibiliteAdmin(admin.ModelAdmin):
-    """Réclamation MODIFIABLE pour correction d'erreurs (identité, poste,
-    statut, affectation). Les justificatifs sont consultables en bas de fiche.
+    """Réclamation MODIFIABLE et CRÉABLE pour corriger/saisir manuellement
+    (identité, poste, statut, affectation). Les justificatifs sont consultables
+    en bas de fiche.
 
-    Note : modifier le statut ici ne reproduit PAS l'effet métier de la
-    validation via l'app (qui crée le dossier RETENU). C'est un outil de
-    correction, pas le circuit de traitement normal."""
+    Note : créer/modifier ici ne reproduit PAS l'effet métier de la validation
+    via l'app (qui crée le dossier RETENU). C'est un outil de correction et de
+    saisie, pas le circuit de traitement normal. Une réclamation saisie ici
+    arrive « en attente » et sera traitée comme les autres."""
 
     list_display = ('id', 'nom', 'postnom', 'prenom', 'appel', 'statut',
                     'affecte_a', 'traite_par', 'cree_le')
@@ -229,8 +231,3 @@ class ReclamationEligibiliteAdmin(admin.ModelAdmin):
     raw_id_fields = ('affecte_a', 'traite_par', 'dossier_cree')
     readonly_fields = ('texte_recherche', 'cree_le')
     inlines = [DocumentReclamationInline, ControleCritereInline]
-
-    def has_add_permission(self, request):
-        # Les réclamations sont déposées via le formulaire public ; ici on
-        # corrige l'existant, on n'en crée pas.
-        return False
