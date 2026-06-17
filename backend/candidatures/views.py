@@ -32,6 +32,7 @@ from .models import (
     Dossier,
     EmailQueue,
     Evaluation,
+    HistoriqueStatut,
     ListeEligibilite,
     PieceJointe,
     Poste,
@@ -1650,6 +1651,45 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             )
 
         # Aucun email pendant le traitement (un rejet de réclamation ne notifie pas).
+        return Response(ReclamationAdminSerializer(reclamation).data)
+
+    @action(detail=True, methods=['post'])
+    def rouvrir(self, request, pk=None):
+        """Rouvre une réclamation DÉCIDÉE (validée/rejetée) → EN ATTENTE, pour
+        correction (admin / superviseur uniquement).
+
+        Si elle avait été VALIDÉE, le dossier créé est annulé (passé à REJETÉ,
+        avec trace dans l'historique) afin de retirer la personne des retenus.
+        L'agent re-traite ensuite normalement (Valider / Rejeter) avec le bon
+        statut et le bon motif."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        with transaction.atomic():
+            reclamation = (
+                ReclamationEligibilite.objects
+                .select_for_update().get(pk=self.get_object().pk)
+            )
+            if reclamation.statut == ReclamationEligibilite.Statut.EN_ATTENTE:
+                raise ValidationError("Cette réclamation est déjà en attente.")
+            # Annule le dossier créé à la validation (le retire des retenus).
+            dossier = reclamation.dossier_cree
+            if dossier and dossier.statut != Dossier.Statut.REJETE:
+                ancien = dossier.statut
+                dossier.statut = Dossier.Statut.REJETE
+                dossier.save(update_fields=['statut', 'modifie_le'])
+                HistoriqueStatut.objects.create(
+                    dossier=dossier, ancien_statut=ancien,
+                    nouveau_statut=Dossier.Statut.REJETE, par=request.user,
+                    motif='Réclamation rouverte (correction) — dossier annulé',
+                )
+            reclamation.statut = ReclamationEligibilite.Statut.EN_ATTENTE
+            reclamation.motif = ''
+            reclamation.traite_par = None
+            reclamation.traite_le = None
+            reclamation.dossier_cree = None
+            reclamation.save(update_fields=[
+                'statut', 'motif', 'traite_par', 'traite_le', 'dossier_cree',
+            ])
         return Response(ReclamationAdminSerializer(reclamation).data)
 
     # --- Répartition de la charge entre agents -------------------------

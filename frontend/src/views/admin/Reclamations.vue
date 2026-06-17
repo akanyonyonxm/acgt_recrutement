@@ -265,6 +265,26 @@ async function doublonSuivantRec() {
   }
 }
 
+// Rouvre une réclamation décidée (-> en attente) pour la corriger. Si elle
+// avait été validée, le dossier créé est annulé côté serveur. On recharge
+// ensuite la fiche : l'agent peut re-trancher (Valider/Rejeter) correctement.
+const enRouverture = ref(false)
+async function rouvrir() {
+  if (!confirm("Rouvrir cette réclamation pour correction ? Elle repassera « en attente ». "
+    + 'Si elle était validée, le dossier créé sera annulé (la personne sort des retenus).')) return
+  enRouverture.value = true
+  try {
+    const { data } = await api.post(`/reclamations/${detail.value.id}/rouvrir/`)
+    notifier('Réclamation rouverte — vous pouvez la re-traiter.')
+    await ouvrir(data)        // recharge la fiche en mode « en attente »
+    await Promise.all([charger(), chargerStats()])
+  } catch (e) {
+    notifier(e.response?.data?.detail || 'Réouverture impossible.', 'error')
+  } finally {
+    enRouverture.value = false
+  }
+}
+
 // Ouvre une réclamation (un doublon, p. ex.) dans la fiche pour l'examiner
 // — justificatifs compris — avant de décider de la rejeter.
 async function examinerReclamation(id) {
@@ -671,6 +691,13 @@ onMounted(async () => {
                  prepend-icon="mdi-content-duplicate" append-icon="mdi-arrow-right"
                  :loading="enNavRec" @click="doublonSuivantRec">Doublon suivant</v-btn>
           <v-spacer />
+          <!-- Réclamation déjà décidée : rouvrir pour corriger (superviseur/admin) -->
+          <v-btn v-if="detail.statut !== 'en_attente' && auth.peutSuperviser"
+                 color="primary" variant="outlined" size="small"
+                 prepend-icon="mdi-lock-open-variant-outline" :loading="enRouverture"
+                 @click="rouvrir">
+            Rouvrir / corriger
+          </v-btn>
           <v-btn v-if="action === 'valider'" color="success" variant="flat" :loading="enCours"
                  :disabled="!grilleSatisfaite" @click="confirmer">
             Confirmer la validation
