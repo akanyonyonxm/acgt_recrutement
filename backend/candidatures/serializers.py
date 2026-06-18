@@ -135,10 +135,44 @@ class PieceJointeUploadSerializer(serializers.ModelSerializer):
         return fichier
 
 
-class DossierSerializer(serializers.ModelSerializer):
-    statut_libelle = serializers.CharField(
-        source='get_statut_display', read_only=True,
-    )
+class MasquageDecisionMixin:
+    """Masque la décision finale (retenu / non-retenu / rejeté) au CANDIDAT
+    tant que les résultats de l'appel ne sont pas publiés.
+
+    Le candidat voit alors « En cours de traitement » (présenté comme EN_EXAMEN).
+    Le personnel back-office (et les comptes techniques) voient le vrai statut.
+    À utiliser avec `statut` et `statut_libelle` déclarés en SerializerMethodField.
+    """
+
+    def _est_staff(self):
+        # Mis en cache sur l'instance (réutilisée pour tous les items en liste).
+        if not hasattr(self, '_staff_cache'):
+            from . import roles
+            request = self.context.get('request')
+            user = getattr(request, 'user', None)
+            self._staff_cache = bool(
+                user and user.is_authenticated and roles.acces_backoffice(user)
+            )
+        return self._staff_cache
+
+    def _decision_masquee(self, obj):
+        if self._est_staff():
+            return False
+        return (obj.statut in Dossier.STATUTS_TERMINAUX
+                and not obj.appel.liste_retenus_publiee)
+
+    def get_statut(self, obj):
+        return 'en_examen' if self._decision_masquee(obj) else obj.statut
+
+    def get_statut_libelle(self, obj):
+        if self._decision_masquee(obj):
+            return 'En cours de traitement'
+        return obj.get_statut_display()
+
+
+class DossierSerializer(MasquageDecisionMixin, serializers.ModelSerializer):
+    statut = serializers.SerializerMethodField()
+    statut_libelle = serializers.SerializerMethodField()
     deposant = serializers.StringRelatedField(read_only=True)
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
@@ -176,10 +210,11 @@ class DossierSerializer(serializers.ModelSerializer):
             'est_complet', 'modifiable', 'cree_le', 'modifie_le',
         ]
         # Le statut ne se change jamais par PATCH direct : il passe par les
-        # actions dédiées (soumettre / approuver / rejeter / retenir / …).
+        # actions dédiées (soumettre / approuver / rejeter / retenir / …) — et
+        # c'est désormais un SerializerMethodField (masquage candidat).
         # `affecte_a` se change via l'action `repartir` (jamais par PATCH).
         read_only_fields = [
-            'statut', 'deposant', 'ligne_eligibilite', 'affecte_a',
+            'deposant', 'ligne_eligibilite', 'affecte_a',
             'cree_le', 'modifie_le',
         ]
 
@@ -188,6 +223,9 @@ class DossierSerializer(serializers.ModelSerializer):
         return (u.get_full_name() or u.email) if u else None
 
     def get_transitions_possibles(self, obj):
+        # Décision masquée au candidat : ne révèle aucune transition.
+        if self._decision_masquee(obj):
+            return []
         return sorted(obj.transitions_possibles())
 
     def get_pieces_manquantes(self, obj):
@@ -285,12 +323,11 @@ class DossierSerializer(serializers.ModelSerializer):
         return appel
 
 
-class DossierListeSerializer(serializers.ModelSerializer):
+class DossierListeSerializer(MasquageDecisionMixin, serializers.ModelSerializer):
     """Vue allégée pour les listes (évite le N+1 des pièces/complétude)."""
 
-    statut_libelle = serializers.CharField(
-        source='get_statut_display', read_only=True,
-    )
+    statut = serializers.SerializerMethodField()
+    statut_libelle = serializers.SerializerMethodField()
     appel_titre = serializers.CharField(source='appel.titre', read_only=True)
     poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
     # Correspondance avec la liste d'éligibilité (badge indicatif, jamais

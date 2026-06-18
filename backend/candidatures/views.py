@@ -1091,11 +1091,21 @@ class DossierViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def historique(self, request, pk=None):
-        """Journal d'audit des changements de statut du dossier."""
+        """Journal d'audit des changements de statut du dossier.
+
+        Pour le CANDIDAT, la transition de décision (vers retenu/non-retenu/
+        rejeté) et son motif restent masqués tant que les résultats de l'appel
+        ne sont pas publiés. Le back-office voit l'historique complet."""
         dossier = self.get_object()
-        data = HistoriqueStatutSerializer(
-            dossier.historique.all(), many=True,
-        ).data
+        qs = dossier.historique.all()
+        decision_masquee = (
+            not roles.acces_backoffice(request.user)
+            and dossier.statut in Dossier.STATUTS_TERMINAUX
+            and not dossier.appel.liste_retenus_publiee
+        )
+        if decision_masquee:
+            qs = qs.exclude(nouveau_statut__in=Dossier.STATUTS_TERMINAUX)
+        data = HistoriqueStatutSerializer(qs, many=True).data
         return Response(data)
 
     # --- Répartition de la charge entre agents --------------------------
