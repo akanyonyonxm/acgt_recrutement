@@ -106,6 +106,11 @@ const motifRejet = ref('')
 const dialogRejet = ref(false)
 const motifNonRetenu = ref('')
 const dialogNonRetenir = ref(false)
+// Nom publié, modifiable à la validation : c'est ce nom qui sortira dans la
+// liste des retenus (corrigeable, ex. faute de frappe ou candidat hors liste).
+const nomEdit = ref('')
+const postnomEdit = ref('')
+const prenomEdit = ref('')
 
 const evaluateurs = ref([])
 const affectations = ref([])
@@ -153,6 +158,9 @@ async function charger() {
   const { data } = await api.get(`/dossiers/${id.value}/`)
   dossier.value = data
   q.value = data.nom
+  nomEdit.value = data.nom
+  postnomEdit.value = data.postnom || ''
+  prenomEdit.value = data.prenom || ''
   historique.value = (await api.get(`/dossiers/${id.value}/historique/`)).data
   if (['en_examen', 'retenu', 'non_retenu'].includes(data.statut)) await chargerExamen()
 }
@@ -185,8 +193,19 @@ async function action(verbe, corps) {
 }
 
 // Validation directe (1 clic) : DÉPOSÉ → RETENU côté serveur. Rattache la
-// personne choisie si une ligne est sélectionnée (sinon best-effort par nom).
-const valider = () => action('valider', ligneChoisie.value ? { eligibilite_id: ligneChoisie.value } : {})
+// personne choisie si une ligne est sélectionnée ; sinon retient sans
+// correspondance. Le nom (éditable) est publié dans la liste des retenus.
+function valider() {
+  if (!nomEdit.value.trim() || !prenomEdit.value.trim()) {
+    return notifier('Le nom et le prénom ne peuvent pas être vides.', 'error')
+  }
+  action('valider', {
+    ...(ligneChoisie.value ? { eligibilite_id: ligneChoisie.value } : {}),
+    nom: nomEdit.value.trim(),
+    postnom: postnomEdit.value.trim(),
+    prenom: prenomEdit.value.trim(),
+  })
+}
 const approuver = () => action('approuver', ligneChoisie.value ? { eligibilite_id: ligneChoisie.value } : {})
 function rejeter() {
   if (!motifRejet.value.trim()) return notifier('Le motif est obligatoire.', 'error')
@@ -469,14 +488,26 @@ watch(() => route.params.id, (nouvel, ancien) => {
           </v-card-text>
           <v-divider />
           <template v-if="peutTrancher">
-            <v-alert v-if="!peutDecider" type="info" variant="tonal" density="compact" class="ma-4 mb-0">
-              Sélectionnez d'abord la personne dans la liste d'éligibilité pour pouvoir
-              <strong>valider (retenir)</strong>. Le <strong>rejet</strong> reste possible sans
-              correspondance (candidat absent de la liste, code erroné…).
-            </v-alert>
+            <!-- Nom publié (modifiable) : avec OU sans correspondance, c'est ce
+                 nom qui sortira dans la liste des retenus. -->
+            <div class="pa-4 pb-0">
+              <div class="text-caption font-weight-bold text-medium-emphasis mb-2">
+                Nom publié dans la liste des retenus
+                <span v-if="!peutDecider" class="text-error">(aucune correspondance — vérifiez l'orthographe)</span>
+              </div>
+              <v-row dense>
+                <v-col cols="12" sm="4"><v-text-field v-model="nomEdit" label="Nom" density="compact" hide-details /></v-col>
+                <v-col cols="12" sm="4"><v-text-field v-model="postnomEdit" label="Postnom" density="compact" hide-details /></v-col>
+                <v-col cols="12" sm="4"><v-text-field v-model="prenomEdit" label="Prénom" density="compact" hide-details /></v-col>
+              </v-row>
+              <div class="text-caption text-medium-emphasis mt-1">
+                <template v-if="peutDecider">Rattaché à une personne de la liste (traçabilité).</template>
+                <template v-else>Validation <strong>sans correspondance</strong> : la personne est retenue avec ce nom.</template>
+              </div>
+            </div>
             <v-card-actions class="pa-4">
-              <v-btn color="success" variant="flat" prepend-icon="mdi-check-bold" :disabled="!peutDecider"
-                     @click="demanderConfirmation('Valider le candidat', 'Décision : le candidat sera RETENU (il sera notifié à la publication de la liste).', valider, 'success')">
+              <v-btn color="success" variant="flat" prepend-icon="mdi-check-bold"
+                     @click="demanderConfirmation('Valider le candidat', 'Décision : le candidat sera RETENU sous le nom affiché (il sera notifié à la publication de la liste).', valider, 'success')">
                 Valider (retenir)
               </v-btn>
               <v-spacer />

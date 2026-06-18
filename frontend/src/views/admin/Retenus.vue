@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import api from '../../api'
 import StatCard from '../../components/StatCard.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -9,22 +9,57 @@ const auth = useAuthStore()
 const appels = ref([])
 const appelId = ref(null)
 const retenus = ref([])
+const total = ref(0)            // vrai nombre de retenus (toutes pages)
+const chargement = ref(false)
+const q = ref('')
+const tri = ref([])
+const page = ref(1)
+const parPage = ref(25)
 const snack = ref({ show: false, color: 'success', text: '' })
 
 const appelCourant = computed(() => appels.value.find((a) => a.id === appelId.value))
 const publiee = computed(() => !!appelCourant.value?.liste_retenus_publiee)
 const notifier = (text, color = 'success') => (snack.value = { show: true, color, text })
 
+const ENTETES = [
+  { title: '#', key: 'rang', sortable: false, width: 64 },
+  { title: 'Nom', key: 'nom' },
+  { title: 'Postnom', key: 'postnom' },
+  { title: 'Prénom', key: 'prenom' },
+  { title: 'Poste', key: 'poste_libelle' },
+]
+// Clé de colonne triée -> champ API (allowlist backend).
+const TRI = { nom: 'nom', postnom: 'postnom', prenom: 'prenom', poste_libelle: 'poste__libelle' }
+
+// Clé réactive : recharge la 1ʳᵉ page quand l'appel ou la recherche change.
+const cle = computed(() => `${appelId.value || ''}|${q.value}`)
+
 async function rechargerAppels() {
   const { data } = await api.get('/appels/')
   appels.value = data.results
 }
-async function chargerRetenus() {
-  retenus.value = []
-  if (!appelId.value) return
-  const { data } = await api.get('/dossiers/', { params: { statut: 'retenu', appel: appelId.value } })
-  retenus.value = data.results
+
+async function charger({ page: p = 1, itemsPerPage = 25, sortBy } = {}) {
+  if (!appelId.value) { retenus.value = []; total.value = 0; return }
+  if (sortBy !== undefined) tri.value = sortBy
+  page.value = p
+  parPage.value = itemsPerPage > 0 ? itemsPerPage : 25
+  chargement.value = true
+  try {
+    const params = { statut: 'retenu', appel: appelId.value, page: p, page_size: parPage.value }
+    if (q.value) params.q = q.value
+    const s = tri.value && tri.value[0]
+    if (s && TRI[s.key]) params.ordering = (s.order === 'desc' ? '-' : '') + TRI[s.key]
+    const { data } = await api.get('/dossiers/', { params })
+    retenus.value = data.results
+    total.value = data.count
+  } finally {
+    chargement.value = false
+  }
 }
+
+let minuteur
+function rechercher() { clearTimeout(minuteur); minuteur = setTimeout(() => { q.value = q.value.trim() }, 300) }
 
 async function publier() {
   try {
@@ -41,7 +76,6 @@ async function depublier() {
   } catch (e) { notifier(e.response?.data?.detail || 'Action impossible.', 'error') }
 }
 
-watch(appelId, chargerRetenus)
 onMounted(rechargerAppels)
 </script>
 
@@ -63,7 +97,7 @@ onMounted(rechargerAppels)
       <!-- KPI -->
       <v-row dense class="mb-5">
         <v-col cols="6" md="3">
-          <StatCard icon="mdi-account-check" :value="retenus.length" label="Personnes retenues"
+          <StatCard icon="mdi-account-check" :value="total" label="Personnes retenues"
                     description="Pour cet appel" color="#2E7D32" />
         </v-col>
         <v-col cols="6" md="3">
@@ -76,33 +110,33 @@ onMounted(rechargerAppels)
       <v-card flat border>
         <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
           <span class="text-subtitle-1 font-weight-bold">Personnes retenues</span>
-          <v-chip color="primary" variant="tonal" size="small">{{ retenus.length }}</v-chip>
+          <v-chip color="primary" variant="tonal" size="small">{{ total }}</v-chip>
           <v-spacer />
+          <v-text-field v-model="q" @update:modelValue="rechercher" placeholder="Rechercher un nom…"
+                        prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
+                        clearable style="max-width: 260px" @click:clear="q = ''" />
           <v-chip v-if="publiee" color="success" variant="flat" prepend-icon="mdi-earth">Liste publiée</v-chip>
           <template v-if="auth.estAdmin">
             <v-btn v-if="!publiee" color="primary" variant="flat"
-                   prepend-icon="mdi-publish" :disabled="!retenus.length" @click="publier">Publier la liste</v-btn>
+                   prepend-icon="mdi-publish" :disabled="!total" @click="publier">Publier la liste</v-btn>
             <v-btn v-else color="grey" variant="outlined" prepend-icon="mdi-publish-off" @click="depublier">Dépublier</v-btn>
           </template>
         </v-card-title>
         <v-divider />
-        <v-table class="tableau-admin">
-          <thead>
-            <tr><th style="width:64px">#</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Poste</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="(d, i) in retenus" :key="d.id">
-              <td class="text-medium-emphasis">{{ i + 1 }}</td>
-              <td class="font-weight-bold">{{ d.nom }}</td>
-              <td>{{ d.postnom }}</td>
-              <td>{{ d.prenom }}</td>
-              <td class="text-medium-emphasis">{{ d.poste_libelle || '—' }}</td>
-            </tr>
-            <tr v-if="!retenus.length">
-              <td colspan="5" class="text-center text-medium-emphasis py-6">Aucune personne retenue pour cet appel.</td>
-            </tr>
-          </tbody>
-        </v-table>
+        <v-data-table-server
+          :headers="ENTETES" :items="retenus" :items-length="total" :loading="chargement"
+          :search="cle" :sort-by="tri" :items-per-page="25"
+          :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
+          @update:options="charger" class="tableau-admin"
+          no-data-text="Aucune personne retenue pour cet appel." loading-text="Chargement…">
+          <template #item.rang="{ index }">
+            <span class="text-medium-emphasis">{{ (page - 1) * parPage + index + 1 }}</span>
+          </template>
+          <template #item.nom="{ item }"><span class="font-weight-bold">{{ item.nom }}</span></template>
+          <template #item.poste_libelle="{ item }">
+            <span class="text-medium-emphasis">{{ item.poste_libelle || '—' }}</span>
+          </template>
+        </v-data-table-server>
         <v-card-text class="text-caption text-medium-emphasis">
           Publier rend cette liste consultable publiquement (NOM · POSTNOM · PRÉNOM).
           Les candidats retenus ont déjà été notifiés individuellement.
@@ -120,5 +154,5 @@ onMounted(rechargerAppels)
 </template>
 
 <style scoped>
-.tableau-admin :deep(thead th), .tableau-admin thead th { background: #f4f5f9; font-weight: 700; color: #1a237e; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.tableau-admin :deep(thead th) { background: #f4f5f9; font-weight: 700 !important; color: #1a237e !important; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
 </style>

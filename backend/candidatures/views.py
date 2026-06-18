@@ -329,7 +329,8 @@ class DossierViewSet(viewsets.ModelViewSet):
     pagination_class = PaginationStandard
 
     # Champs autorisés au tri (allowlist : évite l'injection de champs arbitraires).
-    TRI_AUTORISE = {'id', 'code', 'nom', 'statut', 'cree_le', 'poste__libelle', 'appel__titre'}
+    TRI_AUTORISE = {'id', 'code', 'nom', 'postnom', 'prenom', 'statut', 'cree_le',
+                    'poste__libelle', 'appel__titre'}
 
     def get_serializer_class(self):
         # Liste = vue allégée (pas de N+1 sur pièces/complétude) ; détail et
@@ -894,12 +895,27 @@ class DossierViewSet(viewsets.ModelViewSet):
                 # étape distincte, on accepte les deux comme point de départ).
                 if dossier.statut not in (Dossier.Statut.DEPOSE, Dossier.Statut.EN_EXAMEN):
                     raise ValidationError("Ce dossier n'est plus en attente de validation.")
+                # Correction d'identité éventuelle : c'est ce NOM/POSTNOM/PRÉNOM
+                # qui sera publié dans la liste des retenus. Permet de retenir
+                # une personne hors liste (sans correspondance) avec un nom propre.
+                identite_modifiee = False
+                for champ in ('nom', 'postnom', 'prenom'):
+                    if champ in request.data:
+                        val = (request.data.get(champ) or '').strip()
+                        if champ in ('nom', 'prenom') and not val:
+                            raise ValidationError({champ: "Ce champ ne peut pas être vide."})
+                        if getattr(dossier, champ) != val:
+                            setattr(dossier, champ, val)
+                            identite_modifiee = True
                 eid = request.data.get('eligibilite_id')
                 if eid:
-                    ligne = get_object_or_404(ListeEligibilite, pk=eid)
-                    dossier.ligne_eligibilite = ligne
-                    dossier.save(update_fields=['ligne_eligibilite'])
+                    dossier.ligne_eligibilite = get_object_or_404(ListeEligibilite, pk=eid)
+                    identite_modifiee = True   # déclenche un save complet ci-dessous
+                if identite_modifiee:
+                    dossier.save()   # save() recalcule texte_recherche
                 elif not dossier.ligne_eligibilite_id:
+                    # Aucune correction ni correspondance choisie : rattachement
+                    # best-effort par nom exact (sinon on retient sans lien).
                     self._rattacher_par_nom(dossier)
                 # Passe par EN_EXAMEN seulement si on part de DÉPOSÉ (audit).
                 if dossier.statut == Dossier.Statut.DEPOSE:
