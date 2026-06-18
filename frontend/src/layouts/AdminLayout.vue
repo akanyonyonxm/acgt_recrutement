@@ -17,6 +17,7 @@ const NAV = computed(() => [
   { to: { name: 'reclamations' }, icon: 'mdi-account-alert-outline', t1: 'Réclamations', t2: "d'éligibilité" },
   { to: { name: 'appels' }, icon: 'mdi-bullhorn-outline', t1: 'Appels à', t2: 'candidature' },
   { to: { name: 'retenus' }, icon: 'mdi-trophy-outline', t1: 'Publication', t2: 'des retenus' },
+  { to: { name: 'admin-recours' }, icon: 'mdi-gavel', t1: 'Recours', t2: 'des candidats' },
   { to: { name: 'rapports' }, icon: 'mdi-chart-box-outline', t1: 'Rapports', t2: '& statistiques' },
   // Gestion des accès : visible uniquement pour les administrateurs.
   ...(auth.estAdmin
@@ -44,7 +45,7 @@ async function deconnexion() {
         </div>
       </div>
 
-      <v-list class="pa-0 flex-grow-1" nav density="comfortable">
+      <v-list class="pa-0 flex-grow-1 nav-scroll" nav density="comfortable">
         <v-list-item
           v-for="n in NAV"
           :key="n.t1"
@@ -109,6 +110,16 @@ async function deconnexion() {
   border: 1px solid rgba(255,255,255,0.2);
   display: flex; align-items: center; justify-content: center;
 }
+/* La liste défile si elle dépasse (min-height:0 requis pour un enfant flex). */
+.nav-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+.nav-scroll::-webkit-scrollbar { width: 6px; }
+.nav-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 3px; }
+.nav-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
 .nav-carre {
   border-bottom: 1px solid rgba(255,255,255,0.06);
   border-radius: 0 !important;

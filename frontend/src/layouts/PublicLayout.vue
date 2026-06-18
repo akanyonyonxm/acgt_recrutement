@@ -30,12 +30,13 @@ async function deconnexion() {
 
         <nav class="liens">
           <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" class="lien">Mes dossiers</RouterLink>
-          <RouterLink :to="{ name: 'guide' }" class="lien">Comment postuler ?</RouterLink>
+          <RouterLink v-if="appels.ouvertes" :to="{ name: 'guide' }" class="lien">Comment postuler ?</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" class="lien">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" class="lien">Candidats retenus</RouterLink>
         </nav>
 
         <div class="d-flex align-center ga-2">
+          <RouterLink :to="{ name: 'recours-public' }" class="btn-recours">Recours</RouterLink>
           <!-- Connecté : menu compte ; sinon : bouton Connexion -->
           <v-menu v-if="auth.estConnecte">
             <template #activator="{ props }">
@@ -66,9 +67,10 @@ async function deconnexion() {
       <transition name="fade">
         <nav v-if="drawer" class="liens-mobile">
           <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" @click="drawer = false">Mes dossiers</RouterLink>
-          <RouterLink :to="{ name: 'guide' }" @click="drawer = false">Comment postuler ?</RouterLink>
+          <RouterLink v-if="appels.ouvertes" :to="{ name: 'guide' }" @click="drawer = false">Comment postuler ?</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" @click="drawer = false">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" @click="drawer = false">Candidats retenus</RouterLink>
+          <RouterLink :to="{ name: 'recours-public' }" @click="drawer = false">Recours</RouterLink>
           <RouterLink v-if="!auth.estConnecte && appels.ouvertes" :to="{ name: 'reclamation' }" @click="drawer = false">Réclamation</RouterLink>
           <RouterLink v-if="!auth.estConnecte" :to="{ name: 'candidat-connexion' }" @click="drawer = false">Connexion</RouterLink>
           <a v-else @click="deconnexion(); drawer = false">Déconnexion</a>
@@ -106,6 +108,11 @@ async function deconnexion() {
   font-weight: 700; font-size: 0.9rem; text-decoration: none; transition: all 0.2s;
 }
 .btn-reclamation:hover { background: #fbc02d; box-shadow: 0 6px 16px rgba(253,216,53,0.45); }
+.btn-recours {
+  background: #E53935; color: #fff; padding: 8px 20px; border-radius: 9999px;
+  font-weight: 700; font-size: 0.9rem; text-decoration: none; transition: all 0.2s;
+}
+.btn-recours:hover { background: #c62828; box-shadow: 0 6px 16px rgba(229,57,53,0.45); }
 .compte { display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 9999px; transition: background 0.2s; }
 .compte:hover { background: #f5f2fb; }
 .compte-mail { font-size: 0.85rem; font-weight: 600; color: #1f2933; }

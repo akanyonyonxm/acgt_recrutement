@@ -833,3 +833,59 @@ class ControleCritere(models.Model):
 
     def __str__(self):
         return f'{self.libelle_snapshot} : {"oui" if self.rempli else "non"}'
+
+
+class Recours(models.Model):
+    """Recours d'un candidat qui se sent lésé (souvent absent de la liste des
+    retenus) alors qu'il a bien soumis un dossier ou une réclamation.
+
+    Le demandeur recherche son identité (nom/postnom/prénom) dans la base
+    (réclamations + dossiers soumis), reconnaît son enregistrement et y LIE son
+    recours, puis renseigne sa date de naissance (vérification avec sa pièce
+    d'identité), son email et son message. Traité dans un back-office dédié.
+    """
+
+    class Statut(models.TextChoices):
+        EN_ATTENTE = 'en_attente', 'En attente'
+        TRAITE = 'traite', 'Traité'
+
+    # Enregistrement existant reconnu par le demandeur : un dossier OU une
+    # réclamation (au moins l'un des deux). SET_NULL : si la source est purgée,
+    # le recours subsiste avec l'identité figée ci-dessous.
+    dossier = models.ForeignKey(
+        Dossier, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='recours', verbose_name='dossier lié',
+    )
+    reclamation = models.ForeignKey(
+        'ReclamationEligibilite', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='recours', verbose_name='réclamation liée',
+    )
+    # Identité figée (snapshot de la source) au moment du recours.
+    nom = models.CharField('nom', max_length=100)
+    postnom = models.CharField('postnom', max_length=100, blank=True)
+    prenom = models.CharField('prénom', max_length=100)
+    # Date de naissance déclarée : sert à VÉRIFIER l'identité du demandeur
+    # (recoupement avec sa pièce d'identité).
+    date_naissance = models.DateField('date de naissance')
+    email = models.EmailField('email de contact')
+    message = models.TextField('message')
+    statut = models.CharField(
+        'statut', max_length=20, choices=Statut.choices,
+        default=Statut.EN_ATTENTE, db_index=True,
+    )
+    reponse = models.TextField('réponse / note interne', blank=True)
+    traite_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='recours_traites',
+        verbose_name='traité par',
+    )
+    traite_le = models.DateTimeField('traité le', null=True, blank=True)
+    cree_le = models.DateTimeField('reçu le', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'recours'
+        verbose_name_plural = 'recours'
+        ordering = ['-cree_le']
+
+    def __str__(self):
+        return f'Recours {self.nom} {self.prenom} — {self.get_statut_display()}'

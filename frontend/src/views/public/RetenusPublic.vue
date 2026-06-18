@@ -101,15 +101,15 @@ onMounted(async () => {
         <div class="tableau-scroll">
           <table class="tableau">
             <thead>
-              <tr><th class="num">#</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>STATUT</th></tr>
+              <tr><th class="num">#</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th></tr>
             </thead>
             <tbody>
               <tr v-for="(e, i) in items" :key="e.id" :class="{ zebra: i % 2 }">
                 <td class="num">{{ debut + i }}</td>
-                <td class="nom">{{ e.nom }}</td>
-                <td class="muted">{{ e.postnom }}</td>
-                <td class="muted">{{ e.prenom }}</td>
-                <td><span class="chip-ret">Retenu</span></td>
+                <td class="nom-cell">{{ e.nom }}</td>
+                <td class="nom-cell">{{ e.postnom }}</td>
+                <td class="nom-cell">{{ e.prenom }}</td>
+                <td class="muted">{{ e.poste_libelle || '—' }}</td>
               </tr>
               <tr v-if="!loading && !items.length">
                 <td colspan="5" class="vide">Aucune liste de retenus publiée pour le moment.</td>
@@ -159,9 +159,8 @@ onMounted(async () => {
 .tableau tbody tr:hover { background: #f5f2fb; }
 .tableau tr.zebra { background: #fcfbff; }
 .num { width: 64px; color: #767683; font-weight: 600; }
-.nom { font-weight: 600; color: #1b1b21; }
+.nom-cell { font-weight: 600; color: #1b1b21; text-transform: uppercase; }
 .muted { color: #525f71; }
-.chip-ret { background: #e7f5ef; color: #166534; padding: 4px 12px; border-radius: 9999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .vide { text-align: center; color: #767683; padding: 32px; }
 
 .pagination { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; background: #f5f2fb; border-top: 1px solid #e4e1ea; flex-wrap: wrap; gap: 12px; }

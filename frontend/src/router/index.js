@@ -32,6 +32,11 @@ const routes = [
         name: 'reclamation',
         component: () => import('../views/public/Reclamation.vue'),
       },
+      {
+        path: 'recours',
+        name: 'recours-public',
+        component: () => import('../views/public/Recours.vue'),
+      },
     ],
   },
   {
@@ -111,6 +116,11 @@ const routes = [
         path: 'rapports',
         name: 'rapports',
         component: () => import('../views/admin/Rapports.vue'),
+      },
+      {
+        path: 'recours',
+        name: 'admin-recours',
+        component: () => import('../views/admin/RecoursAdmin.vue'),
       },
       {
         path: 'utilisateurs',

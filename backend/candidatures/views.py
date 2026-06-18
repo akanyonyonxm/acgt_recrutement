@@ -38,6 +38,7 @@ from .models import (
     PieceJointe,
     Poste,
     ReclamationEligibilite,
+    Recours,
     TypePiece,
 )
 from .pagination import PaginationPublique, PaginationStandard
@@ -60,6 +61,8 @@ from .serializers import (
     PosteSerializer,
     ReclamationAdminSerializer,
     ReclamationCreationSerializer,
+    RecoursAdminSerializer,
+    RecoursCreationSerializer,
     RetenuPubliqueSerializer,
     TypePieceSerializer,
 )
@@ -316,7 +319,7 @@ class RetenusViewSet(viewsets.ReadOnlyModelViewSet):
         qs = Dossier.objects.filter(
             statut=Dossier.Statut.RETENU,
             appel__liste_retenus_publiee=True,
-        )
+        ).select_related('poste')
         appel = self.request.query_params.get('appel')
         if appel:
             qs = qs.filter(appel_id=appel)
@@ -1014,6 +1017,10 @@ class DossierViewSet(viewsets.ModelViewSet):
         """
         dossier = self.get_object()
         if request.method == 'GET':
+            # Consultation des désignations : back-office ou évaluateur désigné.
+            # Jamais le candidat (ne doit pas connaître ses évaluateurs).
+            if not roles.acces_backoffice(request.user):
+                self._verifier_designe(dossier)
             return Response(
                 AffectationSerializer(dossier.affectations.all(), many=True).data
             )
@@ -1173,19 +1180,36 @@ class DossierViewSet(viewsets.ModelViewSet):
     def historique(self, request, pk=None):
         """Journal d'audit des changements de statut du dossier.
 
-        Pour le CANDIDAT, la transition de décision (vers retenu/non-retenu/
-        rejeté) et son motif restent masqués tant que les résultats de l'appel
-        ne sont pas publiés. Le back-office voit l'historique complet."""
+        - **Back-office** : historique COMPLET (toutes les étapes + auteurs).
+        - **Candidat** : vue épurée — uniquement le PREMIER statut
+          (Brouillon → Déposé) et la DÉCISION FINALE (retenu/non-retenu/rejeté)
+          avec son motif, et seulement une fois les résultats publiés. Jamais
+          les étapes intermédiaires, jamais les noms des utilisateurs."""
         dossier = self.get_object()
         qs = dossier.historique.all()
-        decision_masquee = (
-            not roles.acces_backoffice(request.user)
-            and dossier.statut in Dossier.STATUTS_TERMINAUX
-            and not dossier.appel.liste_retenus_publiee
+
+        if roles.acces_backoffice(request.user):
+            return Response(HistoriqueStatutSerializer(qs, many=True).data)
+
+        # Vue candidat : on ne retient que le 1er (dépôt) et la décision finale.
+        entrees = []
+        decision_publiee = (
+            dossier.statut in Dossier.STATUTS_TERMINAUX
+            and dossier.appel.liste_retenus_publiee
         )
-        if decision_masquee:
-            qs = qs.exclude(nouveau_statut__in=Dossier.STATUTS_TERMINAUX)
-        data = HistoriqueStatutSerializer(qs, many=True).data
+        if decision_publiee:
+            finale = (qs.filter(nouveau_statut__in=Dossier.STATUTS_TERMINAUX)
+                      .order_by('horodatage').last())
+            if finale:
+                entrees.append(finale)   # décision (la plus récente d'abord)
+        premier = (qs.filter(nouveau_statut=Dossier.Statut.DEPOSE)
+                   .order_by('horodatage').first())
+        if premier and premier not in entrees:
+            entrees.append(premier)
+
+        data = HistoriqueStatutSerializer(entrees, many=True).data
+        for d in data:
+            d['par'] = None   # jamais publier les noms des utilisateurs
         return Response(data)
 
     # --- Répartition de la charge entre agents --------------------------
@@ -2051,4 +2075,153 @@ class RapportsView(APIView):
                 'par_poste': [{'poste': p['poste'], 'n': p['retenus']}
                               for p in par_poste if p['retenus']],
             },
+        })
+
+
+class RecoursThrottle(AnonRateThrottle):
+    """Limite le formulaire public de recours (anti-spam)."""
+
+    scope = 'reclamation'
+
+
+class RecoursViewSet(viewsets.ModelViewSet):
+    """Recours d'une personne (après publication des résultats).
+
+    - **rechercher** : publique — par nom/postnom/prénom, renvoie distinctement
+      les correspondances dans les réclamations ET les dossiers soumis (pour
+      confirmer que la personne existe) ;
+    - **création** : publique (identité + date de naissance + email + message),
+      throttlée ;
+    - **liste / détail / traiter** : réservés au back-office.
+    """
+
+    pagination_class = PaginationStandard
+    parser_classes = [JSONParser]
+
+    # Champs autorisés au tri (allowlist).
+    TRI_AUTORISE = {'id', 'nom', 'statut', 'cree_le'}
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return RecoursCreationSerializer
+        return RecoursAdminSerializer
+
+    def get_permissions(self):
+        if self.action in ('create', 'rechercher'):
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get_throttles(self):
+        return [RecoursThrottle()] if self.action == 'create' else []
+
+    def get_queryset(self):
+        if not roles.acces_backoffice(self.request.user):
+            return Recours.objects.none()
+        qs = Recours.objects.select_related(
+            'traite_par', 'dossier', 'dossier__appel', 'dossier__poste',
+            'reclamation', 'reclamation__appel', 'reclamation__poste',
+        )
+        statut = self.request.query_params.get('statut')
+        if statut:
+            qs = qs.filter(statut=statut)
+        q = (self.request.query_params.get('q') or '').strip()
+        if q:
+            qs = qs.filter(
+                Q(nom__icontains=q) | Q(postnom__icontains=q)
+                | Q(prenom__icontains=q) | Q(email__icontains=q)
+            )
+        ordering = self.request.query_params.get('ordering', '')
+        if ordering.lstrip('-') in self.TRI_AUTORISE:
+            qs = qs.order_by(ordering)
+        else:
+            qs = qs.order_by('-cree_le')
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        """Dépôt public d'un recours (réponse neutre)."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            {'detail': "Votre recours a bien été enregistré. Il sera examiné par nos services."},
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=['get'])
+    def rechercher(self, request):
+        """Public : cherche une identité (nom/postnom/prénom) et renvoie
+        DISTINCTEMENT les correspondances dans les réclamations et dans les
+        dossiers soumis (hors brouillon), pour que le demandeur reconnaisse et
+        lie son enregistrement. Doublons (même identité) regroupés par source."""
+        tokens = tokens_recherche(request.query_params.get('q', ''))
+        if not tokens:
+            return Response({'dossiers': [], 'reclamations': []})
+        dossiers = (Dossier.objects
+                    .exclude(statut=Dossier.Statut.BROUILLON)
+                    .select_related('poste', 'appel'))
+        reclams = ReclamationEligibilite.objects.select_related('poste', 'appel')
+        for token in tokens:
+            dossiers = dossiers.filter(texte_recherche__contains=token)
+            reclams = reclams.filter(texte_recherche__contains=token)
+
+        def dedupe(qs, source_type):
+            """Une entrée par identité normalisée (le 1er enregistrement) :
+            évite d'afficher plusieurs fois la même personne dans une source."""
+            vus, out = set(), []
+            for o in qs.order_by('nom', 'postnom', 'prenom', 'id'):
+                cle = o.texte_recherche or f'{o.nom}|{o.postnom}|{o.prenom}'.lower()
+                if cle in vus:
+                    continue
+                vus.add(cle)
+                out.append({
+                    'type': source_type, 'id': o.id,
+                    'nom': o.nom, 'postnom': o.postnom, 'prenom': o.prenom,
+                    'poste': o.poste.libelle if o.poste else None,
+                    'appel': o.appel.titre,
+                })
+                if len(out) >= 25:
+                    break
+            return out
+
+        return Response({
+            'dossiers': dedupe(dossiers, 'dossier'),
+            'reclamations': dedupe(reclams, 'reclamation'),
+        })
+
+    @action(detail=True, methods=['post'])
+    def traiter(self, request, pk=None):
+        """Back-office : marque le recours comme traité (+ note interne)."""
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs, superviseurs et validateurs.")
+        recours = self.get_object()
+        recours.statut = Recours.Statut.TRAITE
+        recours.reponse = (request.data.get('reponse') or '').strip()
+        recours.traite_par = request.user
+        recours.traite_le = timezone.now()
+        recours.save(update_fields=['statut', 'reponse', 'traite_par', 'traite_le'])
+        return Response(RecoursAdminSerializer(recours).data)
+
+    @action(detail=True, methods=['post'], url_path='rouvrir')
+    def rouvrir(self, request, pk=None):
+        """Back-office : remet un recours traité en attente."""
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs, superviseurs et validateurs.")
+        recours = self.get_object()
+        recours.statut = Recours.Statut.EN_ATTENTE
+        recours.traite_par = None
+        recours.traite_le = None
+        recours.save(update_fields=['statut', 'traite_par', 'traite_le'])
+        return Response(RecoursAdminSerializer(recours).data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Compteurs par statut (pour les cartes KPI du back-office)."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        par_statut = {row['statut']: row['n']
+                      for row in Recours.objects.values('statut').annotate(n=Count('id'))}
+        return Response({
+            'total': sum(par_statut.values()),
+            'en_attente': par_statut.get(Recours.Statut.EN_ATTENTE, 0),
+            'traite': par_statut.get(Recours.Statut.TRAITE, 0),
         })

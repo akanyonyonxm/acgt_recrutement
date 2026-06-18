@@ -24,6 +24,7 @@ from .models import (
     PieceJointe,
     Poste,
     ReclamationEligibilite,
+    Recours,
     TypePiece,
 )
 
@@ -250,3 +251,15 @@ class ReclamationEligibiliteAdmin(admin.ModelAdmin):
         for obj in formset.deleted_objects:
             obj.delete()
         formset.save_m2m()
+
+
+@admin.register(Recours)
+class RecoursAdmin(admin.ModelAdmin):
+    """Recours — inspection technique (le traitement se fait dans Vue)."""
+
+    list_display = ('nom', 'postnom', 'prenom', 'statut', 'email', 'date_naissance',
+                    'cree_le', 'traite_par')
+    list_filter = ('statut', 'cree_le')
+    search_fields = ('nom', 'postnom', 'prenom', 'email')
+    readonly_fields = ('dossier', 'reclamation', 'nom', 'postnom', 'prenom',
+                       'date_naissance', 'email', 'message', 'cree_le')

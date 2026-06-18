@@ -16,6 +16,7 @@ from .models import (
     PieceJointe,
     Poste,
     ReclamationEligibilite,
+    Recours,
     TypePiece,
 )
 
@@ -57,11 +58,13 @@ class EligibilitePubliqueSerializer(serializers.ModelSerializer):
 
 
 class RetenuPubliqueSerializer(serializers.ModelSerializer):
-    """Vue publique d'une personne retenue : NOM · POSTNOM · PRÉNOM seulement."""
+    """Vue publique d'une personne retenue : NOM · POSTNOM · PRÉNOM · POSTE."""
+
+    poste_libelle = serializers.CharField(source='poste.libelle', read_only=True, default=None)
 
     class Meta:
         model = Dossier
-        fields = ['id', 'nom', 'postnom', 'prenom']
+        fields = ['id', 'nom', 'postnom', 'prenom', 'poste_libelle']
 
 
 class EligibiliteAdminSerializer(serializers.ModelSerializer):
@@ -136,12 +139,15 @@ class PieceJointeUploadSerializer(serializers.ModelSerializer):
 
 
 class MasquageDecisionMixin:
-    """Masque la décision finale (retenu / non-retenu / rejeté) au CANDIDAT
-    tant que les résultats de l'appel ne sont pas publiés.
+    """Masque l'état d'un dossier SOUMIS au CANDIDAT tant que les résultats de
+    l'appel ne sont pas publiés.
 
-    Le candidat voit alors « En cours de traitement » (présenté comme EN_EXAMEN).
-    Le personnel back-office (et les comptes techniques) voient le vrai statut.
-    À utiliser avec `statut` et `statut_libelle` déclarés en SerializerMethodField.
+    Tant que la liste n'est pas publiée, tout dossier soumis (déposé, en examen,
+    ou déjà décidé) est présenté au candidat comme « En cours de traitement »
+    (statut neutre EN_EXAMEN). Seul BROUILLON garde son état (le candidat le
+    construit encore). Une fois publiée, le vrai statut/décision s'affiche.
+    Le personnel back-office (et les comptes techniques) voient toujours le vrai
+    statut. À utiliser avec `statut` et `statut_libelle` en SerializerMethodField.
     """
 
     def _est_staff(self):
@@ -158,7 +164,8 @@ class MasquageDecisionMixin:
     def _decision_masquee(self, obj):
         if self._est_staff():
             return False
-        return (obj.statut in Dossier.STATUTS_TERMINAUX
+        # Tout sauf le brouillon est « en cours de traitement » jusqu'à publication.
+        return (obj.statut != Dossier.Statut.BROUILLON
                 and not obj.appel.liste_retenus_publiee)
 
     def get_statut(self, obj):
@@ -218,7 +225,23 @@ class DossierSerializer(MasquageDecisionMixin, serializers.ModelSerializer):
             'cree_le', 'modifie_le',
         ]
 
+    # Champs réservés au BACK-OFFICE : jamais exposés au candidat (nom de
+    # l'agent, rattachement/correspondances d'éligibilité, autres dossiers…).
+    CHAMPS_STAFF = (
+        'affecte_a', 'affecte_a_nom', 'ligne_eligibilite', 'suggestion_eligibilite',
+        'candidats_eligibilite', 'doublons',
+    )
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        if not self._est_staff():
+            for champ in self.CHAMPS_STAFF:
+                data.pop(champ, None)
+        return data
+
     def get_affecte_a_nom(self, obj):
+        if not self._est_staff():
+            return None
         u = obj.affecte_a
         return (u.get_full_name() or u.email) if u else None
 
@@ -232,6 +255,9 @@ class DossierSerializer(MasquageDecisionMixin, serializers.ModelSerializer):
         return [tp.libelle for tp in obj.pieces_obligatoires_manquantes()]
 
     def get_suggestion_eligibilite(self, obj):
+        # Réservé au back-office (et inutile au candidat).
+        if not self._est_staff():
+            return None
         # Suggestion uniquement si pas déjà rattaché et si le code saisi
         # correspond à UNE seule ligne (un code ambigu ne suggère rien).
         if obj.ligne_eligibilite_id or not (obj.code or '').strip():
@@ -251,6 +277,8 @@ class DossierSerializer(MasquageDecisionMixin, serializers.ModelSerializer):
         """Lignes de la liste correspondant au dossier (code OU un des noms),
         avec comparaison champ par champ. Triées par nombre de champs en commun.
         Calculé pour le détail uniquement (une seule ligne → une requête)."""
+        if not self._est_staff():
+            return []
         from functools import reduce
         import operator
         from django.db.models import Q
@@ -292,6 +320,8 @@ class DossierSerializer(MasquageDecisionMixin, serializers.ModelSerializer):
         (nom+postnom+prénom normalisé) = même personne probable. On n'utilise
         pas l'email (un proche peut déposer pour plusieurs personnes depuis la
         même adresse). Les brouillons sont ignorés."""
+        if not self._est_staff():
+            return []
         if not obj.texte_recherche:
             return []
         autres = (
@@ -353,12 +383,26 @@ class DossierListeSerializer(MasquageDecisionMixin, serializers.ModelSerializer)
     class Meta:
         model = Dossier
         fields = [
-            'id', 'code', 'appel', 'appel_titre', 'poste_libelle', 'nom', 'postnom', 'prenom',
+            'id', 'code', 'appel', 'appel_titre', 'poste_libelle',
+            'nom', 'postnom', 'prenom',
             'statut', 'statut_libelle', 'correspondance', 'a_doublon',
             'eligibilite_nom', 'affecte_a', 'affecte_a_nom', 'cree_le',
         ]
 
+    # Champs réservés au BACK-OFFICE : jamais exposés au candidat.
+    CHAMPS_STAFF = ('affecte_a', 'affecte_a_nom', 'eligibilite_nom',
+                    'correspondance', 'a_doublon')
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        if not self._est_staff():
+            for champ in self.CHAMPS_STAFF:
+                data.pop(champ, None)
+        return data
+
     def get_affecte_a_nom(self, obj):
+        if not self._est_staff():
+            return None
         u = obj.affecte_a
         return (u.get_full_name() or u.email) if u else None
 
@@ -372,6 +416,8 @@ class DossierListeSerializer(MasquageDecisionMixin, serializers.ModelSerializer)
                 + egal(ligne.prenom, obj.prenom))
 
     def get_eligibilite_nom(self, obj):
+        if not self._est_staff():
+            return None
         ligne = obj.ligne_eligibilite   # select_related dans get_queryset
         if ligne is not None:
             return {
@@ -603,3 +649,94 @@ class ReclamationAdminSerializer(serializers.ModelSerializer):
         if not u:
             return None
         return (u.get_full_name() or u.email)
+
+
+class RecoursCreationSerializer(serializers.ModelSerializer):
+    """Dépôt public d'un recours, LIÉ à un enregistrement existant.
+
+    Le demandeur fournit la source qu'il a reconnue (`source_type` =
+    dossier|reclamation, `source_id`) + date de naissance + email + message.
+    L'identité est figée depuis la source (jamais saisie librement)."""
+
+    source_type = serializers.ChoiceField(choices=['dossier', 'reclamation'], write_only=True)
+    source_id = serializers.IntegerField(write_only=True)
+    date_naissance = serializers.DateField(
+        required=True, allow_null=False,
+        error_messages={
+            'required': "La date de naissance est requise (vérification d'identité).",
+            'null': "La date de naissance est requise (vérification d'identité).",
+        },
+    )
+
+    class Meta:
+        model = Recours
+        fields = ['source_type', 'source_id', 'date_naissance', 'email', 'message']
+
+    def validate_message(self, message):
+        if not (message or '').strip():
+            raise serializers.ValidationError("Le message ne peut pas être vide.")
+        return message
+
+    def validate(self, data):
+        if data['source_type'] == 'dossier':
+            obj = (Dossier.objects
+                   .exclude(statut=Dossier.Statut.BROUILLON)
+                   .filter(pk=data['source_id']).first())
+        else:
+            obj = ReclamationEligibilite.objects.filter(pk=data['source_id']).first()
+        if not obj:
+            raise serializers.ValidationError(
+                {'source_id': "Enregistrement introuvable. Relancez la recherche."}
+            )
+        self.context['source_obj'] = obj
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop('source_type')
+        validated_data.pop('source_id')
+        obj = self.context['source_obj']
+        if isinstance(obj, Dossier):
+            validated_data['dossier'] = obj
+        else:
+            validated_data['reclamation'] = obj
+        validated_data['nom'] = obj.nom
+        validated_data['postnom'] = obj.postnom
+        validated_data['prenom'] = obj.prenom
+        return super().create(validated_data)
+
+
+class RecoursAdminSerializer(serializers.ModelSerializer):
+    """Vue back-office d'un recours (avec la source liée)."""
+
+    statut_libelle = serializers.CharField(source='get_statut_display', read_only=True)
+    traite_par = serializers.StringRelatedField(read_only=True)
+    source = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Recours
+        fields = [
+            'id', 'nom', 'postnom', 'prenom', 'date_naissance', 'email', 'message',
+            'source', 'statut', 'statut_libelle',
+            'reponse', 'traite_par', 'traite_le', 'cree_le',
+        ]
+        read_only_fields = ['nom', 'postnom', 'prenom', 'date_naissance', 'email',
+                            'message', 'cree_le']
+
+    def get_source(self, obj):
+        if obj.dossier_id:
+            d = obj.dossier
+            return {
+                'type': 'dossier', 'id': d.id,
+                'appel': d.appel.titre,
+                'poste': d.poste.libelle if d.poste else None,
+                'statut': d.get_statut_display(),
+            }
+        if obj.reclamation_id:
+            r = obj.reclamation
+            return {
+                'type': 'reclamation', 'id': r.id,
+                'appel': r.appel.titre,
+                'poste': r.poste.libelle if r.poste else None,
+                'statut': r.get_statut_display(),
+            }
+        return None

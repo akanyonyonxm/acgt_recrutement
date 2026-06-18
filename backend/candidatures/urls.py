@@ -9,6 +9,7 @@ from .views import (
     PosteViewSet,
     RapportsView,
     ReclamationViewSet,
+    RecoursViewSet,
     RetenusViewSet,
     TypePieceViewSet,
 )
@@ -21,6 +22,7 @@ router.register('retenus', RetenusViewSet, basename='retenu')
 router.register('appels', AppelCandidatureViewSet, basename='appel')
 router.register('dossiers', DossierViewSet, basename='dossier')
 router.register('reclamations', ReclamationViewSet, basename='reclamation')
+router.register('recours', RecoursViewSet, basename='recours')
 router.register('criteres', CritereValidationViewSet, basename='critere')
 
 urlpatterns = router.urls + [
