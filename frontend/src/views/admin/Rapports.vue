@@ -102,8 +102,9 @@ onMounted(async () => { await chargerAppels(); await charger() })
                     :description="`sur ${r.eligibles.total} au total`" color="#1a237e" />
         </v-col>
         <v-col cols="6" md="3">
-          <StatCard icon="mdi-folder-multiple" :value="r.dossiers.recus" label="Dossiers reçus"
-                    description="Soumis (hors brouillon)" color="#EF6C00" />
+          <StatCard icon="mdi-folder-multiple" :value="r.dossiers.recus_en_ligne" label="Déposés en ligne"
+                    :description="`+ ${r.dossiers.recus_reclamation} via réclamation = ${r.dossiers.recus} reçus`"
+                    color="#EF6C00" />
         </v-col>
         <v-col cols="6" md="3">
           <StatCard icon="mdi-account-alert-outline" :value="r.reclamations.total" label="Réclamations"

@@ -1978,6 +1978,12 @@ class RapportsView(APIView):
             for row in dossiers.values('statut').annotate(n=Count('id'))
         }
         soumis = dossiers.exclude(statut=Dossier.Statut.BROUILLON)  # « reçus »
+        # Distinguer les VRAIS dépôts en ligne des dossiers créés en validant
+        # une réclamation (qui ne sont pas des dépôts de candidats).
+        nb_soumis = soumis.count()
+        nb_soumis_reclam = soumis.filter(
+            Exists(ReclamationEligibilite.objects.filter(dossier_cree=OuterRef('pk')))
+        ).count()
         retenus_qs = dossiers.filter(statut=Dossier.Statut.RETENU)
         nb_ret = retenus_qs.count()
         nb_ret_reclam = retenus_qs.filter(
@@ -2017,7 +2023,9 @@ class RapportsView(APIView):
             'eligibles': eligibles,
             'dossiers': {
                 'total': sum(ds_par_statut.values()),
-                'recus': soumis.count(),
+                'recus': nb_soumis,
+                'recus_en_ligne': nb_soumis - nb_soumis_reclam,
+                'recus_reclamation': nb_soumis_reclam,
                 'par_statut': ds_par_statut,
                 'par_poste': par_poste,
             },
