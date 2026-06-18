@@ -1105,6 +1105,35 @@ class DossierViewSet(viewsets.ModelViewSet):
             motif_obligatoire=True, verif_validateur=True,
         )
 
+    @action(detail=True, methods=['post'])
+    def rouvrir(self, request, pk=None):
+        """Rouvre un dossier DÉCIDÉ (retenu / non-retenu / rejeté) → DÉPOSÉ, pour
+        correction (admin / superviseur).
+
+        Le dossier repasse dans la file « à valider » : l'agent peut alors
+        re-trancher (Valider / Rejeter) avec le bon statut et le bon motif, et
+        corriger l'identité si besoin. La réouverture est tracée dans
+        l'historique. Si le candidat le consultait, sa décision redevient
+        masquée (le dossier n'est plus décidé)."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        try:
+            with transaction.atomic():
+                dossier = Dossier.objects.select_for_update().get(pk=self.get_object().pk)
+                if dossier.statut not in Dossier.STATUTS_TERMINAUX:
+                    raise ValidationError("Ce dossier n'est pas décidé (déjà à traiter).")
+                ancien = dossier.statut
+                dossier.statut = Dossier.Statut.DEPOSE
+                dossier.save(update_fields=['statut', 'modifie_le'])
+                HistoriqueStatut.objects.create(
+                    dossier=dossier, ancien_statut=ancien,
+                    nouveau_statut=Dossier.Statut.DEPOSE, par=request.user,
+                    motif='Dossier rouvert pour correction',
+                )
+        except DjangoValidationError as exc:
+            raise ValidationError({'detail': exc.messages})
+        return Response(self.get_serializer(dossier).data)
+
     @action(detail=True, methods=['get'])
     def historique(self, request, pk=None):
         """Journal d'audit des changements de statut du dossier.

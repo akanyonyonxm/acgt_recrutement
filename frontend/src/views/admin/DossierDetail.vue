@@ -228,6 +228,25 @@ async function retirerAffectation(evId) {
   await chargerExamen()
 }
 
+// Dossier déjà décidé : un superviseur/admin peut le rouvrir pour corriger
+// (statut + motif + identité), il repasse « à valider ».
+const estDecide = computed(() => ['retenu', 'non_retenu', 'rejete'].includes(dossier.value?.statut))
+const enRouverture = ref(false)
+async function rouvrir() {
+  if (!confirm('Rouvrir ce dossier pour correction ? Il repassera « à valider » '
+    + 'et vous pourrez le re-trancher (statut, motif, nom).')) return
+  enRouverture.value = true
+  try {
+    await api.post(`/dossiers/${id.value}/rouvrir/`)
+    notifier('Dossier rouvert — vous pouvez le corriger et re-trancher.')
+    await charger()
+  } catch (e) {
+    notifier(e.response?.data?.detail || 'Réouverture impossible.', 'error')
+  } finally {
+    enRouverture.value = false
+  }
+}
+
 const ICONE_PIECE = {
   cv: 'mdi-file-account', identite: 'mdi-card-account-details',
   diplome: 'mdi-school', attestation_stage: 'mdi-certificate',
@@ -265,6 +284,10 @@ watch(() => route.params.id, (nouvel, ancien) => {
       <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-left"
              :to="{ name: 'validation' }">Retour</v-btn>
       <v-spacer />
+      <v-btn v-if="estDecide && auth.peutSuperviser" variant="outlined" color="primary" class="mr-2"
+             prepend-icon="mdi-lock-open-variant-outline" :loading="enRouverture" @click="rouvrir">
+        Rouvrir / corriger
+      </v-btn>
       <v-btn v-if="(peutTraiter || peutModifier) && dossier.statut === 'depose'" variant="tonal" color="warning"
              prepend-icon="mdi-content-duplicate" append-icon="mdi-arrow-right"
              :loading="enNav" @click="doublonSuivant">Doublon suivant</v-btn>
