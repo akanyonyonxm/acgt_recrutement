@@ -1976,11 +1976,13 @@ class RapportsView(APIView):
         }
 
         # --- Dossiers ---
+        # Les statistiques ne comptent PAS les brouillons (non soumis) : on se
+        # base uniquement sur les dossiers déposés (et au-delà).
+        soumis = dossiers.exclude(statut=Dossier.Statut.BROUILLON)  # « reçus »
         ds_par_statut = {
             row['statut']: row['n']
-            for row in dossiers.values('statut').annotate(n=Count('id'))
+            for row in soumis.values('statut').annotate(n=Count('id'))
         }
-        soumis = dossiers.exclude(statut=Dossier.Statut.BROUILLON)  # « reçus »
         # Distinguer les VRAIS dépôts en ligne des dossiers créés en validant
         # une réclamation (qui ne sont pas des dépôts de candidats).
         nb_soumis = soumis.count()
