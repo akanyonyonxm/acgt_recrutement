@@ -1648,7 +1648,10 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             reclamation.traite_par = request.user
             reclamation.traite_le = timezone.now()
             reclamation.dossier_cree = dossier
-            champs = ['statut', 'traite_par', 'traite_le', 'dossier_cree']
+            # Le poste choisi à la validation est aussi enregistré sur la
+            # réclamation (sinon « Poste souhaité » resterait vide).
+            reclamation.poste = poste
+            champs = ['statut', 'traite_par', 'traite_le', 'dossier_cree', 'poste']
             if derogation:
                 reclamation.motif = f'Validé par dérogation (critères non remplis) : {derogation}'
                 champs.append('motif')
