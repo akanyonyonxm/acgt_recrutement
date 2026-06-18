@@ -54,13 +54,16 @@ const q = ref(sauve.q ?? '')
 // un admin voit tout. '' = tous, 'moi', 'aucune', '<id>' (admin).
 const affecteParDefaut = (auth.estValidateur && !auth.estAdmin) ? 'moi' : ''
 const affecte = ref(sauve.affecte ?? affecteParDefaut)
+// Tri mémorisé (par utilisateur) : tableau Vuetify [{ key, order }].
+const tri = ref(Array.isArray(sauve.tri) ? sauve.tri : [])
 
-watch([statut, appel, eligibilite, doublons, q, affecte], () => {
+watch([statut, appel, eligibilite, doublons, q, affecte, tri], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, eligibilite: eligibilite.value,
     doublons: doublons.value, q: q.value, affecte: affecte.value,
+    tri: tri.value,
   }))
-})
+}, { deep: true })
 
 // Options du filtre « affecté à ».
 const optionsAffecte = computed(() => {
@@ -127,9 +130,12 @@ const TRI = {
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
 const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${affecte.value}|${q.value}`)
 
-async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
+async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
   chargement.value = true
   try {
+    // Le tableau pilote le tri : on mémorise son choix (persistance par user).
+    if (sortBy !== undefined) tri.value = sortBy
+    const s = tri.value && tri.value[0]
     const params = { page, page_size: itemsPerPage > 0 ? itemsPerPage : 25 }
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
@@ -137,8 +143,8 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy = [] } = {}) {
     if (doublons.value) params.doublons = 1
     if (affecte.value) params.affecte = affecte.value
     if (q.value) params.q = q.value
-    if (sortBy.length && TRI[sortBy[0].key]) {
-      params.ordering = (sortBy[0].order === 'desc' ? '-' : '') + TRI[sortBy[0].key]
+    if (s && TRI[s.key]) {
+      params.ordering = (s.order === 'desc' ? '-' : '') + TRI[s.key]
     }
     const { data } = await api.get('/dossiers/', { params })
     dossiers.value = data.results
@@ -329,6 +335,7 @@ onMounted(async () => {
         :items-length="total"
         :loading="chargement"
         :search="cle"
+        :sort-by="tri"
         :items-per-page="25"
         :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
         @update:options="charger"
