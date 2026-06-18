@@ -89,7 +89,7 @@ onMounted(async () => {
         <p class="hero-sous">
           Liste provisoire des candidats présélectionnés.
           Les candidats dont le nom n'apparaît pas et qui estiment remplir les critères
-          <mark class="surbrillance-claire">(âge maximum de 40 ans, niveau minimum requis de BAC&nbsp;+5, soumission des dossiers dans la période requise, domaines publiés)</mark>
+          <mark class="surbrillance-claire">(âge maximum de 40 ans, niveau minimum requis de BAC&nbsp;+5, soumission des dossiers dans la période requise, domaines de métier publiés)</mark>
           peuvent <strong>déposer leur recours <mark class="surbrillance">au plus tard le samedi 20 juin 2026 à 23h00</mark></strong>.
         </p>
       </div>
