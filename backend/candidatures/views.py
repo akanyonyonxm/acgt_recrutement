@@ -603,15 +603,21 @@ class DossierViewSet(viewsets.ModelViewSet):
             qs = qs.filter(appel_id=appel)
 
         par_statut = {row['statut']: row['n'] for row in qs.values('statut').annotate(n=Count('id'))}
-        # Origine : réclamation (créé en validant une réclamation) vs en ligne.
-        nb_reclam = qs.filter(
+        # Origine des RETENUS (validés) : issus d'une réclamation vs déposés en
+        # ligne (liste des éligibles). Comptes sur le statut RETENU uniquement.
+        retenus = qs.filter(statut=Dossier.Statut.RETENU)
+        nb_reclam_val = retenus.filter(
             Exists(ReclamationEligibilite.objects.filter(dossier_cree=OuterRef('pk')))
         ).count()
+        nb_retenu = retenus.count()
         total = sum(par_statut.values())
         return Response({
             'total': total,
             'par_statut': par_statut,
-            'par_origine': {'reclamation': nb_reclam, 'en_ligne': total - nb_reclam},
+            'par_origine': {
+                'reclamation': nb_reclam_val,
+                'en_ligne': nb_retenu - nb_reclam_val,
+            },
         })
 
     @action(detail=False, methods=['get'], url_path='stats-correspondance')

@@ -99,7 +99,6 @@ const KPIS = [
   { key: '', label: 'Total', desc: 'Tous les dossiers', icon: 'mdi-folder-multiple', color: '#1a237e' },
   { key: 'depose,en_examen', label: 'À valider', desc: 'En attente', icon: 'mdi-inbox-arrow-down', color: '#EF6C00' },
   { key: 'retenu', label: 'Retenus', desc: 'Candidats retenus', icon: 'mdi-check-circle', color: '#2E7D32' },
-  { key: 'non_retenu', label: 'Non retenus', desc: 'Écartés', icon: 'mdi-close-circle', color: '#C62828' },
   { key: 'rejete', label: 'Rejetés', desc: 'Refusés', icon: 'mdi-cancel', color: '#607D8B' },
 ]
 // Clé éventuellement composite (« depose,en_examen ») → somme des statuts.
@@ -107,13 +106,18 @@ const compte = (key) => (key === ''
   ? stats.value.total
   : key.split(',').reduce((n, k) => n + (stats.value.par_statut[k] || 0), 0))
 
-// Origine du dossier : réclamation (validé depuis une réclamation) vs en ligne.
+// Retenus (validés) par origine : issus d'une réclamation vs déposés en ligne.
 const ORIGINES = [
-  { key: 'reclamation', label: 'Réclamations', desc: 'Validées depuis une réclamation', icon: 'mdi-account-alert-outline', color: '#6A1B9A' },
-  { key: 'en_ligne', label: 'En ligne', desc: 'Déposées par un candidat', icon: 'mdi-web', color: '#00838F' },
+  { key: 'reclamation', label: 'Réclamations validées', desc: 'Retenus issus d\'une réclamation', icon: 'mdi-account-alert-outline', color: '#6A1B9A' },
+  { key: 'en_ligne', label: 'Éligibles validées', desc: 'Retenus déposés en ligne', icon: 'mdi-web', color: '#00838F' },
 ]
 const compteOrigine = (k) => stats.value.par_origine?.[k] || 0
-function filtrerOrigine(k) { origine.value = (origine.value === k ? '' : k) }
+// Carte « validées » : clic = retenus de cette origine (statut retenu + origine).
+const origineActive = (k) => origine.value === k && statut.value === 'retenu'
+function filtrerOrigine(k) {
+  if (origineActive(k)) { origine.value = ''; statut.value = 'depose,en_examen' }
+  else { origine.value = k; statut.value = 'retenu' }
+}
 
 const ENTETES = [
   { title: 'Code', key: 'code', width: 110 },
@@ -292,19 +296,15 @@ onMounted(async () => {
       </v-btn>
     </div>
 
-    <!-- KPI par statut -->
-    <v-row dense class="mb-3">
+    <!-- KPI : statut (filtre) puis origine (réclamation / en ligne), même rangée -->
+    <v-row dense class="mb-5">
       <v-col v-for="k in KPIS" :key="k.key" cols="6" sm="4" md="2">
         <StatCard :icon="k.icon" :value="compte(k.key)" :label="k.label" :description="k.desc"
                   :color="k.color" clickable :active="statut === k.key" @click="filtrer(k.key)" />
       </v-col>
-    </v-row>
-
-    <!-- KPI par origine (cliquables : filtrent réclamation vs en ligne) -->
-    <v-row dense class="mb-5">
-      <v-col v-for="o in ORIGINES" :key="o.key" cols="6" md="3">
+      <v-col v-for="o in ORIGINES" :key="o.key" cols="6" sm="4" md="2">
         <StatCard :icon="o.icon" :value="compteOrigine(o.key)" :label="o.label" :description="o.desc"
-                  :color="o.color" clickable :active="origine === o.key" @click="filtrerOrigine(o.key)" />
+                  :color="o.color" clickable :active="origineActive(o.key)" @click="filtrerOrigine(o.key)" />
       </v-col>
     </v-row>
 
