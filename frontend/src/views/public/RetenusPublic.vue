@@ -87,7 +87,10 @@ onMounted(async () => {
       <div class="hero-inner">
         <h1 class="hero-titre">Candidats retenus</h1>
         <p class="hero-sous">
-          Liste officielle des candidats retenus pour la suite du processus de recrutement.
+          Liste provisoire des candidats présélectionnés.
+          Les candidats dont le nom n'apparaît pas et qui estiment remplir les critères
+          <mark class="surbrillance-claire">(âge maximum de 40 ans, niveau minimum requis de BAC&nbsp;+5, soumission des dossiers dans la période requise, domaines publiés)</mark>
+          peuvent <strong>déposer leur recours <mark class="surbrillance">au plus tard le samedi 20 juin 2026 à 23h00</mark></strong>.
         </p>
       </div>
     </section>
@@ -156,7 +159,9 @@ onMounted(async () => {
 .hero-courbes { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
 .hero-inner { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; text-align: center; }
 .hero-titre { color: #fff; font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
-.hero-sous { color: #fff; opacity: 0.9; font-size: 1.05rem; line-height: 1.6; max-width: 560px; margin: 16px auto 0; }
+.hero-sous { color: #fff; opacity: 0.9; font-size: 1.05rem; line-height: 1.7; max-width: 680px; margin: 16px auto 0; }
+.surbrillance { background: #E53935; color: #fff; padding: 1px 8px; border-radius: 6px; font-weight: 800; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.surbrillance-claire { background: #fff; color: #1a237e; padding: 1px 7px; border-radius: 6px; font-weight: 700; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px 48px; }
 
