@@ -13,6 +13,7 @@ from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -934,6 +935,13 @@ class DossierViewSet(viewsets.ModelViewSet):
                         if getattr(dossier, champ) != val:
                             setattr(dossier, champ, val)
                             identite_modifiee = True
+                # Correction éventuelle du poste visé (mal renseigné).
+                if 'poste_id' in request.data:
+                    pid = request.data.get('poste_id')
+                    nouveau_poste = get_object_or_404(Poste, pk=pid) if pid else None
+                    if dossier.poste_id != (nouveau_poste.id if nouveau_poste else None):
+                        dossier.poste = nouveau_poste
+                        identite_modifiee = True
                 eid = request.data.get('eligibilite_id')
                 if eid:
                     dossier.ligne_eligibilite = get_object_or_404(ListeEligibilite, pk=eid)
@@ -1928,3 +1936,106 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             )
         except Exception:  # noqa: BLE001
             pass
+
+
+class RapportsView(APIView):
+    """Tableau de bord statistique (back-office) : éligibles, dossiers reçus,
+    réclamations, niveaux de traitement, retenus par poste/origine.
+
+    `?appel=<id>` restreint dossiers/réclamations à un appel (les éligibles
+    restent globaux). Lecture seule, réservé au back-office.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+
+        appel_id = request.query_params.get('appel')
+        dossiers = Dossier.objects.all()
+        reclamations = ReclamationEligibilite.objects.all()
+        appel_obj = None
+        if appel_id:
+            dossiers = dossiers.filter(appel_id=appel_id)
+            reclamations = reclamations.filter(appel_id=appel_id)
+            appel_obj = AppelCandidature.objects.filter(pk=appel_id).first()
+
+        # --- Éligibles (référentiel global, indépendant de l'appel) ---
+        elig = ListeEligibilite.objects.all()
+        eligibles = {
+            'total': elig.count(),
+            'publies': elig.filter(est_publie=True).count(),
+            'par_type': {
+                (row['type_eligibilite'] or 'autre'): row['n']
+                for row in elig.values('type_eligibilite').annotate(n=Count('id'))
+            },
+        }
+
+        # --- Dossiers ---
+        ds_par_statut = {
+            row['statut']: row['n']
+            for row in dossiers.values('statut').annotate(n=Count('id'))
+        }
+        soumis = dossiers.exclude(statut=Dossier.Statut.BROUILLON)  # « reçus »
+        retenus_qs = dossiers.filter(statut=Dossier.Statut.RETENU)
+        nb_ret = retenus_qs.count()
+        nb_ret_reclam = retenus_qs.filter(
+            Exists(ReclamationEligibilite.objects.filter(dossier_cree=OuterRef('pk')))
+        ).count()
+
+        par_poste = [
+            {
+                'poste': row['poste__libelle'] or 'Non précisé',
+                'recus': row['recus'], 'retenus': row['retenus'],
+            }
+            for row in soumis.values('poste__libelle').annotate(
+                recus=Count('id'),
+                retenus=Count('id', filter=Q(statut=Dossier.Statut.RETENU)),
+            ).order_by('-recus')
+        ]
+
+        # --- Réclamations ---
+        rec_par_statut = {
+            row['statut']: row['n']
+            for row in reclamations.values('statut').annotate(n=Count('id'))
+        }
+
+        # --- Niveaux de traitement ---
+        def g(d, k):
+            return d.get(k, 0)
+        ds_traite = (g(ds_par_statut, 'retenu') + g(ds_par_statut, 'non_retenu')
+                     + g(ds_par_statut, 'rejete'))
+        ds_attente = g(ds_par_statut, 'depose') + g(ds_par_statut, 'en_examen')
+        rec_traite = g(rec_par_statut, 'validee') + g(rec_par_statut, 'rejetee')
+        rec_attente = g(rec_par_statut, 'en_attente')
+
+        return Response({
+            'appel': ({'id': appel_obj.id, 'titre': appel_obj.titre,
+                       'liste_retenus_publiee': appel_obj.liste_retenus_publiee}
+                      if appel_obj else None),
+            'eligibles': eligibles,
+            'dossiers': {
+                'total': sum(ds_par_statut.values()),
+                'recus': soumis.count(),
+                'par_statut': ds_par_statut,
+                'par_poste': par_poste,
+            },
+            'reclamations': {
+                'total': sum(rec_par_statut.values()),
+                'par_statut': rec_par_statut,
+            },
+            'traitement': {
+                'dossiers': {'traite': ds_traite, 'en_attente': ds_attente,
+                             'total': ds_traite + ds_attente},
+                'reclamations': {'traite': rec_traite, 'en_attente': rec_attente,
+                                 'total': rec_traite + rec_attente},
+            },
+            'retenus': {
+                'total': nb_ret,
+                'par_origine': {'reclamation': nb_ret_reclam,
+                                'en_ligne': nb_ret - nb_ret_reclam},
+                'par_poste': [{'poste': p['poste'], 'n': p['retenus']}
+                              for p in par_poste if p['retenus']],
+            },
+        })

@@ -108,6 +108,11 @@ const routes = [
         component: () => import('../views/admin/Retenus.vue'),
       },
       {
+        path: 'rapports',
+        name: 'rapports',
+        component: () => import('../views/admin/Rapports.vue'),
+      },
+      {
         path: 'utilisateurs',
         name: 'utilisateurs',
         component: () => import('../views/admin/Utilisateurs.vue'),

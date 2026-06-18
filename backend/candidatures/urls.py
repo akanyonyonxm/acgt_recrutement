@@ -1,3 +1,4 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -6,6 +7,7 @@ from .views import (
     DossierViewSet,
     EligibiliteViewSet,
     PosteViewSet,
+    RapportsView,
     ReclamationViewSet,
     RetenusViewSet,
     TypePieceViewSet,
@@ -21,4 +23,6 @@ router.register('dossiers', DossierViewSet, basename='dossier')
 router.register('reclamations', ReclamationViewSet, basename='reclamation')
 router.register('criteres', CritereValidationViewSet, basename='critere')
 
-urlpatterns = router.urls
+urlpatterns = router.urls + [
+    path('rapports/', RapportsView.as_view(), name='rapports'),
+]

@@ -17,6 +17,7 @@ const NAV = computed(() => [
   { to: { name: 'reclamations' }, icon: 'mdi-account-alert-outline', t1: 'Réclamations', t2: "d'éligibilité" },
   { to: { name: 'appels' }, icon: 'mdi-bullhorn-outline', t1: 'Appels à', t2: 'candidature' },
   { to: { name: 'retenus' }, icon: 'mdi-trophy-outline', t1: 'Publication', t2: 'des retenus' },
+  { to: { name: 'rapports' }, icon: 'mdi-chart-box-outline', t1: 'Rapports', t2: '& statistiques' },
   // Gestion des accès : visible uniquement pour les administrateurs.
   ...(auth.estAdmin
     ? [{ to: { name: 'utilisateurs' }, icon: 'mdi-account-cog-outline', t1: 'Utilisateurs', t2: '& accès' }]

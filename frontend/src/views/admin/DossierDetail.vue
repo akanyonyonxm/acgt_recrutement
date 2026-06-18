@@ -111,6 +111,9 @@ const dialogNonRetenir = ref(false)
 const nomEdit = ref('')
 const postnomEdit = ref('')
 const prenomEdit = ref('')
+// Poste visé, corrigeable à la validation (s'il a été mal renseigné).
+const posteEdit = ref(null)
+const postes = ref([])
 
 const evaluateurs = ref([])
 const affectations = ref([])
@@ -161,6 +164,7 @@ async function charger() {
   nomEdit.value = data.nom
   postnomEdit.value = data.postnom || ''
   prenomEdit.value = data.prenom || ''
+  posteEdit.value = data.poste || null
   historique.value = (await api.get(`/dossiers/${id.value}/historique/`)).data
   if (['en_examen', 'retenu', 'non_retenu'].includes(data.statut)) await chargerExamen()
 }
@@ -204,6 +208,7 @@ function valider() {
     nom: nomEdit.value.trim(),
     postnom: postnomEdit.value.trim(),
     prenom: prenomEdit.value.trim(),
+    poste_id: posteEdit.value || '',
   })
 }
 const approuver = () => action('approuver', ligneChoisie.value ? { eligibilite_id: ligneChoisie.value } : {})
@@ -266,7 +271,12 @@ function naviguer(d) {
 }
 const dateFr = (d) => new Date(d).toLocaleString('fr-FR')
 const kos = (o) => `${Math.round(o / 1024)} Ko`
-onMounted(charger)
+onMounted(async () => {
+  try {
+    postes.value = (await api.get('/postes/')).data.results.map((p) => ({ value: p.id, title: p.libelle }))
+  } catch { /* non bloquant */ }
+  charger()
+})
 
 // Naviguer vers un doublon change l'id de route sans recréer le composant :
 // on réinitialise et on recharge le nouveau dossier.
@@ -523,6 +533,8 @@ watch(() => route.params.id, (nouvel, ancien) => {
                 <v-col cols="12" sm="4"><v-text-field v-model="postnomEdit" label="Postnom" density="compact" hide-details /></v-col>
                 <v-col cols="12" sm="4"><v-text-field v-model="prenomEdit" label="Prénom" density="compact" hide-details /></v-col>
               </v-row>
+              <v-select v-model="posteEdit" :items="postes" label="Poste visé (corrigeable)" clearable
+                        density="compact" hide-details class="mt-2" prepend-inner-icon="mdi-briefcase-outline" />
               <div class="text-caption text-medium-emphasis mt-1">
                 <template v-if="peutDecider">Rattaché à une personne de la liste (traçabilité).</template>
                 <template v-else>Validation <strong>sans correspondance</strong> : la personne est retenue avec ce nom.</template>
