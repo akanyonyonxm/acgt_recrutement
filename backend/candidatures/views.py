@@ -1316,7 +1316,20 @@ class ReclamationViewSet(viewsets.ModelViewSet):
         if q:
             for token in tokens_recherche(q):
                 qs = qs.filter(texte_recherche__contains=token)
+
+        # Tri demandé par le tableau (allowlist) ; sinon plus récentes d'abord.
+        ordering = self.request.query_params.get('ordering', '')
+        if ordering.lstrip('-') in self.TRI_AUTORISE:
+            qs = qs.order_by(ordering)
+        else:
+            qs = qs.order_by('-cree_le')
         return qs
+
+    # Champs autorisés au tri (allowlist : évite l'injection de champ arbitraire).
+    TRI_AUTORISE = {
+        'id', 'nom', 'email', 'statut', 'cree_le',
+        'appel__titre', 'affecte_a__first_name',
+    }
 
     # Documents attendus : accusé, CV, pièce d'identité (un chacun) + diplôme(s).
     DOCS_SIMPLES = [

@@ -38,13 +38,16 @@ const dossierDepose = ref(sauve.dossierDepose ?? false)
 // '<id>' = le lot d'un agent (admin seulement).
 const affecteParDefaut = (auth.estValidateur && !auth.estAdmin) ? 'moi' : ''
 const affecte = ref(sauve.affecte ?? affecteParDefaut)
+// Tri mémorisé (par utilisateur) : tableau Vuetify [{ key, order }].
+const tri = ref(Array.isArray(sauve.tri) ? sauve.tri : [])
 
-watch([statut, appel, q, dossierDepose, affecte], () => {
+watch([statut, appel, q, dossierDepose, affecte, tri], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, q: q.value,
     dossierDepose: dossierDepose.value, affecte: affecte.value,
+    tri: tri.value,
   }))
-})
+}, { deep: true })
 
 // Options du filtre « affecté à ».
 const optionsAffecte = computed(() => {
@@ -113,15 +116,20 @@ const COULEUR_DOSSIER = {
 }
 
 const ENTETES = [
-  { title: '#', key: 'id', width: 60, sortable: false },
-  { title: 'Personne', key: 'personne', sortable: false },
-  { title: 'Appel', key: 'appel_titre', sortable: false },
-  { title: 'Contact', key: 'email', sortable: false },
-  { title: 'Affecté à', key: 'affecte_a_nom', sortable: false },
-  { title: 'Statut', key: 'statut', sortable: false },
-  { title: 'Reçue le', key: 'cree_le', sortable: false },
+  { title: '#', key: 'id', width: 60 },
+  { title: 'Personne', key: 'personne' },
+  { title: 'Appel', key: 'appel_titre' },
+  { title: 'Contact', key: 'email' },
+  { title: 'Affecté à', key: 'affecte_a_nom' },
+  { title: 'Statut', key: 'statut' },
+  { title: 'Reçue le', key: 'cree_le' },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
+// Clé de colonne triée -> champ de tri côté API (allowlist backend).
+const TRI = {
+  id: 'id', personne: 'nom', appel_titre: 'appel__titre', email: 'email',
+  affecte_a_nom: 'affecte_a__first_name', statut: 'statut', cree_le: 'cree_le',
+}
 
 const notifier = (text, color = 'success') => (snack.value = { show: true, color, text })
 const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR')
@@ -148,15 +156,19 @@ async function chargerStats() {
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
 const cle = computed(() => `${statut.value}|${appel.value || ''}|${dossierDepose.value}|${affecte.value}|${q.value}`)
 
-async function charger({ page = 1, itemsPerPage = 25 } = {}) {
+async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
   chargement.value = true
   try {
+    // Le tableau pilote le tri : on mémorise son choix (persistance par user).
+    if (sortBy !== undefined) tri.value = sortBy
     const params = { page, page_size: itemsPerPage > 0 ? itemsPerPage : 25 }
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
     if (dossierDepose.value) params.dossier_depose = 1
     if (affecte.value) params.affecte = affecte.value
     if (q.value) params.q = q.value
+    const s = tri.value && tri.value[0]
+    if (s && TRI[s.key]) params.ordering = (s.order === 'desc' ? '-' : '') + TRI[s.key]
     const { data } = await api.get('/reclamations/', { params })
     reclamations.value = data.results
     total.value = data.count
@@ -425,7 +437,7 @@ onMounted(async () => {
     <v-card flat border>
       <v-data-table-server
         :headers="ENTETES" :items="reclamations" :items-length="total" :loading="chargement"
-        :search="cle" :items-per-page="25"
+        :search="cle" :items-per-page="25" :sort-by="tri"
         :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
         @update:options="charger" hover class="tableau-admin"
         no-data-text="Aucune réclamation dans cette catégorie." loading-text="Chargement…">
