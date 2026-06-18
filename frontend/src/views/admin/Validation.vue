@@ -54,14 +54,16 @@ const q = ref(sauve.q ?? '')
 // un admin voit tout. '' = tous, 'moi', 'aucune', '<id>' (admin).
 const affecteParDefaut = (auth.estValidateur && !auth.estAdmin) ? 'moi' : ''
 const affecte = ref(sauve.affecte ?? affecteParDefaut)
+// Origine : '' (toutes), 'reclamation', 'en_ligne'.
+const origine = ref(sauve.origine ?? '')
 // Tri mémorisé (par utilisateur) : tableau Vuetify [{ key, order }].
 const tri = ref(Array.isArray(sauve.tri) ? sauve.tri : [])
 
-watch([statut, appel, eligibilite, doublons, q, affecte, tri], () => {
+watch([statut, appel, eligibilite, doublons, q, affecte, origine, tri], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, eligibilite: eligibilite.value,
     doublons: doublons.value, q: q.value, affecte: affecte.value,
-    tri: tri.value,
+    origine: origine.value, tri: tri.value,
   }))
 }, { deep: true })
 
@@ -105,6 +107,14 @@ const compte = (key) => (key === ''
   ? stats.value.total
   : key.split(',').reduce((n, k) => n + (stats.value.par_statut[k] || 0), 0))
 
+// Origine du dossier : réclamation (validé depuis une réclamation) vs en ligne.
+const ORIGINES = [
+  { key: 'reclamation', label: 'Réclamations', desc: 'Validées depuis une réclamation', icon: 'mdi-account-alert-outline', color: '#6A1B9A' },
+  { key: 'en_ligne', label: 'En ligne', desc: 'Déposées par un candidat', icon: 'mdi-web', color: '#00838F' },
+]
+const compteOrigine = (k) => stats.value.par_origine?.[k] || 0
+function filtrerOrigine(k) { origine.value = (origine.value === k ? '' : k) }
+
 const ENTETES = [
   { title: 'Code', key: 'code', width: 110 },
   { title: 'Candidat', key: 'candidat', sortable: true },
@@ -128,7 +138,7 @@ const TRI = {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${affecte.value}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${affecte.value}|${origine.value}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
   chargement.value = true
@@ -142,6 +152,7 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
     if (eligibilite.value) params.correspondance = eligibilite.value
     if (doublons.value) params.doublons = 1
     if (affecte.value) params.affecte = affecte.value
+    if (origine.value) params.origine = origine.value
     if (q.value) params.q = q.value
     if (s && TRI[s.key]) {
       params.ordering = (s.order === 'desc' ? '-' : '') + TRI[s.key]
@@ -281,11 +292,19 @@ onMounted(async () => {
       </v-btn>
     </div>
 
-    <!-- KPI -->
-    <v-row dense class="mb-5">
+    <!-- KPI par statut -->
+    <v-row dense class="mb-3">
       <v-col v-for="k in KPIS" :key="k.key" cols="6" sm="4" md="2">
         <StatCard :icon="k.icon" :value="compte(k.key)" :label="k.label" :description="k.desc"
                   :color="k.color" clickable :active="statut === k.key" @click="filtrer(k.key)" />
+      </v-col>
+    </v-row>
+
+    <!-- KPI par origine (cliquables : filtrent réclamation vs en ligne) -->
+    <v-row dense class="mb-5">
+      <v-col v-for="o in ORIGINES" :key="o.key" cols="6" md="3">
+        <StatCard :icon="o.icon" :value="compteOrigine(o.key)" :label="o.label" :description="o.desc"
+                  :color="o.color" clickable :active="origine === o.key" @click="filtrerOrigine(o.key)" />
       </v-col>
     </v-row>
 

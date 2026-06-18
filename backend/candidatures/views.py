@@ -468,6 +468,10 @@ class DossierViewSet(viewsets.ModelViewSet):
             # dossiers (personnes différentes) depuis la même adresse. On
             # ignore les brouillons (non traités). Indicatif : l'admin tranche.
             a_doublon=self._doublon_exists(),
+            # Origine : True si le dossier a été créé en validant une réclamation.
+            est_reclamation=Exists(
+                ReclamationEligibilite.objects.filter(dossier_cree=OuterRef('pk'))
+            ),
         )
         user = self.request.user
         if roles.acces_backoffice(user):
@@ -492,6 +496,14 @@ class DossierViewSet(viewsets.ModelViewSet):
         # Filtres de liste (statut, appel, correspondance, doublons, recherche),
         # factorisés pour être réutilisés à l'identique par `repartir`.
         qs = self._filtrer_liste(qs, self.request.query_params)
+
+        # Filtre d'origine : réclamation (validée depuis une réclamation) vs
+        # candidature en ligne (déposée par un compte candidat).
+        origine = self.request.query_params.get('origine')
+        if origine == 'reclamation':
+            qs = qs.filter(est_reclamation=True)
+        elif origine == 'en_ligne':
+            qs = qs.filter(est_reclamation=False)
 
         # Tri demandé par le tableau (sinon : plus récents d'abord).
         ordering = self.request.query_params.get('ordering', '')
@@ -591,7 +603,16 @@ class DossierViewSet(viewsets.ModelViewSet):
             qs = qs.filter(appel_id=appel)
 
         par_statut = {row['statut']: row['n'] for row in qs.values('statut').annotate(n=Count('id'))}
-        return Response({'total': sum(par_statut.values()), 'par_statut': par_statut})
+        # Origine : réclamation (créé en validant une réclamation) vs en ligne.
+        nb_reclam = qs.filter(
+            Exists(ReclamationEligibilite.objects.filter(dossier_cree=OuterRef('pk')))
+        ).count()
+        total = sum(par_statut.values())
+        return Response({
+            'total': total,
+            'par_statut': par_statut,
+            'par_origine': {'reclamation': nb_reclam, 'en_ligne': total - nb_reclam},
+        })
 
     @action(detail=False, methods=['get'], url_path='stats-correspondance')
     def stats_correspondance(self, request):
