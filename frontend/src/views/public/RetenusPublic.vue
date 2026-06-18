@@ -4,6 +4,16 @@ import api from '../../api'
 
 const appels = ref([])
 const appelId = ref('')
+
+// Communiqué à afficher : celui de l'appel sélectionné, sinon le premier appel
+// publié qui en a un (cas « Tous les appels »).
+const messageActif = computed(() => {
+  if (appelId.value) {
+    const a = appels.value.find((x) => x.id === appelId.value)
+    return (a?.message_retenus || '').trim()
+  }
+  return (appels.value.find((x) => (x.message_retenus || '').trim())?.message_retenus || '').trim()
+})
 const items = ref([])
 const total = ref(0)
 const loading = ref(false)
@@ -83,8 +93,17 @@ onMounted(async () => {
     </section>
 
     <div class="wrap">
+      <!-- Communiqué officiel (éditable dans la console : champ « message public ») -->
+      <div v-if="messageActif" class="communique">
+        <div class="comm-entete">
+          <span class="comm-icone">📢</span>
+          <span>Communiqué</span>
+        </div>
+        <p class="comm-texte">{{ messageActif }}</p>
+      </div>
+
       <!-- Recherche flottante -->
-      <div class="recherche">
+      <div class="recherche" :class="{ 'rech-mt': messageActif }">
         <div class="rech-input">
           <span class="loupe">🔍</span>
           <input v-model="q" @input="rechercher" type="text" placeholder="Rechercher un nom…" />
@@ -140,6 +159,14 @@ onMounted(async () => {
 .hero-sous { color: #fff; opacity: 0.9; font-size: 1.05rem; line-height: 1.6; max-width: 560px; margin: 16px auto 0; }
 
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px 48px; }
+
+.communique { background: #fff; border: 1px solid #c6c5d4; border-left: 6px solid #1a237e; border-radius: 16px;
+  padding: 18px 22px; margin-top: -40px; position: relative; z-index: 10; box-shadow: 0 12px 30px rgba(26,35,126,0.12); }
+.comm-entete { display: flex; align-items: center; gap: 8px; font-weight: 800; color: #1a237e;
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.85rem; margin-bottom: 8px; }
+.comm-icone { font-size: 1.1rem; }
+.comm-texte { white-space: pre-line; color: #1f2933; line-height: 1.6; margin: 0; }
+.rech-mt { margin-top: 24px !important; }
 
 .recherche { background: #fff; border: 2px solid #29b6f6; border-radius: 18px; box-shadow: 0 12px 30px rgba(41,182,246,0.15);
   margin-top: -40px; position: relative; z-index: 10; padding: 22px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }

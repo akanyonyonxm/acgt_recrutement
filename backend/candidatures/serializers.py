@@ -564,8 +564,8 @@ class AppelCandidatureSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'titre', 'description', 'statut', 'statut_libelle',
             'date_ouverture', 'date_cloture', 'liste_retenus_publiee',
-            'candidature_unique', 'pieces_exigees', 'nb_dossiers',
-            'cree_le', 'modifie_le',
+            'message_retenus', 'candidature_unique', 'pieces_exigees',
+            'nb_dossiers', 'cree_le', 'modifie_le',
         ]
 
 

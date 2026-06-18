@@ -57,6 +57,11 @@ class AppelCandidature(models.Model):
     liste_retenus_publiee = models.BooleanField(
         'liste des retenus publiée', default=False,
     )
+    # Communiqué affiché en haut de la page publique des retenus (échéances de
+    # recours, critères, date de la liste définitive…). Vide = aucun bandeau.
+    message_retenus = models.TextField(
+        'message public (page des retenus)', blank=True,
+    )
     # Si True, un même compte ne peut déposer qu'un seul dossier pour cet appel.
     candidature_unique = models.BooleanField(
         'candidature unique par compte', default=False,
