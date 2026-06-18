@@ -1383,6 +1383,9 @@ class ReclamationViewSet(viewsets.ModelViewSet):
             qs = qs.filter(appel_id=appel)
         if self.request.query_params.get('dossier_depose') in ('1', 'true', 'oui'):
             qs = qs.filter(a_dossier_depose=True)
+        # Réclamations sans poste renseigné (à corriger).
+        if self.request.query_params.get('sans_poste') in ('1', 'true', 'oui'):
+            qs = qs.filter(poste__isnull=True)
         # Filtre d'affectation : « moi » = mon lot, « aucune » = non affectées,
         # un id = le lot d'un agent (pour l'admin qui supervise la répartition).
         affecte = self.request.query_params.get('affecte')

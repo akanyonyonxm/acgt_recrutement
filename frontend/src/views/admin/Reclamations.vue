@@ -33,6 +33,7 @@ const statut = ref(sauve.statut ?? 'en_attente')
 const appel = ref(sauve.appel ?? null)
 const q = ref(sauve.q ?? '')
 const dossierDepose = ref(sauve.dossierDepose ?? false)
+const sansPoste = ref(sauve.sansPoste ?? false)   // poste souhaité non renseigné
 // Filtre d'affectation. Un validateur (non admin) voit par défaut SON lot ;
 // un admin voit tout. '' = tous, 'moi' = mon lot, 'aucune' = non affectées,
 // '<id>' = le lot d'un agent (admin seulement).
@@ -41,11 +42,11 @@ const affecte = ref(sauve.affecte ?? affecteParDefaut)
 // Tri mémorisé (par utilisateur) : tableau Vuetify [{ key, order }].
 const tri = ref(Array.isArray(sauve.tri) ? sauve.tri : [])
 
-watch([statut, appel, q, dossierDepose, affecte, tri], () => {
+watch([statut, appel, q, dossierDepose, sansPoste, affecte, tri], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, q: q.value,
-    dossierDepose: dossierDepose.value, affecte: affecte.value,
-    tri: tri.value,
+    dossierDepose: dossierDepose.value, sansPoste: sansPoste.value,
+    affecte: affecte.value, tri: tri.value,
   }))
 }, { deep: true })
 
@@ -154,7 +155,7 @@ async function chargerStats() {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${dossierDepose.value}|${affecte.value}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${dossierDepose.value}|${sansPoste.value}|${affecte.value}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
   chargement.value = true
@@ -165,6 +166,7 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
     if (statut.value) params.statut = statut.value
     if (appel.value) params.appel = appel.value
     if (dossierDepose.value) params.dossier_depose = 1
+    if (sansPoste.value) params.sans_poste = 1
     if (affecte.value) params.affecte = affecte.value
     if (q.value) params.q = q.value
     const s = tri.value && tri.value[0]
@@ -418,6 +420,10 @@ onMounted(async () => {
       <v-btn :variant="dossierDepose ? 'flat' : 'outlined'" :color="dossierDepose ? 'deep-orange' : 'grey'"
              prepend-icon="mdi-folder-account-outline" @click="dossierDepose = !dossierDepose">
         A déjà un dossier
+      </v-btn>
+      <v-btn :variant="sansPoste ? 'flat' : 'outlined'" :color="sansPoste ? 'warning' : 'grey'"
+             prepend-icon="mdi-briefcase-off-outline" @click="sansPoste = !sansPoste">
+        Sans poste
       </v-btn>
       <v-btn v-if="auth.peutSuperviser" color="primary" variant="flat"
              prepend-icon="mdi-account-multiple-check-outline" @click="dialogRepartir = true">
