@@ -156,7 +156,8 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
     if (eligibilite.value) params.correspondance = eligibilite.value
     if (doublons.value) params.doublons = 1
     if (affecte.value) params.affecte = affecte.value
-    if (origine.value) params.origine = origine.value
+    // L'origine (réclamation / en ligne) ne filtre que les retenus.
+    if (origine.value && statut.value === 'retenu') params.origine = origine.value
     if (q.value) params.q = q.value
     if (s && TRI[s.key]) {
       params.ordering = (s.order === 'desc' ? '-' : '') + TRI[s.key]
@@ -208,9 +209,12 @@ function filtrerBarre(b) {
   statut.value = b.statut
   eligibilite.value = b.elig
   doublons.value = false
+  origine.value = ''   // l'origine ne s'applique qu'aux retenus
 }
 
-function filtrer(key) { statut.value = key }     // -> cle change -> tableau rechargé
+// Clic sur une carte de statut : on réinitialise l'origine (sous-filtre des
+// « validées par origine », réservé aux retenus) pour ne pas la cumuler.
+function filtrer(key) { statut.value = key; origine.value = '' }     // -> cle change -> tableau rechargé
 function changerAppel() { chargerStats(); chargerHisto() }   // le tableau se recharge via cle
 
 // Répartit le sous-ensemble FILTRÉ (statut + éligibilité + appel + doublons +
