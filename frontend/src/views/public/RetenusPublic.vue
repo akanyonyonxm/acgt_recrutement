@@ -41,6 +41,11 @@ function rechercher() {
 }
 function changerAppel() { page.value = 1; charger() }
 
+// Normalise les caractères Unicode « stylisés » (lettres mathématiques, pleine
+// largeur, ligatures…) en lettres normales pour un affichage homogène.
+// Ex. « 𝐅𝐥𝐨𝐫𝐲 » → « Flory ». N'altère pas les accents.
+const aff = (v) => (v || '').normalize('NFKC')
+
 const nbPages = computed(() => Math.max(1, Math.ceil(total.value / PAR_PAGE)))
 const debut = computed(() => (total.value === 0 ? 0 : (page.value - 1) * PAR_PAGE + 1))
 const fin = computed(() => Math.min(page.value * PAR_PAGE, total.value))
@@ -128,9 +133,9 @@ onMounted(async () => {
             <tbody>
               <tr v-for="(e, i) in items" :key="e.id" :class="{ zebra: i % 2 }">
                 <td class="num">{{ debut + i }}</td>
-                <td class="nom-cell">{{ e.nom }}</td>
-                <td class="nom-cell">{{ e.postnom }}</td>
-                <td class="nom-cell">{{ e.prenom }}</td>
+                <td class="nom-cell">{{ aff(e.nom) }}</td>
+                <td class="nom-cell">{{ aff(e.postnom) }}</td>
+                <td class="nom-cell">{{ aff(e.prenom) }}</td>
                 <td class="muted">{{ e.poste_libelle || '—' }}</td>
               </tr>
               <tr v-if="!loading && !items.length">
