@@ -18,6 +18,14 @@ const niveau = computed(() => ordre[dossier.value?.statut] ?? 0)
 const refuse = computed(() => ['non_retenu', 'rejete'].includes(dossier.value?.statut))
 const retenu = computed(() => dossier.value?.statut === 'retenu')
 
+// Le candidat ne voit que le PREMIER (Brouillon → Déposé) et le DERNIER statut
+// (décision finale) — jamais les étapes intermédiaires. L'historique arrive du
+// plus récent au plus ancien : on garde donc le 1er (décision) et le dernier (dépôt).
+const historiqueAffiche = computed(() => {
+  const h = historique.value
+  return h.length <= 2 ? h : [h[0], h[h.length - 1]]
+})
+
 const ICONE_PIECE = {
   cv: 'mdi-file-account', identite: 'mdi-card-account-details',
   diplome: 'mdi-school', attestation_stage: 'mdi-certificate',
@@ -87,7 +95,7 @@ const kos = (o) => (o > 1048576 ? (o / 1048576).toFixed(1) + ' Mo' : Math.round(
           <v-divider />
           <div class="pa-5">
             <v-timeline side="end" align="start" density="comfortable" truncate-line="both">
-              <v-timeline-item v-for="h in historique" :key="h.id" size="x-small" dot-color="primary">
+              <v-timeline-item v-for="h in historiqueAffiche" :key="h.id" size="x-small" dot-color="primary">
                 <div class="font-weight-medium">{{ h.ancien_statut_libelle }} → {{ h.nouveau_statut_libelle }}</div>
                 <div class="text-caption text-medium-emphasis">
                   {{ dateHeure(h.horodatage) }}<span v-if="h.motif"> · {{ h.motif }}</span>
