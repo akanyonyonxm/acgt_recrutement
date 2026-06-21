@@ -76,6 +76,7 @@ function filtrerStatut(s) { statut.value = statut.value === s ? '' : s }
 function ouvrir(r) {
   detail.value = r
   reponse.value = r.reponse || ''
+  modeEdition.value = false
   dialog.value = true
 }
 
@@ -110,6 +111,37 @@ async function rouvrir() {
 }
 
 const nomComplet = (r) => [r.nom, r.postnom, r.prenom].filter(Boolean).join(' ')
+
+// --- Édition d'un recours (identité, contact, message, date de réception) ---
+const modeEdition = ref(false)
+const edit = ref({})
+
+function ouvrirEdition() {
+  edit.value = {
+    nom: detail.value.nom, postnom: detail.value.postnom, prenom: detail.value.prenom,
+    date_naissance: detail.value.date_naissance,
+    email: detail.value.email, message: detail.value.message,
+    cree_le: (detail.value.cree_le || '').slice(0, 10),   // YYYY-MM-DD
+  }
+  modeEdition.value = true
+}
+
+async function enregistrer() {
+  enAction.value = true
+  try {
+    const { data } = await api.patch(`/recours/${detail.value.id}/`, edit.value)
+    Object.assign(detail.value, data)
+    notifier('Recours modifié.')
+    modeEdition.value = false
+    charger()
+  } catch (e) {
+    const d = e.response?.data
+    notifier(d?.detail || d?.nom?.[0] || d?.prenom?.[0] || d?.message?.[0]
+      || d?.cree_le?.[0] || 'Modification impossible.', 'error')
+  } finally {
+    enAction.value = false
+  }
+}
 
 onMounted(() => {})
 </script>
@@ -191,49 +223,81 @@ onMounted(() => {})
         </v-card-title>
         <v-divider />
         <v-card-text class="pa-4">
-          <div class="d-flex ga-4 mb-3 text-body-2 flex-wrap">
-            <span class="dn"><v-icon size="16">mdi-cake-variant-outline</v-icon> Né(e) le {{ dateFr(detail.date_naissance) }}</span>
-            <span v-if="detail.email"><v-icon size="16">mdi-email-outline</v-icon> {{ detail.email }}</span>
-            <span class="text-medium-emphasis">Reçu le {{ dateFr(detail.cree_le) }}</span>
-          </div>
-          <div class="mb-3">
-            <span class="text-caption text-medium-emphasis mr-2">Recours lié à :</span>
-            <template v-if="detail.source">
-              <v-chip size="small" :color="detail.source.type === 'reclamation' ? '#00838F' : 'primary'" variant="tonal">
-                {{ detail.source.type === 'reclamation' ? 'Réclamation' : 'Dossier' }} #{{ detail.source.id }}
-              </v-chip>
-              <span class="text-body-2 text-medium-emphasis ml-2">
-                {{ [detail.source.poste, detail.source.appel, detail.source.statut].filter(Boolean).join(' · ') }}
-              </span>
-            </template>
-            <span v-else class="text-medium-emphasis">source supprimée</span>
-          </div>
-          <v-alert type="info" variant="tonal" density="compact" class="mb-3" icon="mdi-card-account-details-outline">
-            Vérifiez la <strong>date de naissance</strong> ci-dessus avec la pièce d'identité du demandeur.
-          </v-alert>
-          <v-card variant="tonal" color="grey" class="pa-3 mb-4">
-            <div class="text-caption font-weight-bold mb-1">Message</div>
-            <div style="white-space: pre-wrap">{{ detail.message }}</div>
-          </v-card>
+          <!-- Mode ÉDITION -->
+          <template v-if="modeEdition">
+            <v-row dense>
+              <v-col cols="12" sm="4"><v-text-field v-model="edit.nom" label="Nom *" density="compact" variant="outlined" hide-details /></v-col>
+              <v-col cols="12" sm="4"><v-text-field v-model="edit.postnom" label="Postnom" density="compact" variant="outlined" hide-details /></v-col>
+              <v-col cols="12" sm="4"><v-text-field v-model="edit.prenom" label="Prénom *" density="compact" variant="outlined" hide-details /></v-col>
+            </v-row>
+            <v-row dense class="mt-1">
+              <v-col cols="12" sm="4"><v-text-field v-model="edit.date_naissance" label="Date de naissance" type="date" density="compact" variant="outlined" hide-details /></v-col>
+              <v-col cols="12" sm="4"><v-text-field v-model="edit.cree_le" label="Date de réception" type="date" density="compact" variant="outlined" hide-details /></v-col>
+              <v-col cols="12" sm="4"><v-text-field v-model="edit.email" label="Email" type="email" density="compact" variant="outlined" hide-details /></v-col>
+            </v-row>
+            <v-textarea v-model="edit.message" label="Message" rows="4" variant="outlined" hide-details class="mt-2" />
+          </template>
 
-          <v-textarea v-model="reponse" label="Réponse / note interne" rows="3" variant="outlined"
-                      :readonly="!auth.peutTraiter" hide-details />
-          <div v-if="detail.traite_par" class="text-caption text-medium-emphasis mt-2">
-            Traité par {{ detail.traite_par }} le {{ dateFr(detail.traite_le) }}
-          </div>
+          <!-- Mode LECTURE -->
+          <template v-else>
+            <div class="d-flex ga-4 mb-3 text-body-2 flex-wrap">
+              <span class="dn"><v-icon size="16">mdi-cake-variant-outline</v-icon> Né(e) le {{ dateFr(detail.date_naissance) }}</span>
+              <span v-if="detail.email"><v-icon size="16">mdi-email-outline</v-icon> {{ detail.email }}</span>
+              <span class="text-medium-emphasis">Reçu le {{ dateFr(detail.cree_le) }}</span>
+            </div>
+            <div class="mb-3">
+              <span class="text-caption text-medium-emphasis mr-2">Recours lié à :</span>
+              <template v-if="detail.source">
+                <v-chip size="small" :color="detail.source.type === 'reclamation' ? '#00838F' : 'primary'" variant="tonal">
+                  {{ detail.source.type === 'reclamation' ? 'Réclamation' : 'Dossier' }} #{{ detail.source.id }}
+                </v-chip>
+                <span class="text-body-2 text-medium-emphasis ml-2">
+                  {{ [detail.source.poste, detail.source.appel, detail.source.statut].filter(Boolean).join(' · ') }}
+                </span>
+              </template>
+              <span v-else class="text-medium-emphasis">source supprimée</span>
+            </div>
+            <v-alert type="info" variant="tonal" density="compact" class="mb-3" icon="mdi-card-account-details-outline">
+              Vérifiez la <strong>date de naissance</strong> ci-dessus avec la pièce d'identité du demandeur.
+            </v-alert>
+            <v-card variant="tonal" color="grey" class="pa-3 mb-4">
+              <div class="text-caption font-weight-bold mb-1">Message</div>
+              <div style="white-space: pre-wrap">{{ detail.message }}</div>
+            </v-card>
+
+            <v-textarea v-model="reponse" label="Réponse / note interne" rows="3" variant="outlined"
+                        :readonly="!auth.peutTraiter" hide-details />
+            <div v-if="detail.traite_par" class="text-caption text-medium-emphasis mt-2">
+              Traité par {{ detail.traite_par }} le {{ dateFr(detail.traite_le) }}
+            </div>
+          </template>
         </v-card-text>
         <v-divider />
         <v-card-actions class="pa-3">
-          <v-btn v-if="auth.peutTraiter && detail.statut === 'traite'" variant="text"
-                 prepend-icon="mdi-lock-open-variant-outline" :loading="enAction" @click="rouvrir">
-            Rouvrir
-          </v-btn>
-          <v-spacer />
-          <v-btn variant="text" @click="dialog = false">Fermer</v-btn>
-          <v-btn v-if="auth.peutTraiter && detail.statut !== 'traite'" color="primary" variant="flat"
-                 prepend-icon="mdi-check" :loading="enAction" @click="traiter">
-            Marquer traité
-          </v-btn>
+          <!-- Actions en mode édition -->
+          <template v-if="modeEdition">
+            <v-spacer />
+            <v-btn variant="text" @click="modeEdition = false">Annuler</v-btn>
+            <v-btn color="primary" variant="flat" prepend-icon="mdi-content-save" :loading="enAction" @click="enregistrer">
+              Enregistrer
+            </v-btn>
+          </template>
+          <!-- Actions en mode lecture -->
+          <template v-else>
+            <v-btn v-if="auth.peutTraiter" variant="text" prepend-icon="mdi-pencil" @click="ouvrirEdition">
+              Modifier
+            </v-btn>
+            <v-btn v-if="auth.peutTraiter && detail.statut === 'traite'" variant="text"
+                   prepend-icon="mdi-lock-open-variant-outline" :loading="enAction" @click="rouvrir">
+              Rouvrir
+            </v-btn>
+            <v-spacer />
+            <v-btn variant="text" @click="dialog = false">Fermer</v-btn>
+            <v-btn v-if="auth.peutTraiter && detail.statut !== 'traite'" color="primary" variant="flat"
+                   prepend-icon="mdi-check" :loading="enAction" @click="traiter">
+              Marquer traité
+            </v-btn>
+          </template>
         </v-card-actions>
       </v-card>
     </v-dialog>

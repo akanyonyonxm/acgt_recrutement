@@ -1,6 +1,12 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api, { initCsrf } from '../../api'
+import { useAppelsStore } from '../../stores/appels'
+
+const appels = useAppelsStore()
+onMounted(() => appels.charger())
+// Dépôt de recours clôturé (échéance passée) : on ferme la page.
+const recoursOuverts = computed(() => appels.recoursOuverts)
 
 // Étape 1 : rechercher son identité. Étape 2 : déposer le recours.
 const q = ref('')
@@ -85,7 +91,19 @@ const nomComplet = (p) => [p.nom, p.postnom, p.prenom].filter(Boolean).join(' ')
 
     <div class="wrap">
       <v-card flat border rounded="lg" class="carte pa-6 pa-md-8">
-        <div v-if="envoye" class="text-center py-6">
+        <!-- Recours clôturés (échéance passée) -->
+        <div v-if="!recoursOuverts" class="text-center py-6">
+          <v-icon color="grey" size="64" class="mb-3">mdi-lock-clock</v-icon>
+          <h2 class="text-h5 font-weight-bold text-primary mb-2">Dépôt des recours clôturé</h2>
+          <p class="text-body-1 text-medium-emphasis mb-6">
+            La période de dépôt des recours est terminée. Les recours reçus sont en cours de traitement par le comité.
+          </p>
+          <v-btn color="primary" variant="flat" :to="{ name: 'retenus-public' }" prepend-icon="mdi-arrow-left">
+            Retour à la liste des retenus
+          </v-btn>
+        </div>
+
+        <div v-else-if="envoye" class="text-center py-6">
           <v-icon color="success" size="64" class="mb-3">mdi-check-circle</v-icon>
           <h2 class="text-h5 font-weight-bold text-primary mb-2">Recours envoyé</h2>
           <p class="text-body-1 text-medium-emphasis mb-6">

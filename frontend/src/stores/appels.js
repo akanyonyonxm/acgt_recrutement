@@ -15,6 +15,14 @@ export const useAppelsStore = defineStore('appels', {
     ouvertes: (s) => s.appels.some((a) => a.statut === 'publie'),
     // Dernier appel (le plus récent ; /appels/ est trié par -cree_le).
     dernierAppel: (s) => s.appels[0] || null,
+    // Dépôt de recours ouvert : au moins un appel publié sans échéance ou dont
+    // l'échéance n'est pas passée. Sinon, recours clôturés.
+    recoursOuverts: (s) => {
+      const pub = s.appels.filter((a) => a.liste_retenus_publiee)
+      if (!pub.length) return false
+      const now = Date.now()
+      return pub.some((a) => !a.date_limite_recours || new Date(a.date_limite_recours).getTime() > now)
+    },
   },
   actions: {
     async charger({ force = false } = {}) {

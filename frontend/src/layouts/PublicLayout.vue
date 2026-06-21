@@ -36,7 +36,7 @@ async function deconnexion() {
         </nav>
 
         <div class="d-flex align-center ga-2">
-          <RouterLink :to="{ name: 'recours-public' }" class="btn-recours">Recours</RouterLink>
+          <RouterLink v-if="appels.recoursOuverts" :to="{ name: 'recours-public' }" class="btn-recours">Recours</RouterLink>
           <!-- Connecté : menu compte ; sinon : bouton Connexion -->
           <v-menu v-if="auth.estConnecte">
             <template #activator="{ props }">
@@ -70,7 +70,7 @@ async function deconnexion() {
           <RouterLink v-if="appels.ouvertes" :to="{ name: 'guide' }" @click="drawer = false">Comment postuler ?</RouterLink>
           <RouterLink :to="{ name: 'eligibles' }" @click="drawer = false">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" @click="drawer = false">Candidats retenus</RouterLink>
-          <RouterLink :to="{ name: 'recours-public' }" @click="drawer = false">Recours</RouterLink>
+          <RouterLink v-if="appels.recoursOuverts" :to="{ name: 'recours-public' }" @click="drawer = false">Recours</RouterLink>
           <RouterLink v-if="!auth.estConnecte && appels.ouvertes" :to="{ name: 'reclamation' }" @click="drawer = false">Réclamation</RouterLink>
           <RouterLink v-if="!auth.estConnecte" :to="{ name: 'candidat-connexion' }" @click="drawer = false">Connexion</RouterLink>
           <a v-else @click="deconnexion(); drawer = false">Déconnexion</a>

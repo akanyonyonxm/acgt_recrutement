@@ -564,8 +564,8 @@ class AppelCandidatureSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'titre', 'description', 'statut', 'statut_libelle',
             'date_ouverture', 'date_cloture', 'liste_retenus_publiee',
-            'message_retenus', 'candidature_unique', 'pieces_exigees',
-            'nb_dossiers', 'cree_le', 'modifie_le',
+            'message_retenus', 'date_limite_recours', 'candidature_unique',
+            'pieces_exigees', 'nb_dossiers', 'cree_le', 'modifie_le',
         ]
 
 
@@ -703,6 +703,33 @@ class RecoursCreationSerializer(serializers.ModelSerializer):
         validated_data['postnom'] = obj.postnom
         validated_data['prenom'] = obj.prenom
         return super().create(validated_data)
+
+
+class RecoursModificationSerializer(serializers.ModelSerializer):
+    """Édition d'un recours par le back-office : identité, contact, message et
+    date de réception (cree_le, normalement auto)."""
+
+    cree_le = serializers.DateTimeField(required=False)
+
+    class Meta:
+        model = Recours
+        fields = ['nom', 'postnom', 'prenom', 'date_naissance', 'email',
+                  'message', 'cree_le']
+
+    def validate_nom(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le nom est requis.")
+        return v.strip()
+
+    def validate_prenom(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le prénom est requis.")
+        return v.strip()
+
+    def validate_message(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le message ne peut pas être vide.")
+        return v
 
 
 class RecoursAdminSerializer(serializers.ModelSerializer):

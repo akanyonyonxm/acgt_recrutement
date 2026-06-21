@@ -63,6 +63,7 @@ from .serializers import (
     ReclamationCreationSerializer,
     RecoursAdminSerializer,
     RecoursCreationSerializer,
+    RecoursModificationSerializer,
     RetenuPubliqueSerializer,
     TypePieceSerializer,
 )
@@ -2104,12 +2105,23 @@ class RecoursViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return RecoursCreationSerializer
+        if self.action in ('update', 'partial_update'):
+            return RecoursModificationSerializer
         return RecoursAdminSerializer
 
     def get_permissions(self):
         if self.action in ('create', 'rechercher'):
             return [AllowAny()]
         return [IsAuthenticated()]
+
+    def update(self, request, *args, **kwargs):
+        # Édition d'un recours (identité, contact, message, date de réception) :
+        # réservée au back-office traitant.
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs, superviseurs et validateurs.")
+        response = super().update(request, *args, **kwargs)
+        # Renvoie la vue complète (source, statut…) après modification.
+        return Response(RecoursAdminSerializer(self.get_object()).data)
 
     def get_throttles(self):
         return [RecoursThrottle()] if self.action == 'create' else []
@@ -2139,6 +2151,10 @@ class RecoursViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Dépôt public d'un recours (réponse neutre)."""
+        if not AppelCandidature.recours_ouverts():
+            raise ValidationError(
+                {'detail': "Le dépôt des recours est clôturé."}
+            )
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()

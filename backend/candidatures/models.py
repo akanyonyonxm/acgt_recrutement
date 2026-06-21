@@ -62,6 +62,12 @@ class AppelCandidature(models.Model):
     message_retenus = models.TextField(
         'message public (page des retenus)', blank=True,
     )
+    # Date/heure limite pour déposer un recours. Passée cette échéance, le dépôt
+    # de recours est fermé (bouton masqué, soumission refusée) pour laisser le
+    # comité traiter. Vide = pas d'échéance (recours ouvert tant que publié).
+    date_limite_recours = models.DateTimeField(
+        'date limite des recours', null=True, blank=True,
+    )
     # Si True, un même compte ne peut déposer qu'un seul dossier pour cet appel.
     candidature_unique = models.BooleanField(
         'candidature unique par compte', default=False,
@@ -77,6 +83,19 @@ class AppelCandidature(models.Model):
 
     def __str__(self):
         return self.titre
+
+    @staticmethod
+    def recours_ouverts():
+        """Le dépôt de recours est-il ouvert (au moins un appel publié dont
+        l'échéance n'est pas passée — ou sans échéance) ? Sinon, recours clôturés."""
+        appels = AppelCandidature.objects.filter(liste_retenus_publiee=True)
+        if not appels.exists():
+            return False
+        maintenant = timezone.now()
+        return any(
+            a.date_limite_recours is None or a.date_limite_recours > maintenant
+            for a in appels
+        )
 
     @property
     def est_ouvert(self):
