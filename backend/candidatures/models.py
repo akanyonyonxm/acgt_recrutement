@@ -906,6 +906,14 @@ class Recours(models.Model):
         default=Statut.EN_ATTENTE, db_index=True,
     )
     reponse = models.TextField('réponse / note interne', blank=True)
+    # Agent (superviseur/validateur) chargé de traiter ce recours : permet de
+    # répartir et d'équilibrer la charge entre plusieurs agents, comme pour les
+    # dossiers et les réclamations. Un validateur ne tranche que son lot.
+    affecte_a = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='recours_affectes',
+        verbose_name='affecté à', db_index=True,
+    )
     traite_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='recours_traites',

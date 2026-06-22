@@ -1,10 +1,18 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import api from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import StatCard from '../../components/StatCard.vue'
 
 const auth = useAuthStore()
+const monId = computed(() => auth.utilisateur?.id)
+// Décision sur un recours précis : admin/superviseur toujours ; un validateur
+// seulement si le recours LUI est affecté (cohérent avec le contrôle serveur).
+function peutDecider(item) {
+  if (auth.peutSuperviser) return true
+  return auth.estValidateur && item?.affecte_a === monId.value
+}
+
 const STORAGE_FILTRES = `acgt_filtres_recours_${auth.utilisateur?.id ?? 'anon'}`
 const sauve = JSON.parse(localStorage.getItem(STORAGE_FILTRES) || '{}')
 
@@ -16,6 +24,35 @@ const stats = ref({ total: 0, en_attente: 0, valide: 0, rejete: 0 })
 const statut = ref(sauve.statut ?? '')
 const q = ref(sauve.q ?? '')
 const tri = ref(Array.isArray(sauve.tri) ? sauve.tri : [])
+// Filtre d'affectation. Un validateur (non admin/superviseur) voit son lot par
+// défaut. '' = tous, 'moi' = mon lot, 'aucune' = non affectés, '<id>' = lot d'un agent.
+const affecteParDefaut = (auth.estValidateur && !auth.peutSuperviser) ? 'moi' : ''
+const affecte = ref(sauve.affecte ?? affecteParDefaut)
+const agents = ref([])   // agents pouvant traiter (admin/superviseur/validateur)
+
+// Répartition de la charge (supervision)
+const dialogRepartir = ref(false)
+const agentsChoisis = ref([])
+const enRepartition = ref(false)
+const resultatRepartition = ref(null)
+const reequilibrer = ref(false)
+// Catégorie déjà décidée (validés / rejetés) : révision réservée aux superviseurs.
+const categorieDecidee = computed(() => !['', 'en_attente'].includes(statut.value))
+const agentsEligibles = computed(() => agents.value.filter((a) =>
+  categorieDecidee.value
+    ? (a.roles.includes('admin') || a.roles.includes('superviseur'))
+    : true))
+const optionsAffecte = computed(() => {
+  if (!auth.peutSuperviser) {
+    return [{ value: 'moi', title: 'Les miens' }, { value: '', title: 'Tous' }]
+  }
+  return [
+    { value: '', title: 'Tous les agents' },
+    { value: 'moi', title: 'Les miens' },
+    { value: 'aucune', title: 'Non affectés' },
+    ...agents.value.map((a) => ({ value: String(a.id), title: a.nom })),
+  ]
+})
 
 const detail = ref(null)
 const dialog = ref(false)
@@ -38,17 +75,18 @@ const headers = [
   { title: 'Né(e) le', key: 'date_naissance', sortable: false },
   { title: 'Email', key: 'email', sortable: false },
   { title: 'Lié à', key: 'source', sortable: false },
+  { title: 'Affecté à', key: 'affecte_a_nom', sortable: false },
   { title: 'Statut', key: 'statut' },
   { title: 'Reçu le', key: 'cree_le' },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
 const TRI = { nom: 'nom', statut: 'statut', cree_le: 'cree_le' }
 
-const cle = computed(() => `${statut.value}|${q.value}`)
+const cle = computed(() => `${statut.value}|${affecte.value}|${q.value}`)
 
 function memoriser() {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
-    statut: statut.value, q: q.value, tri: tri.value,
+    statut: statut.value, q: q.value, affecte: affecte.value, tri: tri.value,
   }))
 }
 
@@ -63,6 +101,7 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
     if (sortBy !== undefined) tri.value = sortBy
     const params = { page, page_size: itemsPerPage > 0 ? itemsPerPage : 25 }
     if (statut.value) params.statut = statut.value
+    if (affecte.value) params.affecte = affecte.value
     if (q.value) params.q = q.value
     const s = tri.value && tri.value[0]
     if (s && TRI[s.key]) params.ordering = (s.order === 'desc' ? '-' : '') + TRI[s.key]
@@ -190,6 +229,47 @@ async function enregistrer() {
     enAction.value = false
   }
 }
+
+// --- Répartition de la charge entre agents (supervision) ---
+async function repartir() {
+  if (!agentsChoisis.value.length) {
+    notifier('Sélectionnez au moins un agent.', 'error'); return
+  }
+  enRepartition.value = true
+  resultatRepartition.value = null
+  try {
+    const corps = {
+      agents: agentsChoisis.value,
+      seulement_non_affectes: !reequilibrer.value,
+    }
+    if (statut.value) corps.statut = statut.value
+    if (q.value) corps.q = q.value
+    const { data } = await api.post('/recours/repartir/', corps)
+    resultatRepartition.value = data
+    notifier(`${data.total_reparti} recours réparti(s).`)
+    charger()
+  } catch (e) {
+    notifier(e.response?.data?.agents || e.response?.data?.detail || 'Répartition impossible.', 'error')
+  } finally {
+    enRepartition.value = false
+  }
+}
+
+// Recharger quand le filtre d'affectation change (le tableau écoute `cle`).
+watch(affecte, () => memoriser())
+
+onMounted(async () => {
+  // Liste des agents pouvant traiter (pour répartir / filtrer) — supervision.
+  if (auth.peutSuperviser) {
+    try {
+      const { data } = await api.get('/auth/utilisateurs/')
+      agents.value = data
+        .filter((u) => u.roles.includes('admin') || u.roles.includes('superviseur')
+          || u.roles.includes('validateur'))
+        .map((u) => ({ id: u.id, nom: `${u.prenom} ${u.nom}`.trim() || u.email, roles: u.roles }))
+    } catch { /* non bloquant */ }
+  }
+})
 </script>
 
 <template>
@@ -198,6 +278,12 @@ async function enregistrer() {
       <v-icon color="primary" size="32">mdi-gavel</v-icon>
       <h1 class="text-h5 font-weight-bold text-primary mb-0">Recours</h1>
       <v-spacer />
+      <v-select v-model="affecte" :items="optionsAffecte" label="Affecté à" hide-details density="compact"
+                variant="outlined" style="max-width: 220px" />
+      <v-btn v-if="auth.peutSuperviser" color="primary" variant="tonal"
+             prepend-icon="mdi-account-multiple-check-outline" @click="dialogRepartir = true">
+        Répartir
+      </v-btn>
       <v-text-field v-model="q" placeholder="Rechercher (nom, email)…"
                     density="compact" variant="outlined" hide-details prepend-inner-icon="mdi-magnify"
                     style="max-width: 280px" clearable />
@@ -243,6 +329,12 @@ async function enregistrer() {
                   :color="item.source.type === 'reclamation' ? '#00838F' : 'primary'" variant="tonal">
             {{ item.source.type === 'reclamation' ? 'Réclamation' : 'Dossier' }} #{{ item.source.id }}
           </v-chip>
+          <span v-else class="text-medium-emphasis">—</span>
+        </template>
+        <template #[`item.affecte_a_nom`]="{ item }">
+          <v-chip v-if="item.affecte_a_nom" size="small" variant="tonal"
+                  :color="item.affecte_a === monId ? 'primary' : 'grey'"
+                  prepend-icon="mdi-account-outline">{{ item.affecte_a_nom }}</v-chip>
           <span v-else class="text-medium-emphasis">—</span>
         </template>
         <template #[`item.statut`]="{ item }">
@@ -297,6 +389,13 @@ async function enregistrer() {
                   <span v-if="detail.email"><v-icon size="16">mdi-email-outline</v-icon> {{ detail.email }}</span>
                 </div>
                 <div class="text-caption text-medium-emphasis mb-3">Reçu le {{ dateFr(detail.cree_le) }}</div>
+                <div class="mb-3">
+                  <span class="text-caption text-medium-emphasis mr-2">Affecté à :</span>
+                  <v-chip v-if="detail.affecte_a_nom" size="small" variant="tonal"
+                          :color="detail.affecte_a === monId ? 'primary' : 'grey'"
+                          prepend-icon="mdi-account-outline">{{ detail.affecte_a_nom }}</v-chip>
+                  <span v-else class="text-medium-emphasis">Non affecté</span>
+                </div>
                 <div class="mb-3">
                   <span class="text-caption text-medium-emphasis mr-2">Recours lié à :</span>
                   <template v-if="detail.source">
@@ -414,17 +513,21 @@ async function enregistrer() {
             <v-btn v-if="auth.estAdmin" variant="text" prepend-icon="mdi-pencil" @click="ouvrirEdition">
               Modifier
             </v-btn>
-            <v-btn v-if="auth.peutTraiter && detail.statut !== 'en_attente'" variant="text"
+            <v-btn v-if="auth.peutSuperviser && detail.statut !== 'en_attente'" variant="text"
                    prepend-icon="mdi-lock-open-variant-outline" :loading="enAction" @click="rouvrir">
               Rouvrir
             </v-btn>
             <v-spacer />
             <v-btn variant="text" @click="dialog = false">Fermer</v-btn>
-            <template v-if="auth.peutTraiter && detail.statut !== 'rejete'">
+            <!-- Décision : agent affecté (ou admin/superviseur) -->
+            <span v-if="auth.peutTraiter && !peutDecider(detail)" class="text-caption text-medium-emphasis mr-2">
+              Affecté à un autre agent
+            </span>
+            <template v-if="peutDecider(detail) && detail.statut !== 'rejete'">
               <v-btn color="error" variant="tonal" prepend-icon="mdi-close-circle-outline"
                      :loading="enAction" @click="demanderDecision('rejeter')">Rejeter</v-btn>
             </template>
-            <template v-if="auth.peutTraiter && detail.statut !== 'valide'">
+            <template v-if="peutDecider(detail) && detail.statut !== 'valide'">
               <v-btn color="success" variant="flat" prepend-icon="mdi-check-decagram-outline"
                      :loading="enAction" @click="demanderDecision('valider')">Valider</v-btn>
             </template>
@@ -488,6 +591,56 @@ async function enregistrer() {
         <v-card-text class="pa-0" style="height: 72vh">
           <iframe v-if="apercu.url" :src="apercu.url" title="Aperçu" class="apercu-frame" />
         </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <!-- Répartition de la charge entre agents (supervision) -->
+    <v-dialog v-model="dialogRepartir" max-width="560">
+      <v-card flat border rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 py-4">
+          <v-icon color="primary">mdi-account-multiple-check-outline</v-icon>
+          <span class="font-weight-bold">Répartir les recours</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text>
+          <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+            Catégorie répartie :
+            <strong>{{ statut === 'valide' ? 'Validés' : statut === 'rejete' ? 'Rejetés' : 'En attente' }}</strong>
+            <span v-if="q"> · recherche « {{ q }} »</span>.
+            Distribution <strong>équitable</strong> entre les agents.
+            <template v-if="reequilibrer"> <strong>Rééquilibrage</strong> : les déjà affectés sont aussi redistribués.</template>
+            <template v-else> Les déjà affectés ne sont pas touchés.</template>
+          </v-alert>
+          <v-alert v-if="categorieDecidee" type="warning" variant="tonal" density="compact" class="mb-3"
+                   icon="mdi-shield-account-outline">
+            Catégorie déjà décidée : seuls les <strong>superviseurs</strong> peuvent être affectés (révision).
+          </v-alert>
+          <v-switch v-model="reequilibrer" color="primary" density="compact" hide-details class="mb-1"
+                    label="Rééquilibrer (réaffecter aussi les déjà affectés)" />
+          <v-select v-model="agentsChoisis" :items="agentsEligibles" item-title="nom" item-value="id"
+                    label="Agents" multiple chips closable-chips
+                    prepend-inner-icon="mdi-account-group-outline"
+                    :hint="categorieDecidee ? 'Superviseurs uniquement pour cette catégorie.' : 'Agents qui traiteront ces recours.'"
+                    persistent-hint />
+
+          <div v-if="resultatRepartition" class="mt-4">
+            <v-divider class="mb-3" />
+            <div class="font-weight-bold mb-2">{{ resultatRepartition.total_reparti }} recours réparti(s) :</div>
+            <div v-for="p in resultatRepartition.par_agent" :key="p.agent_id"
+                 class="d-flex align-center justify-space-between py-1">
+              <span><v-icon size="18" class="mr-1">mdi-account</v-icon>{{ p.agent }}</span>
+              <v-chip size="small" color="primary" variant="tonal">{{ p.attribues }}</v-chip>
+            </div>
+          </div>
+        </v-card-text>
+        <v-card-actions class="px-4 pb-4">
+          <v-btn variant="text" @click="dialogRepartir = false">Fermer</v-btn>
+          <v-spacer />
+          <v-btn color="primary" variant="flat" :loading="enRepartition"
+                 :disabled="!agentsChoisis.length" @click="repartir">
+            Répartir maintenant
+          </v-btn>
+        </v-card-actions>
       </v-card>
     </v-dialog>
 

@@ -738,16 +738,24 @@ class RecoursAdminSerializer(serializers.ModelSerializer):
     statut_libelle = serializers.CharField(source='get_statut_display', read_only=True)
     traite_par = serializers.StringRelatedField(read_only=True)
     source = serializers.SerializerMethodField()
+    affecte_a = serializers.PrimaryKeyRelatedField(read_only=True)
+    affecte_a_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Recours
         fields = [
             'id', 'nom', 'postnom', 'prenom', 'date_naissance', 'email', 'message',
-            'source', 'statut', 'statut_libelle',
+            'source', 'statut', 'statut_libelle', 'affecte_a', 'affecte_a_nom',
             'reponse', 'traite_par', 'traite_le', 'cree_le',
         ]
         read_only_fields = ['nom', 'postnom', 'prenom', 'date_naissance', 'email',
                             'message', 'cree_le']
+
+    def get_affecte_a_nom(self, obj):
+        u = obj.affecte_a
+        if not u:
+            return ''
+        return (u.get_full_name() or u.email)
 
     def get_source(self, obj):
         if obj.dossier_id:

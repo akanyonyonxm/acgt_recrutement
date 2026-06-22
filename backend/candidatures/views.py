@@ -2130,12 +2130,21 @@ class RecoursViewSet(viewsets.ModelViewSet):
         if not roles.acces_backoffice(self.request.user):
             return Recours.objects.none()
         qs = Recours.objects.select_related(
-            'traite_par', 'dossier', 'dossier__appel', 'dossier__poste',
+            'traite_par', 'affecte_a', 'dossier', 'dossier__appel', 'dossier__poste',
             'reclamation', 'reclamation__appel', 'reclamation__poste',
         )
         statut = self.request.query_params.get('statut')
         if statut:
             qs = qs.filter(statut=statut)
+        # Filtre d'affectation : « moi » = mon lot, « aucune » = non affectés,
+        # un id = le lot d'un agent (pour la supervision de la répartition).
+        affecte = self.request.query_params.get('affecte')
+        if affecte == 'moi':
+            qs = qs.filter(affecte_a=self.request.user)
+        elif affecte == 'aucune':
+            qs = qs.filter(affecte_a__isnull=True)
+        elif affecte and affecte.isdigit():
+            qs = qs.filter(affecte_a_id=int(affecte))
         q = (self.request.query_params.get('q') or '').strip()
         if q:
             qs = qs.filter(
@@ -2209,9 +2218,11 @@ class RecoursViewSet(viewsets.ModelViewSet):
         a décidé et quand. La décision reste INTERNE : elle n'actualise pas la
         liste publique des retenus ni le statut du dossier (la publication
         définitive est une étape ultérieure distincte)."""
+        recours = self.get_object()
         if not roles.peut_traiter(request.user):
             raise PermissionDenied("Réservé aux administrateurs, superviseurs et validateurs.")
-        recours = self.get_object()
+        if not roles.peut_decider_affecte(request.user, recours.affecte_a_id):
+            raise PermissionDenied("Ce recours est affecté à un autre agent.")
         recours.statut = statut_cible
         reponse = request.data.get('reponse')
         if reponse is not None:
@@ -2338,3 +2349,99 @@ class RecoursViewSet(viewsets.ModelViewSet):
                        + par_statut.get(Recours.Statut.TRAITE, 0)),
             'rejete': par_statut.get(Recours.Statut.REJETE, 0),
         })
+
+    @action(detail=False, methods=['post'])
+    def repartir(self, request):
+        """Répartit équitablement des recours entre des agents (supervision).
+
+        Corps : {agents: [id, …], statut?, q?, seulement_non_affectes?}.
+        - `statut` : la catégorie filtrée à répartir (défaut : en attente). On
+          peut aussi répartir des recours DÉCIDÉS (validés/rejetés) pour révision.
+        - `seulement_non_affectes` (défaut True) : à False = RÉÉQUILIBRAGE
+          (réaffecte aussi les déjà affectés pour équilibrer la charge).
+
+        Éligibilité des agents : « en attente » → agents de traitement
+        (validateur/superviseur) ; catégorie DÉJÀ DÉCIDÉE → seuls les
+        SUPERVISEURS (révision). Round-robin (parts égales ±1). Additif."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        agent_ids = request.data.get('agents') or []
+        if not isinstance(agent_ids, list) or not agent_ids:
+            raise ValidationError({'agents': "Sélectionnez au moins un agent."})
+
+        statuts = [s for s in str(request.data.get('statut') or '').split(',') if s]
+        if not statuts:
+            statuts = [Recours.Statut.EN_ATTENTE]
+        cible_decidee = any(s != Recours.Statut.EN_ATTENTE for s in statuts)
+        eligible = roles.peut_superviser if cible_decidee else roles.peut_traiter
+
+        trouves = {u.id: u for u in User.objects.filter(id__in=agent_ids, is_active=True)}
+        agents = [trouves[i] for i in agent_ids if i in trouves and eligible(trouves[i])]
+        if not agents:
+            raise ValidationError({'agents': (
+                "Pour une catégorie déjà décidée (validés / rejetés), seuls des "
+                "superviseurs peuvent être affectés." if cible_decidee else
+                "Aucun agent valide (validateur ou superviseur actif).")})
+
+        qs = Recours.objects.filter(statut__in=statuts)
+        q = (request.data.get('q') or '').strip()
+        if q:
+            qs = qs.filter(
+                Q(nom__icontains=q) | Q(postnom__icontains=q)
+                | Q(prenom__icontains=q) | Q(email__icontains=q)
+            )
+        if request.data.get('seulement_non_affectes', True):
+            qs = qs.filter(affecte_a__isnull=True)
+        ids = list(qs.order_by('cree_le').values_list('id', flat=True))
+
+        par_agent = {u.id: [] for u in agents}
+        for i, rid in enumerate(ids):
+            par_agent[agents[i % len(agents)].id].append(rid)
+
+        with transaction.atomic():
+            for u in agents:
+                lot = par_agent[u.id]
+                if lot:
+                    Recours.objects.filter(id__in=lot).update(affecte_a=u)
+
+        return Response({
+            'total_reparti': len(ids),
+            'par_agent': [
+                {'agent_id': u.id, 'agent': (u.get_full_name() or u.email),
+                 'attribues': len(par_agent[u.id])}
+                for u in agents
+            ],
+        })
+
+    @action(detail=False, methods=['get'])
+    def repartition(self, request):
+        """Charge par agent : total affecté, en attente, traités (back-office)."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        lignes = (
+            Recours.objects
+            .filter(affecte_a__isnull=False)
+            .values('affecte_a_id', 'affecte_a__first_name',
+                    'affecte_a__last_name', 'affecte_a__email')
+            .annotate(
+                total=Count('id'),
+                en_attente=Count('id', filter=Q(statut=Recours.Statut.EN_ATTENTE)),
+            )
+            .order_by('affecte_a__first_name', 'affecte_a__last_name')
+        )
+        resultat = []
+        for l in lignes:
+            nom = f"{l['affecte_a__first_name']} {l['affecte_a__last_name']}".strip()
+            resultat.append({
+                'agent_id': l['affecte_a_id'],
+                'agent': nom or l['affecte_a__email'],
+                'total': l['total'],
+                'en_attente': l['en_attente'],
+                'traites': l['total'] - l['en_attente'],
+            })
+        non_affectes = (
+            Recours.objects
+            .filter(affecte_a__isnull=True, statut=Recours.Statut.EN_ATTENTE)
+            .count()
+        )
+        return Response({'par_agent': resultat, 'non_affectes': non_affectes})
