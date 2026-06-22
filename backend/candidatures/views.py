@@ -2046,6 +2046,27 @@ class RapportsView(APIView):
         rec_traite = g(rec_par_statut, 'validee') + g(rec_par_statut, 'rejetee')
         rec_attente = g(rec_par_statut, 'en_attente')
 
+        # --- Recours ---
+        # Rattachés à l'appel via leur source (dossier OU réclamation).
+        recours_qs = Recours.objects.all()
+        if appel_id:
+            recours_qs = recours_qs.filter(
+                Q(dossier__appel_id=appel_id) | Q(reclamation__appel_id=appel_id)
+            )
+        rc_par_statut = {
+            row['statut']: row['n']
+            for row in recours_qs.values('statut').annotate(n=Count('id'))
+        }
+        # « Traité » legacy compté avec les validés (cf. stats recours).
+        rc_valide = g(rc_par_statut, 'valide') + g(rc_par_statut, 'traite')
+        rc_rejete = g(rc_par_statut, 'rejete')
+        rc_attente = g(rc_par_statut, 'en_attente')
+        rc_total = rc_valide + rc_rejete + rc_attente
+        rc_par_source = {
+            'dossier': recours_qs.filter(dossier__isnull=False).count(),
+            'reclamation': recours_qs.filter(reclamation__isnull=False).count(),
+        }
+
         return Response({
             'appel': ({'id': appel_obj.id, 'titre': appel_obj.titre,
                        'liste_retenus_publiee': appel_obj.liste_retenus_publiee}
@@ -2063,11 +2084,20 @@ class RapportsView(APIView):
                 'total': sum(rec_par_statut.values()),
                 'par_statut': rec_par_statut,
             },
+            'recours': {
+                'total': rc_total,
+                'en_attente': rc_attente,
+                'valide': rc_valide,
+                'rejete': rc_rejete,
+                'par_source': rc_par_source,
+            },
             'traitement': {
                 'dossiers': {'traite': ds_traite, 'en_attente': ds_attente,
                              'total': ds_traite + ds_attente},
                 'reclamations': {'traite': rec_traite, 'en_attente': rec_attente,
                                  'total': rec_traite + rec_attente},
+                'recours': {'traite': rc_valide + rc_rejete, 'en_attente': rc_attente,
+                            'total': rc_total},
             },
             'retenus': {
                 'total': nb_ret,

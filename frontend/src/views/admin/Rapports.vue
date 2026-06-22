@@ -72,8 +72,19 @@ const segOrigine = computed(() => {
 })
 const totalRetenus = computed(() => r.value?.retenus?.total || 0)
 
+const segRecours = computed(() => {
+  const rc = r.value?.recours || {}
+  return [
+    { key: 'en_attente', label: 'En attente', color: '#EF6C00', value: rc.en_attente || 0 },
+    { key: 'valide', label: 'Validé', color: '#2E7D32', value: rc.valide || 0 },
+    { key: 'rejete', label: 'Rejeté', color: '#C62828', value: rc.rejete || 0 },
+  ].filter((s) => s.value > 0)
+})
+const totalRecours = computed(() => r.value?.recours?.total || 0)
+
 const trDossiers = computed(() => r.value?.traitement?.dossiers || { traite: 0, en_attente: 0, total: 0 })
 const trReclam = computed(() => r.value?.traitement?.reclamations || { traite: 0, en_attente: 0, total: 0 })
+const trRecours = computed(() => r.value?.traitement?.recours || { traite: 0, en_attente: 0, total: 0 })
 
 const retenusPoste = computed(() => r.value?.retenus?.par_poste || [])
 const maxRetenusPoste = computed(() => Math.max(1, ...retenusPoste.value.map((p) => p.n)))
@@ -118,7 +129,7 @@ onMounted(async () => { await chargerAppels(); await charger() })
 
       <!-- Donuts -->
       <v-row dense class="mb-2">
-        <v-col cols="12" md="4">
+        <v-col cols="12" md="3">
           <v-card flat border class="pa-5 h-100">
             <div class="carte-titre">Dossiers par statut</div>
             <div class="donut-zone">
@@ -136,7 +147,7 @@ onMounted(async () => { await chargerAppels(); await charger() })
             </div>
           </v-card>
         </v-col>
-        <v-col cols="12" md="4">
+        <v-col cols="12" md="3">
           <v-card flat border class="pa-5 h-100">
             <div class="carte-titre">Réclamations par statut</div>
             <div class="donut-zone">
@@ -155,7 +166,7 @@ onMounted(async () => { await chargerAppels(); await charger() })
             </div>
           </v-card>
         </v-col>
-        <v-col cols="12" md="4">
+        <v-col cols="12" md="3">
           <v-card flat border class="pa-5 h-100">
             <div class="carte-titre">Retenus par origine</div>
             <div class="donut-zone">
@@ -174,13 +185,32 @@ onMounted(async () => { await chargerAppels(); await charger() })
             </div>
           </v-card>
         </v-col>
+        <v-col cols="12" md="3">
+          <v-card flat border class="pa-5 h-100">
+            <div class="carte-titre">Recours par statut</div>
+            <div class="donut-zone">
+              <div class="donut" :style="donutStyle(segRecours)">
+                <div class="donut-hole"><span class="donut-val">{{ totalRecours }}</span><span class="donut-lib">recours</span></div>
+              </div>
+              <div class="legende">
+                <div v-for="s in segRecours" :key="s.key" class="legende-l">
+                  <span class="pastille" :style="{ background: s.color }" />
+                  <span class="flex-grow-1">{{ s.label }}</span>
+                  <strong>{{ s.value }}</strong>
+                  <span class="text-medium-emphasis ml-1">({{ pct(s.value, totalRecours) }}%)</span>
+                </div>
+                <div v-if="!segRecours.length" class="text-medium-emphasis text-caption">Aucun recours.</div>
+              </div>
+            </div>
+          </v-card>
+        </v-col>
       </v-row>
 
       <!-- Niveau de traitement -->
       <v-card flat border class="pa-5 mb-2">
         <div class="carte-titre mb-3">Niveau de traitement</div>
         <v-row dense>
-          <v-col cols="12" md="6">
+          <v-col cols="12" md="4">
             <div class="jauge-bloc">
               <div class="jauge-tete">
                 <span><v-icon size="18" color="#EF6C00" class="mr-1">mdi-folder-multiple</v-icon>Dossiers</span>
@@ -190,7 +220,7 @@ onMounted(async () => { await chargerAppels(); await charger() })
               <div class="jauge-sous">{{ trDossiers.traite }} traités · {{ trDossiers.en_attente }} à traiter</div>
             </div>
           </v-col>
-          <v-col cols="12" md="6">
+          <v-col cols="12" md="4">
             <div class="jauge-bloc">
               <div class="jauge-tete">
                 <span><v-icon size="18" color="#6A1B9A" class="mr-1">mdi-account-alert-outline</v-icon>Réclamations</span>
@@ -198,6 +228,16 @@ onMounted(async () => { await chargerAppels(); await charger() })
               </div>
               <div class="jauge"><div class="jauge-fill" :style="{ width: pct(trReclam.traite, trReclam.total) + '%', background: '#6A1B9A' }" /></div>
               <div class="jauge-sous">{{ trReclam.traite }} traitées · {{ trReclam.en_attente }} à traiter</div>
+            </div>
+          </v-col>
+          <v-col cols="12" md="4">
+            <div class="jauge-bloc">
+              <div class="jauge-tete">
+                <span><v-icon size="18" color="#5E35B1" class="mr-1">mdi-gavel</v-icon>Recours</span>
+                <strong class="jauge-pct">{{ pct(trRecours.traite, trRecours.total) }}%</strong>
+              </div>
+              <div class="jauge"><div class="jauge-fill" :style="{ width: pct(trRecours.traite, trRecours.total) + '%', background: '#5E35B1' }" /></div>
+              <div class="jauge-sous">{{ trRecours.traite }} traités · {{ trRecours.en_attente }} à traiter</div>
             </div>
           </v-col>
         </v-row>
