@@ -2204,18 +2204,97 @@ class RecoursViewSet(viewsets.ModelViewSet):
             'reclamations': dedupe(reclams, 'reclamation'),
         })
 
-    @action(detail=True, methods=['post'])
-    def traiter(self, request, pk=None):
-        """Back-office : marque le recours comme traité (+ note interne)."""
+    def _decider(self, request, statut_cible):
+        """Tranche un recours (valider / rejeter) + note interne, et trace qui
+        a décidé et quand. La décision reste INTERNE : elle n'actualise pas la
+        liste publique des retenus ni le statut du dossier (la publication
+        définitive est une étape ultérieure distincte)."""
         if not roles.peut_traiter(request.user):
             raise PermissionDenied("Réservé aux administrateurs, superviseurs et validateurs.")
         recours = self.get_object()
-        recours.statut = Recours.Statut.TRAITE
-        recours.reponse = (request.data.get('reponse') or '').strip()
+        recours.statut = statut_cible
+        reponse = request.data.get('reponse')
+        if reponse is not None:
+            recours.reponse = reponse.strip()
         recours.traite_par = request.user
         recours.traite_le = timezone.now()
         recours.save(update_fields=['statut', 'reponse', 'traite_par', 'traite_le'])
         return Response(RecoursAdminSerializer(recours).data)
+
+    @action(detail=True, methods=['post'])
+    def valider(self, request, pk=None):
+        """Back-office : VALIDE le recours → rejoint la liste interne des
+        « validés après recours » (distincte des autres validations)."""
+        return self._decider(request, Recours.Statut.VALIDE)
+
+    @action(detail=True, methods=['post'])
+    def rejeter(self, request, pk=None):
+        """Back-office : REJETTE le recours (décision défavorable)."""
+        return self._decider(request, Recours.Statut.REJETE)
+
+    @action(detail=True, methods=['get'])
+    def personne(self, request, pk=None):
+        """Back-office : tous les enregistrements de la MÊME personne (doublons)
+        — dossiers soumis + réclamations — avec leurs documents, pour examiner
+        avant de décider. L'enregistrement source du recours est marqué
+        (`est_source`). Correspondance tolérante par nom/postnom/prénom."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        recours = self.get_object()
+        tokens = tokens_recherche(f'{recours.nom} {recours.postnom} {recours.prenom}')
+        if not tokens:
+            return Response({'dossiers': [], 'reclamations': []})
+        dossiers = (Dossier.objects
+                    .exclude(statut=Dossier.Statut.BROUILLON)
+                    .select_related('poste', 'appel')
+                    .prefetch_related('pieces__type_piece'))
+        reclams = (ReclamationEligibilite.objects
+                   .select_related('poste', 'appel')
+                   .prefetch_related('documents'))
+        for token in tokens:
+            dossiers = dossiers.filter(texte_recherche__contains=token)
+            reclams = reclams.filter(texte_recherche__contains=token)
+
+        def _dossier(d):
+            return {
+                'type': 'dossier', 'id': d.id,
+                'nom': d.nom, 'postnom': d.postnom, 'prenom': d.prenom,
+                'email': d.email,
+                'poste': d.poste.libelle if d.poste else None,
+                'appel': d.appel.titre,
+                'statut': d.statut, 'statut_libelle': d.get_statut_display(),
+                'cree_le': d.cree_le,
+                'est_source': d.id == recours.dossier_id,
+                'documents': [{
+                    'id': p.id,
+                    'libelle': p.type_piece.libelle,
+                    'nom_original': p.nom_original,
+                    'url': f'/api/dossiers/{d.id}/pieces/{p.id}/telecharger/',
+                } for p in d.pieces.all()],
+            }
+
+        def _reclam(r):
+            return {
+                'type': 'reclamation', 'id': r.id,
+                'nom': r.nom, 'postnom': r.postnom, 'prenom': r.prenom,
+                'email': r.email, 'telephone': r.telephone, 'message': r.message,
+                'poste': r.poste.libelle if r.poste else None,
+                'appel': r.appel.titre,
+                'statut': r.statut, 'statut_libelle': r.get_statut_display(),
+                'cree_le': r.cree_le,
+                'est_source': r.id == recours.reclamation_id,
+                'documents': [{
+                    'id': doc.id,
+                    'libelle': doc.get_type_display(),
+                    'nom_original': doc.nom_original,
+                    'url': f'/api/reclamations/{r.id}/documents/{doc.id}/',
+                } for doc in r.documents.all()],
+            }
+
+        return Response({
+            'dossiers': [_dossier(d) for d in dossiers.order_by('-cree_le')],
+            'reclamations': [_reclam(r) for r in reclams.order_by('-cree_le')],
+        })
 
     @action(detail=True, methods=['post'], url_path='rouvrir')
     def rouvrir(self, request, pk=None):
@@ -2236,8 +2315,12 @@ class RecoursViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Réservé au back-office.")
         par_statut = {row['statut']: row['n']
                       for row in Recours.objects.values('statut').annotate(n=Count('id'))}
+        # « Traités » legacy comptés avec les validés (décision favorable
+        # implicite à l'époque) pour ne pas les perdre dans les compteurs.
         return Response({
             'total': sum(par_statut.values()),
             'en_attente': par_statut.get(Recours.Statut.EN_ATTENTE, 0),
-            'traite': par_statut.get(Recours.Statut.TRAITE, 0),
+            'valide': (par_statut.get(Recours.Statut.VALIDE, 0)
+                       + par_statut.get(Recours.Statut.TRAITE, 0)),
+            'rejete': par_statut.get(Recours.Statut.REJETE, 0),
         })

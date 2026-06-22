@@ -871,7 +871,15 @@ class Recours(models.Model):
 
     class Statut(models.TextChoices):
         EN_ATTENTE = 'en_attente', 'En attente'
+        VALIDE = 'valide', 'Validé'
+        REJETE = 'rejete', 'Rejeté'
+        # Valeur historique (avant la décision valider/rejeter) : un recours
+        # « traité » sans décision tranchée. Conservée pour ne pas casser les
+        # enregistrements existants ; n'est plus produite par le traitement.
         TRAITE = 'traite', 'Traité'
+
+    # Décisions qui clôturent le recours (le retirent de « En attente »).
+    STATUTS_DECIDES = {Statut.VALIDE, Statut.REJETE, Statut.TRAITE}
 
     # Enregistrement existant reconnu par le demandeur : un dossier OU une
     # réclamation (au moins l'un des deux). SET_NULL : si la source est purgée,

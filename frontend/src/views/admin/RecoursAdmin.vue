@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import api from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import StatCard from '../../components/StatCard.vue'
@@ -11,7 +11,7 @@ const sauve = JSON.parse(localStorage.getItem(STORAGE_FILTRES) || '{}')
 const recours = ref([])
 const total = ref(0)
 const chargement = ref(false)
-const stats = ref({ total: 0, en_attente: 0, traite: 0 })
+const stats = ref({ total: 0, en_attente: 0, valide: 0, rejete: 0 })
 
 const statut = ref(sauve.statut ?? '')
 const q = ref(sauve.q ?? '')
@@ -25,7 +25,13 @@ const snack = ref({ show: false, color: 'success', text: '' })
 
 const notifier = (text, color = 'success') => (snack.value = { show: true, color, text })
 const dateFr = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '—')
-const COULEUR_STATUT = { en_attente: 'warning', traite: 'success' }
+const COULEUR_STATUT = { en_attente: 'warning', valide: 'success', rejete: 'error', traite: 'success' }
+// Couleur de chip pour le statut d'un dossier lié (convention métier).
+const COULEUR_DOSSIER = {
+  brouillon: 'grey', depose: 'info', en_examen: 'warning',
+  retenu: 'success', non_retenu: 'orange', rejete: 'error',
+}
+const COULEUR_STATUT_DOSSIER = (s) => COULEUR_DOSSIER[s] || 'grey'
 
 const headers = [
   { title: 'Personne', key: 'nom' },
@@ -73,19 +79,52 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
 
 function filtrerStatut(s) { statut.value = statut.value === s ? '' : s }
 
+// --- Détail / examen ---
+const personne = ref(null)            // { dossiers: [], reclamations: [] }
+const chargementPersonne = ref(false)
+
 function ouvrir(r) {
   detail.value = r
   reponse.value = r.reponse || ''
   modeEdition.value = false
+  personne.value = null
   dialog.value = true
+  chargerPersonne(r.id)
 }
 
-async function traiter() {
+async function chargerPersonne(id) {
+  chargementPersonne.value = true
+  try {
+    const { data } = await api.get(`/recours/${id}/personne/`)
+    personne.value = data
+  } catch {
+    personne.value = { dossiers: [], reclamations: [] }
+  } finally {
+    chargementPersonne.value = false
+  }
+}
+
+const nbEnregistrements = computed(() =>
+  personne.value ? personne.value.dossiers.length + personne.value.reclamations.length : 0)
+
+// --- Aperçu de document (in-app) ---
+const apercu = ref({ show: false, url: '', titre: '' })
+function voirDocument(doc) {
+  apercu.value = { show: true, url: doc.url + '?inline=1', titre: doc.libelle || doc.nom_original }
+}
+
+// --- Décision (valider / rejeter) avec confirmation ---
+const confirme = ref({ show: false, type: '' })   // type: 'valider' | 'rejeter'
+function demanderDecision(type) { confirme.value = { show: true, type } }
+
+async function confirmerDecision() {
+  const type = confirme.value.type
   enAction.value = true
   try {
-    const { data } = await api.post(`/recours/${detail.value.id}/traiter/`, { reponse: reponse.value })
+    const { data } = await api.post(`/recours/${detail.value.id}/${type}/`, { reponse: reponse.value })
     Object.assign(detail.value, data)
-    notifier('Recours marqué comme traité.')
+    notifier(type === 'valider' ? 'Recours validé (validés après recours).' : 'Recours rejeté.')
+    confirme.value.show = false
     dialog.value = false
     charger()
   } catch (e) {
@@ -142,8 +181,6 @@ async function enregistrer() {
     enAction.value = false
   }
 }
-
-onMounted(() => {})
 </script>
 
 <template>
@@ -159,20 +196,25 @@ onMounted(() => {})
 
     <!-- KPI -->
     <v-row dense class="mb-4">
-      <v-col cols="12" sm="4">
+      <v-col cols="6" sm="3">
         <StatCard icon="mdi-gavel" :value="stats.total" label="Total recours"
                   description="Tous statuts" color="#5E35B1"
                   clickable :active="statut === ''" @click="filtrerStatut('')" />
       </v-col>
-      <v-col cols="12" sm="4">
+      <v-col cols="6" sm="3">
         <StatCard icon="mdi-clock-outline" :value="stats.en_attente" label="En attente"
                   description="À examiner" color="#EF6C00"
                   clickable :active="statut === 'en_attente'" @click="filtrerStatut('en_attente')" />
       </v-col>
-      <v-col cols="12" sm="4">
-        <StatCard icon="mdi-check-circle-outline" :value="stats.traite" label="Traités"
-                  description="Examinés" color="#2E7D32"
-                  clickable :active="statut === 'traite'" @click="filtrerStatut('traite')" />
+      <v-col cols="6" sm="3">
+        <StatCard icon="mdi-check-decagram-outline" :value="stats.valide" label="Validés"
+                  description="Validés après recours" color="#2E7D32"
+                  clickable :active="statut === 'valide'" @click="filtrerStatut('valide')" />
+      </v-col>
+      <v-col cols="6" sm="3">
+        <StatCard icon="mdi-close-circle-outline" :value="stats.rejete" label="Rejetés"
+                  description="Décision défavorable" color="#C62828"
+                  clickable :active="statut === 'rejete'" @click="filtrerStatut('rejete')" />
       </v-col>
     </v-row>
 
@@ -214,9 +256,10 @@ onMounted(() => {})
     </v-card>
 
     <!-- Détail / traitement -->
-    <v-dialog v-model="dialog" max-width="640">
+    <v-dialog v-model="dialog" max-width="1100" scrollable>
       <v-card v-if="detail" rounded="lg">
         <v-card-title class="d-flex align-center ga-2 pa-4">
+          <v-icon color="primary">mdi-gavel</v-icon>
           <span class="text-h6">{{ nomComplet(detail) }}</span>
           <v-spacer />
           <v-chip :color="COULEUR_STATUT[detail.statut]" size="small" variant="flat">{{ detail.statut_libelle }}</v-chip>
@@ -240,36 +283,104 @@ onMounted(() => {})
 
           <!-- Mode LECTURE -->
           <template v-else>
-            <div class="d-flex ga-4 mb-3 text-body-2 flex-wrap">
-              <span class="dn"><v-icon size="16">mdi-cake-variant-outline</v-icon> Né(e) le {{ dateFr(detail.date_naissance) }}</span>
-              <span v-if="detail.email"><v-icon size="16">mdi-email-outline</v-icon> {{ detail.email }}</span>
-              <span class="text-medium-emphasis">Reçu le {{ dateFr(detail.cree_le) }}</span>
-            </div>
-            <div class="mb-3">
-              <span class="text-caption text-medium-emphasis mr-2">Recours lié à :</span>
-              <template v-if="detail.source">
-                <v-chip size="small" :color="detail.source.type === 'reclamation' ? '#00838F' : 'primary'" variant="tonal">
-                  {{ detail.source.type === 'reclamation' ? 'Réclamation' : 'Dossier' }} #{{ detail.source.id }}
-                </v-chip>
-                <span class="text-body-2 text-medium-emphasis ml-2">
-                  {{ [detail.source.poste, detail.source.appel, detail.source.statut].filter(Boolean).join(' · ') }}
-                </span>
-              </template>
-              <span v-else class="text-medium-emphasis">source supprimée</span>
-            </div>
-            <v-alert type="info" variant="tonal" density="compact" class="mb-3" icon="mdi-card-account-details-outline">
-              Vérifiez la <strong>date de naissance</strong> ci-dessus avec la pièce d'identité du demandeur.
-            </v-alert>
-            <v-card variant="tonal" color="grey" class="pa-3 mb-4">
-              <div class="text-caption font-weight-bold mb-1">Message</div>
-              <div style="white-space: pre-wrap">{{ detail.message }}</div>
-            </v-card>
+            <v-row>
+              <!-- Colonne gauche : le recours + décision -->
+              <v-col cols="12" md="5">
+                <div class="d-flex ga-4 mb-3 text-body-2 flex-wrap">
+                  <span class="dn"><v-icon size="16">mdi-cake-variant-outline</v-icon> Né(e) le {{ dateFr(detail.date_naissance) }}</span>
+                  <span v-if="detail.email"><v-icon size="16">mdi-email-outline</v-icon> {{ detail.email }}</span>
+                </div>
+                <div class="text-caption text-medium-emphasis mb-3">Reçu le {{ dateFr(detail.cree_le) }}</div>
+                <div class="mb-3">
+                  <span class="text-caption text-medium-emphasis mr-2">Recours lié à :</span>
+                  <template v-if="detail.source">
+                    <v-chip size="small" :color="detail.source.type === 'reclamation' ? '#00838F' : 'primary'" variant="tonal">
+                      {{ detail.source.type === 'reclamation' ? 'Réclamation' : 'Dossier' }} #{{ detail.source.id }}
+                    </v-chip>
+                    <div class="text-body-2 text-medium-emphasis mt-1">
+                      {{ [detail.source.poste, detail.source.appel, detail.source.statut].filter(Boolean).join(' · ') }}
+                    </div>
+                  </template>
+                  <span v-else class="text-medium-emphasis">source supprimée</span>
+                </div>
+                <v-alert type="info" variant="tonal" density="compact" class="mb-3" icon="mdi-card-account-details-outline">
+                  Vérifiez la <strong>date de naissance</strong> ci-dessus avec la pièce d'identité du demandeur.
+                </v-alert>
+                <v-card variant="tonal" color="grey" class="pa-3 mb-4">
+                  <div class="text-caption font-weight-bold mb-1">Message du demandeur</div>
+                  <div style="white-space: pre-wrap">{{ detail.message }}</div>
+                </v-card>
 
-            <v-textarea v-model="reponse" label="Réponse / note interne" rows="3" variant="outlined"
-                        :readonly="!auth.peutTraiter" hide-details />
-            <div v-if="detail.traite_par" class="text-caption text-medium-emphasis mt-2">
-              Traité par {{ detail.traite_par }} le {{ dateFr(detail.traite_le) }}
-            </div>
+                <v-textarea v-model="reponse" label="Réponse / note interne" rows="3" variant="outlined"
+                            :readonly="!auth.peutTraiter" hide-details />
+                <div v-if="detail.traite_par" class="text-caption text-medium-emphasis mt-2">
+                  {{ detail.statut === 'rejete' ? 'Rejeté' : 'Validé' }} par {{ detail.traite_par }} le {{ dateFr(detail.traite_le) }}
+                </div>
+              </v-col>
+
+              <!-- Colonne droite : enregistrements & documents de la personne -->
+              <v-col cols="12" md="7">
+                <div class="d-flex align-center ga-2 mb-2">
+                  <v-icon size="18" color="primary">mdi-account-search-outline</v-icon>
+                  <span class="text-subtitle-2 font-weight-bold text-primary">Dossiers & réclamations de la personne</span>
+                  <v-chip v-if="personne" size="x-small" variant="tonal" color="primary">{{ nbEnregistrements }}</v-chip>
+                </div>
+                <p class="text-caption text-medium-emphasis mb-3">
+                  Tous les enregistrements au même nom (doublons inclus). Cliquez un document pour le visualiser.
+                </p>
+
+                <div v-if="chargementPersonne" class="text-center py-6">
+                  <v-progress-circular indeterminate color="primary" size="28" />
+                </div>
+                <template v-else-if="personne">
+                  <v-alert v-if="nbEnregistrements === 0" type="warning" variant="tonal" density="compact">
+                    Aucun enregistrement retrouvé à ce nom.
+                  </v-alert>
+
+                  <!-- Dossiers -->
+                  <div v-for="d in personne.dossiers" :key="'d' + d.id" class="enr">
+                    <div class="enr-tete">
+                      <v-icon size="18" color="#1a237e">mdi-folder-account-outline</v-icon>
+                      <span class="font-weight-bold">Dossier #{{ d.id }}</span>
+                      <v-chip size="x-small" :color="COULEUR_STATUT_DOSSIER(d.statut)" variant="tonal">{{ d.statut_libelle }}</v-chip>
+                      <v-chip v-if="d.est_source" size="x-small" color="error" variant="flat">Source du recours</v-chip>
+                      <v-spacer />
+                      <span class="text-caption text-medium-emphasis">{{ dateFr(d.cree_le) }}</span>
+                    </div>
+                    <div class="enr-meta">{{ [d.poste, d.appel].filter(Boolean).join(' · ') }}</div>
+                    <div v-if="d.documents.length" class="enr-docs">
+                      <v-chip v-for="doc in d.documents" :key="doc.id" size="small" variant="outlined"
+                              color="primary" class="ma-1" prepend-icon="mdi-file-eye-outline"
+                              @click="voirDocument(doc)">
+                        {{ doc.libelle }}
+                      </v-chip>
+                    </div>
+                    <div v-else class="text-caption text-medium-emphasis mt-1">Aucun document.</div>
+                  </div>
+
+                  <!-- Réclamations -->
+                  <div v-for="r in personne.reclamations" :key="'r' + r.id" class="enr">
+                    <div class="enr-tete">
+                      <v-icon size="18" color="#00838F">mdi-account-alert-outline</v-icon>
+                      <span class="font-weight-bold">Réclamation #{{ r.id }}</span>
+                      <v-chip size="x-small" color="#00838F" variant="tonal">{{ r.statut_libelle }}</v-chip>
+                      <v-chip v-if="r.est_source" size="x-small" color="error" variant="flat">Source du recours</v-chip>
+                      <v-spacer />
+                      <span class="text-caption text-medium-emphasis">{{ dateFr(r.cree_le) }}</span>
+                    </div>
+                    <div class="enr-meta">{{ [r.poste, r.appel].filter(Boolean).join(' · ') }}</div>
+                    <div v-if="r.documents.length" class="enr-docs">
+                      <v-chip v-for="doc in r.documents" :key="doc.id" size="small" variant="outlined"
+                              color="#00838F" class="ma-1" prepend-icon="mdi-file-eye-outline"
+                              @click="voirDocument(doc)">
+                        {{ doc.libelle }}
+                      </v-chip>
+                    </div>
+                    <div v-else class="text-caption text-medium-emphasis mt-1">Aucun document.</div>
+                  </div>
+                </template>
+              </v-col>
+            </v-row>
           </template>
         </v-card-text>
         <v-divider />
@@ -287,18 +398,69 @@ onMounted(() => {})
             <v-btn v-if="auth.peutTraiter" variant="text" prepend-icon="mdi-pencil" @click="ouvrirEdition">
               Modifier
             </v-btn>
-            <v-btn v-if="auth.peutTraiter && detail.statut === 'traite'" variant="text"
+            <v-btn v-if="auth.peutTraiter && detail.statut !== 'en_attente'" variant="text"
                    prepend-icon="mdi-lock-open-variant-outline" :loading="enAction" @click="rouvrir">
               Rouvrir
             </v-btn>
             <v-spacer />
             <v-btn variant="text" @click="dialog = false">Fermer</v-btn>
-            <v-btn v-if="auth.peutTraiter && detail.statut !== 'traite'" color="primary" variant="flat"
-                   prepend-icon="mdi-check" :loading="enAction" @click="traiter">
-              Marquer traité
-            </v-btn>
+            <template v-if="auth.peutTraiter && detail.statut !== 'rejete'">
+              <v-btn color="error" variant="tonal" prepend-icon="mdi-close-circle-outline"
+                     :loading="enAction" @click="demanderDecision('rejeter')">Rejeter</v-btn>
+            </template>
+            <template v-if="auth.peutTraiter && detail.statut !== 'valide'">
+              <v-btn color="success" variant="flat" prepend-icon="mdi-check-decagram-outline"
+                     :loading="enAction" @click="demanderDecision('valider')">Valider</v-btn>
+            </template>
           </template>
         </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Confirmation de décision -->
+    <v-dialog v-model="confirme.show" max-width="460">
+      <v-card rounded="lg">
+        <v-card-title class="text-h6 pa-4">
+          {{ confirme.type === 'valider' ? 'Valider le recours ?' : 'Rejeter le recours ?' }}
+        </v-card-title>
+        <v-card-text class="pb-2">
+          <template v-if="confirme.type === 'valider'">
+            La personne sera ajoutée à la liste interne des <strong>validés après recours</strong>.
+            Cela <strong>n'actualise pas</strong> la liste publique des retenus : la publication
+            définitive reste une étape ultérieure.
+          </template>
+          <template v-else>
+            Le recours de <strong>{{ nomComplet(detail || {}) }}</strong> sera marqué
+            <strong>rejeté</strong> (décision défavorable). Vous pourrez le rouvrir si besoin.
+          </template>
+        </v-card-text>
+        <v-card-actions class="pa-3">
+          <v-spacer />
+          <v-btn variant="text" @click="confirme.show = false">Annuler</v-btn>
+          <v-btn :color="confirme.type === 'valider' ? 'success' : 'error'"
+                 :variant="confirme.type === 'valider' ? 'flat' : 'tonal'"
+                 :loading="enAction" @click="confirmerDecision">
+            {{ confirme.type === 'valider' ? 'Confirmer la validation' : 'Confirmer le rejet' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Aperçu de document -->
+    <v-dialog v-model="apercu.show" max-width="980" scrollable>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 pa-3">
+          <v-icon color="primary">mdi-file-eye-outline</v-icon>
+          <span class="text-subtitle-1">{{ apercu.titre }}</span>
+          <v-spacer />
+          <v-btn variant="text" size="small" :href="apercu.url" target="_blank"
+                 prepend-icon="mdi-open-in-new">Onglet</v-btn>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="apercu.show = false" />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-0" style="height: 72vh">
+          <iframe v-if="apercu.url" :src="apercu.url" title="Aperçu" class="apercu-frame" />
+        </v-card-text>
       </v-card>
     </v-dialog>
 
@@ -309,4 +471,9 @@ onMounted(() => {})
 <style scoped>
 .message-court { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; color: #525f71; }
 .dn { font-weight: 600; color: #1a237e; }
+.enr { border: 1px solid #e0e3ee; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; background: #fafbff; }
+.enr-tete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.enr-meta { font-size: 0.82rem; color: #66707e; margin: 2px 0 4px; }
+.enr-docs { display: flex; flex-wrap: wrap; margin: 2px -4px 0; }
+.apercu-frame { width: 100%; height: 100%; border: 0; }
 </style>
