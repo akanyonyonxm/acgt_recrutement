@@ -2247,13 +2247,25 @@ class RecoursViewSet(viewsets.ModelViewSet):
         dossiers = (Dossier.objects
                     .exclude(statut=Dossier.Statut.BROUILLON)
                     .select_related('poste', 'appel')
-                    .prefetch_related('pieces__type_piece'))
+                    .prefetch_related('pieces__type_piece', 'historique'))
         reclams = (ReclamationEligibilite.objects
                    .select_related('poste', 'appel')
                    .prefetch_related('documents'))
         for token in tokens:
             dossiers = dossiers.filter(texte_recherche__contains=token)
             reclams = reclams.filter(texte_recherche__contains=token)
+
+        rejetes_dossier = {Dossier.Statut.REJETE, Dossier.Statut.NON_RETENU}
+
+        def _motif_rejet(d):
+            """Motif de la décision défavorable (rejet/non-retenu) : porté par
+            l'entrée d'historique qui a fait basculer le dossier dans cet état."""
+            if d.statut not in rejetes_dossier:
+                return ''
+            for h in d.historique.all():   # prefetch, déjà trié -horodatage
+                if h.nouveau_statut == d.statut and h.motif:
+                    return h.motif
+            return ''
 
         def _dossier(d):
             return {
@@ -2263,6 +2275,7 @@ class RecoursViewSet(viewsets.ModelViewSet):
                 'poste': d.poste.libelle if d.poste else None,
                 'appel': d.appel.titre,
                 'statut': d.statut, 'statut_libelle': d.get_statut_display(),
+                'motif_rejet': _motif_rejet(d),
                 'cree_le': d.cree_le,
                 'est_source': d.id == recours.dossier_id,
                 'documents': [{
@@ -2281,6 +2294,7 @@ class RecoursViewSet(viewsets.ModelViewSet):
                 'poste': r.poste.libelle if r.poste else None,
                 'appel': r.appel.titre,
                 'statut': r.statut, 'statut_libelle': r.get_statut_display(),
+                'motif_rejet': (r.motif if r.statut == ReclamationEligibilite.Statut.REJETEE else ''),
                 'cree_le': r.cree_le,
                 'est_source': r.id == recours.reclamation_id,
                 'documents': [{

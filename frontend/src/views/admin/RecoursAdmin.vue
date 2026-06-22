@@ -38,7 +38,6 @@ const headers = [
   { title: 'Né(e) le', key: 'date_naissance', sortable: false },
   { title: 'Email', key: 'email', sortable: false },
   { title: 'Lié à', key: 'source', sortable: false },
-  { title: 'Message', key: 'message', sortable: false },
   { title: 'Statut', key: 'statut' },
   { title: 'Reçu le', key: 'cree_le' },
   { title: '', key: 'actions', sortable: false, align: 'end' },
@@ -236,9 +235,6 @@ async function enregistrer() {
           </v-chip>
           <span v-else class="text-medium-emphasis">—</span>
         </template>
-        <template #[`item.message`]="{ item }">
-          <span class="message-court">{{ item.message }}</span>
-        </template>
         <template #[`item.statut`]="{ item }">
           <v-chip :color="COULEUR_STATUT[item.statut]" size="small" variant="flat">
             {{ item.statut_libelle }}
@@ -356,6 +352,10 @@ async function enregistrer() {
                       </v-chip>
                     </div>
                     <div v-else class="text-caption text-medium-emphasis mt-1">Aucun document.</div>
+                    <div v-if="d.motif_rejet" class="motif-rejet">
+                      <v-icon size="14" color="error">mdi-information-outline</v-icon>
+                      <span><strong>Motif du rejet :</strong> {{ d.motif_rejet }}</span>
+                    </div>
                   </div>
 
                   <!-- Réclamations -->
@@ -377,6 +377,10 @@ async function enregistrer() {
                       </v-chip>
                     </div>
                     <div v-else class="text-caption text-medium-emphasis mt-1">Aucun document.</div>
+                    <div v-if="r.motif_rejet" class="motif-rejet">
+                      <v-icon size="14" color="error">mdi-information-outline</v-icon>
+                      <span><strong>Motif du rejet :</strong> {{ r.motif_rejet }}</span>
+                    </div>
                   </div>
                 </template>
               </v-col>
@@ -469,8 +473,9 @@ async function enregistrer() {
 </template>
 
 <style scoped>
-.message-court { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; color: #525f71; }
 .dn { font-weight: 600; color: #1a237e; }
+.motif-rejet { display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; padding: 7px 10px;
+  background: #fdecea; border-radius: 8px; font-size: 0.82rem; color: #8b2c26; line-height: 1.4; }
 .enr { border: 1px solid #e0e3ee; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; background: #fafbff; }
 .enr-tete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .enr-meta { font-size: 0.82rem; color: #66707e; margin: 2px 0 4px; }
