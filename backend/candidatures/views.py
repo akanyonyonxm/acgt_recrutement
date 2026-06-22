@@ -2116,9 +2116,9 @@ class RecoursViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         # Édition d'un recours (identité, contact, message, date de réception) :
-        # réservée au back-office traitant.
-        if not roles.peut_traiter(request.user):
-            raise PermissionDenied("Réservé aux administrateurs, superviseurs et validateurs.")
+        # réservée aux ADMINISTRATEURS (correction de saisie sensible).
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("La modification d'un recours est réservée aux administrateurs.")
         response = super().update(request, *args, **kwargs)
         # Renvoie la vue complète (source, statut…) après modification.
         return Response(RecoursAdminSerializer(self.get_object()).data)

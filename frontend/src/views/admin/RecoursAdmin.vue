@@ -114,10 +114,20 @@ function voirDocument(doc) {
 
 // --- Décision (valider / rejeter) avec confirmation ---
 const confirme = ref({ show: false, type: '' })   // type: 'valider' | 'rejeter'
-function demanderDecision(type) { confirme.value = { show: true, type } }
+const erreurNote = ref('')
+function demanderDecision(type) {
+  reponse.value = detail.value.reponse || ''
+  erreurNote.value = ''
+  confirme.value = { show: true, type }
+}
 
 async function confirmerDecision() {
   const type = confirme.value.type
+  // Le rejet exige un motif ; la validation accepte une note facultative.
+  if (type === 'rejeter' && !reponse.value.trim()) {
+    erreurNote.value = 'Le motif du rejet est obligatoire.'
+    return
+  }
   enAction.value = true
   try {
     const { data } = await api.post(`/recours/${detail.value.id}/${type}/`, { reponse: reponse.value })
@@ -307,8 +317,10 @@ async function enregistrer() {
                   <div style="white-space: pre-wrap">{{ detail.message }}</div>
                 </v-card>
 
-                <v-textarea v-model="reponse" label="Réponse / note interne" rows="3" variant="outlined"
-                            :readonly="!auth.peutTraiter" hide-details />
+                <v-card v-if="detail.reponse" variant="tonal" color="blue-grey" class="pa-3">
+                  <div class="text-caption font-weight-bold mb-1">Note interne / motif</div>
+                  <div style="white-space: pre-wrap">{{ detail.reponse }}</div>
+                </v-card>
                 <div v-if="detail.traite_par" class="text-caption text-medium-emphasis mt-2">
                   {{ detail.statut === 'rejete' ? 'Rejeté' : 'Validé' }} par {{ detail.traite_par }} le {{ dateFr(detail.traite_le) }}
                 </div>
@@ -399,7 +411,7 @@ async function enregistrer() {
           </template>
           <!-- Actions en mode lecture -->
           <template v-else>
-            <v-btn v-if="auth.peutTraiter" variant="text" prepend-icon="mdi-pencil" @click="ouvrirEdition">
+            <v-btn v-if="auth.estAdmin" variant="text" prepend-icon="mdi-pencil" @click="ouvrirEdition">
               Modifier
             </v-btn>
             <v-btn v-if="auth.peutTraiter && detail.statut !== 'en_attente'" variant="text"
@@ -437,6 +449,11 @@ async function enregistrer() {
             Le recours de <strong>{{ nomComplet(detail || {}) }}</strong> sera marqué
             <strong>rejeté</strong> (décision défavorable). Vous pourrez le rouvrir si besoin.
           </template>
+
+          <v-textarea v-model="reponse" class="mt-4" rows="3" variant="outlined"
+                      :label="confirme.type === 'rejeter' ? 'Motif du rejet *' : 'Note interne (facultatif)'"
+                      :error-messages="erreurNote"
+                      @update:model-value="erreurNote = ''" />
         </v-card-text>
         <v-card-actions class="pa-3">
           <v-spacer />
