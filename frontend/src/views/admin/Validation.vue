@@ -56,14 +56,17 @@ const affecteParDefaut = (auth.estValidateur && !auth.estAdmin) ? 'moi' : ''
 const affecte = ref(sauve.affecte ?? affecteParDefaut)
 // Origine : '' (toutes), 'reclamation', 'en_ligne'.
 const origine = ref(sauve.origine ?? '')
+// Catégorie de provenance : '' (toutes), 'en_ligne' (vrais dépôts),
+// 'validation' (ajouts via réclamation, actifs), 'annule' (résidus annulés).
+const categorie = ref(sauve.categorie ?? '')
 // Tri mémorisé (par utilisateur) : tableau Vuetify [{ key, order }].
 const tri = ref(Array.isArray(sauve.tri) ? sauve.tri : [])
 
-watch([statut, appel, eligibilite, doublons, q, affecte, origine, tri], () => {
+watch([statut, appel, eligibilite, doublons, q, affecte, origine, categorie, tri], () => {
   localStorage.setItem(STORAGE_FILTRES, JSON.stringify({
     statut: statut.value, appel: appel.value, eligibilite: eligibilite.value,
     doublons: doublons.value, q: q.value, affecte: affecte.value,
-    origine: origine.value, tri: tri.value,
+    origine: origine.value, categorie: categorie.value, tri: tri.value,
   }))
 }, { deep: true })
 
@@ -115,8 +118,36 @@ const compteOrigine = (k) => stats.value.par_origine?.[k] || 0
 // Carte « validées » : clic = retenus de cette origine (statut retenu + origine).
 const origineActive = (k) => origine.value === k && statut.value === 'retenu'
 function filtrerOrigine(k) {
+  categorie.value = ''
   if (origineActive(k)) { origine.value = ''; statut.value = 'depose,en_examen' }
   else { origine.value = k; statut.value = 'retenu' }
+}
+
+// Provenance des dossiers (analyse réel vs ajouts) : vrais dépôts en ligne,
+// ajouts par validation de réclamation (actifs), et résidus annulés (validation
+// rouverte → dossier rejeté, resté en table). Cf. backend get_queryset.
+const CATEGORIES = [
+  { key: 'en_ligne', label: 'Dépôts en ligne', desc: 'Postés par les candidats', icon: 'mdi-web', color: '#00838F' },
+  { key: 'validation', label: 'Ajouts validation', desc: 'Créés en validant (actifs)', icon: 'mdi-account-plus-outline', color: '#6A1B9A' },
+  { key: 'annule', label: 'Résidus annulés', desc: 'Validation annulée (rejetés)', icon: 'mdi-cancel', color: '#B0392E' },
+]
+const CAT_CHIP = {
+  en_ligne: { label: 'En ligne', color: '#00838F' },
+  validation: { label: 'Validation', color: '#6A1B9A' },
+  annule: { label: 'Annulé', color: '#B0392E' },
+}
+const compteCategorie = (k) => stats.value.par_categorie?.[k] || 0
+// Clic sur une carte de provenance : vue propre de la catégorie (on enlève les
+// autres filtres pour voir tout l'ensemble, quel que soit le statut).
+function filtrerCategorie(k) {
+  if (categorie.value === k) { categorie.value = '' }
+  else {
+    categorie.value = k
+    statut.value = ''
+    origine.value = ''
+    eligibilite.value = null
+    doublons.value = false
+  }
 }
 
 const ENTETES = [
@@ -125,6 +156,7 @@ const ENTETES = [
   { title: 'Éligibilité', key: 'correspondance', sortable: false },
   { title: 'Nom sur la liste', key: 'eligibilite_nom', sortable: false },
   { title: 'Poste', key: 'poste_libelle' },
+  { title: 'Provenance', key: 'categorie', sortable: false },
   { title: 'Affecté à', key: 'affecte_a_nom', sortable: false },
   { title: 'Statut', key: 'statut' },
   { title: 'Déposé le', key: 'cree_le' },
@@ -142,7 +174,7 @@ const TRI = {
 }
 
 // Clé réactive : tout changement de filtre/recherche recharge le tableau (page 1).
-const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${affecte.value}|${origine.value}|${q.value}`)
+const cle = computed(() => `${statut.value}|${appel.value || ''}|${eligibilite.value || ''}|${doublons.value}|${affecte.value}|${origine.value}|${categorie.value}|${q.value}`)
 
 async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
   chargement.value = true
@@ -158,6 +190,7 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
     if (affecte.value) params.affecte = affecte.value
     // L'origine (réclamation / en ligne) ne filtre que les retenus.
     if (origine.value && statut.value === 'retenu') params.origine = origine.value
+    if (categorie.value) params.categorie = categorie.value
     if (q.value) params.q = q.value
     if (s && TRI[s.key]) {
       params.ordering = (s.order === 'desc' ? '-' : '') + TRI[s.key]
@@ -209,12 +242,14 @@ function filtrerBarre(b) {
   statut.value = b.statut
   eligibilite.value = b.elig
   doublons.value = false
-  origine.value = ''   // l'origine ne s'applique qu'aux retenus
+  origine.value = ''     // l'origine ne s'applique qu'aux retenus
+  categorie.value = ''   // vue par correspondance, pas par provenance
 }
 
 // Clic sur une carte de statut : on réinitialise l'origine (sous-filtre des
-// « validées par origine », réservé aux retenus) pour ne pas la cumuler.
-function filtrer(key) { statut.value = key; origine.value = '' }     // -> cle change -> tableau rechargé
+// « validées par origine », réservé aux retenus) et la provenance, pour ne pas
+// les cumuler silencieusement.
+function filtrer(key) { statut.value = key; origine.value = ''; categorie.value = '' }
 function changerAppel() { chargerStats(); chargerHisto() }   // le tableau se recharge via cle
 
 // Répartit le sous-ensemble FILTRÉ (statut + éligibilité + appel + doublons +
@@ -309,6 +344,20 @@ onMounted(async () => {
       <v-col v-for="o in ORIGINES" :key="o.key" cols="6" sm="4" md="2">
         <StatCard :icon="o.icon" :value="compteOrigine(o.key)" :label="o.label" :description="o.desc"
                   :color="o.color" clickable :active="origineActive(o.key)" @click="filtrerOrigine(o.key)" />
+      </v-col>
+    </v-row>
+
+    <!-- Provenance : distinguer le réel des ajouts (analyse du nombre de dossiers) -->
+    <v-row dense class="mb-5">
+      <v-col cols="12">
+        <div class="text-caption text-medium-emphasis mb-1">
+          <v-icon size="14" class="mr-1">mdi-information-outline</v-icon>
+          Provenance des dossiers reçus (hors brouillon) — pour distinguer les vrais dépôts des ajouts par validation
+        </div>
+      </v-col>
+      <v-col v-for="c in CATEGORIES" :key="c.key" cols="12" sm="4">
+        <StatCard :icon="c.icon" :value="compteCategorie(c.key)" :label="c.label" :description="c.desc"
+                  :color="c.color" clickable :active="categorie === c.key" @click="filtrerCategorie(c.key)" />
       </v-col>
     </v-row>
 
@@ -409,6 +458,11 @@ onMounted(async () => {
           <span v-else class="text-medium-emphasis">—</span>
         </template>
         <template #item.poste_libelle="{ item }">{{ item.poste_libelle || '—' }}</template>
+        <template #item.categorie="{ item }">
+          <v-chip v-if="item.categorie && CAT_CHIP[item.categorie]" size="x-small" label variant="tonal"
+                  :color="CAT_CHIP[item.categorie].color">{{ CAT_CHIP[item.categorie].label }}</v-chip>
+          <span v-else class="text-medium-emphasis">—</span>
+        </template>
         <template #item.affecte_a_nom="{ item }">
           <v-chip v-if="item.affecte_a_nom" size="small" variant="tonal"
                   :color="item.affecte_a === monId ? 'primary' : 'grey'"

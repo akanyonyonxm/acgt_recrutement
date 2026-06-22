@@ -379,6 +379,9 @@ class DossierListeSerializer(MasquageDecisionMixin, serializers.ModelSerializer)
     # Agent affecté au dossier (répartition de la charge).
     affecte_a = serializers.IntegerField(source='affecte_a_id', read_only=True, default=None)
     affecte_a_nom = serializers.SerializerMethodField()
+    # Provenance : 'en_ligne' (vrai dépôt), 'validation' (créé en validant une
+    # réclamation, actif), 'annule' (créé via validation puis annulé, résidu).
+    categorie = serializers.SerializerMethodField()
 
     class Meta:
         model = Dossier
@@ -386,12 +389,12 @@ class DossierListeSerializer(MasquageDecisionMixin, serializers.ModelSerializer)
             'id', 'code', 'appel', 'appel_titre', 'poste_libelle',
             'nom', 'postnom', 'prenom',
             'statut', 'statut_libelle', 'correspondance', 'a_doublon',
-            'eligibilite_nom', 'affecte_a', 'affecte_a_nom', 'cree_le',
+            'eligibilite_nom', 'affecte_a', 'affecte_a_nom', 'categorie', 'cree_le',
         ]
 
     # Champs réservés au BACK-OFFICE : jamais exposés au candidat.
     CHAMPS_STAFF = ('affecte_a', 'affecte_a_nom', 'eligibilite_nom',
-                    'correspondance', 'a_doublon')
+                    'correspondance', 'a_doublon', 'categorie')
 
     def to_representation(self, obj):
         data = super().to_representation(obj)
@@ -405,6 +408,16 @@ class DossierListeSerializer(MasquageDecisionMixin, serializers.ModelSerializer)
             return None
         u = obj.affecte_a
         return (u.get_full_name() or u.email) if u else None
+
+    def get_categorie(self, obj):
+        # 'en_ligne' = vrai dépôt (deposant renseigné) ; sinon, créé en validant
+        # une réclamation : 'validation' s'il est encore lié (actif), 'annule'
+        # s'il est orphelin (réclamation rouverte → dossier annulé, résidu).
+        if not self._est_staff():
+            return None
+        if obj.deposant_id is not None:
+            return 'en_ligne'
+        return 'validation' if getattr(obj, 'est_reclamation', False) else 'annule'
 
     @staticmethod
     def _nb_champs_communs(ligne, obj):

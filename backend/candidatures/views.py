@@ -510,6 +510,26 @@ class DossierViewSet(viewsets.ModelViewSet):
         elif origine == 'en_ligne':
             qs = qs.filter(est_reclamation=False)
 
+        # Catégorie de provenance (pour distinguer le réel des ajouts) :
+        #   en_ligne   : vrai dépôt d'un candidat connecté (deposant renseigné) ;
+        #   validation : créé en validant une réclamation, encore lié (actif) ;
+        #   annule     : créé en validant une réclamation puis ANNULÉ (réclamation
+        #                rouverte → dossier rejeté + lien dossier_cree retiré),
+        #                résidu resté en table.
+        # `deposant` est le discriminant fiable (jamais modifié) ; le lien
+        # `dossier_cree` (annotation est_reclamation) sépare actifs et résidus.
+        categorie = self.request.query_params.get('categorie')
+        if categorie in ('en_ligne', 'validation', 'annule'):
+            # Analyse de provenance = dossiers REÇUS (hors brouillon), cohérent
+            # avec les compteurs des cartes.
+            qs = qs.exclude(statut=Dossier.Statut.BROUILLON)
+            if categorie == 'en_ligne':
+                qs = qs.filter(deposant__isnull=False)
+            elif categorie == 'validation':
+                qs = qs.filter(deposant__isnull=True, est_reclamation=True)
+            else:
+                qs = qs.filter(deposant__isnull=True, est_reclamation=False)
+
         # Tri demandé par le tableau (sinon : plus récents d'abord).
         ordering = self.request.query_params.get('ordering', '')
         if ordering.lstrip('-') in self.TRI_AUTORISE:
@@ -616,12 +636,29 @@ class DossierViewSet(viewsets.ModelViewSet):
         ).count()
         nb_retenu = retenus.count()
         total = sum(par_statut.values())
+
+        # Provenance (hors brouillon) : vrais dépôts en ligne vs ajouts par
+        # validation (actifs / annulés résiduels). Voir get_queryset.
+        soumis = qs.exclude(statut=Dossier.Statut.BROUILLON)
+        cat_en_ligne = soumis.filter(deposant__isnull=False).count()
+        val_null = soumis.filter(deposant__isnull=True).annotate(
+            _lie=Exists(ReclamationEligibilite.objects.filter(dossier_cree=OuterRef('pk')))
+        )
+        cat_validation = val_null.filter(_lie=True).count()
+        cat_annule = val_null.filter(_lie=False).count()
+
         return Response({
             'total': total,
             'par_statut': par_statut,
             'par_origine': {
                 'reclamation': nb_reclam_val,
                 'en_ligne': nb_retenu - nb_reclam_val,
+            },
+            'par_categorie': {
+                'en_ligne': cat_en_ligne,
+                'validation': cat_validation,
+                'annule': cat_annule,
+                'total_soumis': cat_en_ligne + cat_validation + cat_annule,
             },
         })
 
