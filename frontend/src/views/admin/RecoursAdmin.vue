@@ -433,13 +433,18 @@ async function enregistrer() {
       </v-card>
     </v-dialog>
 
-    <!-- Confirmation de décision -->
+    <!-- Confirmation de décision (vert = valider, rouge = rejeter) -->
     <v-dialog v-model="confirme.show" max-width="460">
-      <v-card rounded="lg">
-        <v-card-title class="text-h6 pa-4">
-          {{ confirme.type === 'valider' ? 'Valider le recours ?' : 'Rejeter le recours ?' }}
-        </v-card-title>
-        <v-card-text class="pb-2">
+      <v-card rounded="lg" :class="confirme.type === 'valider' ? 'confirm-valider' : 'confirm-rejeter'">
+        <div class="confirm-tete">
+          <v-icon :color="confirme.type === 'valider' ? '#2E7D32' : '#C62828'" size="26">
+            {{ confirme.type === 'valider' ? 'mdi-check-decagram' : 'mdi-close-circle' }}
+          </v-icon>
+          <span class="text-h6 font-weight-bold">
+            {{ confirme.type === 'valider' ? 'Valider le recours ?' : 'Rejeter le recours ?' }}
+          </span>
+        </div>
+        <v-card-text class="pb-2 pt-4">
           <template v-if="confirme.type === 'valider'">
             La personne sera ajoutée à la liste interne des <strong>validés après recours</strong>.
             Cela <strong>n'actualise pas</strong> la liste publique des retenus : la publication
@@ -451,6 +456,7 @@ async function enregistrer() {
           </template>
 
           <v-textarea v-model="reponse" class="mt-4" rows="3" variant="outlined"
+                      :color="confirme.type === 'valider' ? 'success' : 'error'"
                       :label="confirme.type === 'rejeter' ? 'Motif du rejet *' : 'Note interne (facultatif)'"
                       :error-messages="erreurNote"
                       @update:model-value="erreurNote = ''" />
@@ -458,8 +464,8 @@ async function enregistrer() {
         <v-card-actions class="pa-3">
           <v-spacer />
           <v-btn variant="text" @click="confirme.show = false">Annuler</v-btn>
-          <v-btn :color="confirme.type === 'valider' ? 'success' : 'error'"
-                 :variant="confirme.type === 'valider' ? 'flat' : 'tonal'"
+          <v-btn :color="confirme.type === 'valider' ? 'success' : 'error'" variant="flat"
+                 :prepend-icon="confirme.type === 'valider' ? 'mdi-check-decagram-outline' : 'mdi-close-circle-outline'"
                  :loading="enAction" @click="confirmerDecision">
             {{ confirme.type === 'valider' ? 'Confirmer la validation' : 'Confirmer le rejet' }}
           </v-btn>
@@ -498,4 +504,9 @@ async function enregistrer() {
 .enr-meta { font-size: 0.82rem; color: #66707e; margin: 2px 0 4px; }
 .enr-docs { display: flex; flex-wrap: wrap; margin: 2px -4px 0; }
 .apercu-frame { width: 100%; height: 100%; border: 0; }
+.confirm-tete { display: flex; align-items: center; gap: 10px; padding: 16px 20px; }
+.confirm-valider { border-top: 4px solid #2E7D32; }
+.confirm-valider .confirm-tete { background: #E8F5E9; color: #1B5E20; }
+.confirm-rejeter { border-top: 4px solid #C62828; }
+.confirm-rejeter .confirm-tete { background: #FDECEA; color: #8B2C26; }
 </style>
