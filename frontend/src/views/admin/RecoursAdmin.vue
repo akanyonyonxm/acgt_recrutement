@@ -607,7 +607,8 @@ onMounted(async () => {
             Catégorie répartie :
             <strong>{{ statut === 'valide' ? 'Validés' : statut === 'rejete' ? 'Rejetés' : 'En attente' }}</strong>
             <span v-if="q"> · recherche « {{ q }} »</span>.
-            Distribution <strong>équitable</strong> entre les agents.
+            Distribution <strong>équitable</strong> entre les agents. Les recours d'une
+            <strong>même personne</strong> (doublons) restent assignés au même agent.
             <template v-if="reequilibrer"> <strong>Rééquilibrage</strong> : les déjà affectés sont aussi redistribués.</template>
             <template v-else> Les déjà affectés ne sont pas touchés.</template>
           </v-alert>
@@ -625,7 +626,11 @@ onMounted(async () => {
 
           <div v-if="resultatRepartition" class="mt-4">
             <v-divider class="mb-3" />
-            <div class="font-weight-bold mb-2">{{ resultatRepartition.total_reparti }} recours réparti(s) :</div>
+            <div class="font-weight-bold mb-2">
+              {{ resultatRepartition.total_reparti }} recours
+              <span v-if="resultatRepartition.personnes != null">({{ resultatRepartition.personnes }} personne(s))</span>
+              réparti(s) :
+            </div>
             <div v-for="p in resultatRepartition.par_agent" :key="p.agent_id"
                  class="d-flex align-center justify-space-between py-1">
               <span><v-icon size="18" class="mr-1">mdi-account</v-icon>{{ p.agent }}</span>

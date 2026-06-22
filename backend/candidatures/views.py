@@ -69,7 +69,7 @@ from .serializers import (
 )
 from .services.email import envoyer_email
 from .services.import_eligibilite import ImportEligibiliteErreur, importer_eligibles
-from .utils import tokens_recherche
+from .utils import normaliser_texte, tokens_recherche
 
 User = get_user_model()
 
@@ -2392,11 +2392,25 @@ class RecoursViewSet(viewsets.ModelViewSet):
             )
         if request.data.get('seulement_non_affectes', True):
             qs = qs.filter(affecte_a__isnull=True)
-        ids = list(qs.order_by('cree_le').values_list('id', flat=True))
+        lignes = list(qs.order_by('cree_le').values('id', 'nom', 'postnom', 'prenom'))
+
+        # Regroupement par identité normalisée : tous les recours d'une MÊME
+        # personne (doublons) restent assignés au MÊME agent — on ne les éclate
+        # jamais entre plusieurs agents (facilite le traitement). Le round-robin
+        # se fait donc sur les PERSONNES, pas sur les lignes (équilibrage par
+        # personne, parts égales ±1 personne).
+        groupes = {}
+        ordre = []
+        for row in lignes:
+            cle = normaliser_texte(f"{row['nom']} {row['postnom']} {row['prenom']}")
+            if cle not in groupes:
+                groupes[cle] = []
+                ordre.append(cle)
+            groupes[cle].append(row['id'])
 
         par_agent = {u.id: [] for u in agents}
-        for i, rid in enumerate(ids):
-            par_agent[agents[i % len(agents)].id].append(rid)
+        for i, cle in enumerate(ordre):
+            par_agent[agents[i % len(agents)].id].extend(groupes[cle])
 
         with transaction.atomic():
             for u in agents:
@@ -2405,7 +2419,8 @@ class RecoursViewSet(viewsets.ModelViewSet):
                     Recours.objects.filter(id__in=lot).update(affecte_a=u)
 
         return Response({
-            'total_reparti': len(ids),
+            'total_reparti': len(lignes),
+            'personnes': len(ordre),
             'par_agent': [
                 {'agent_id': u.id, 'agent': (u.get_full_name() or u.email),
                  'attribues': len(par_agent[u.id])}
