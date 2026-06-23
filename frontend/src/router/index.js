@@ -37,6 +37,11 @@ const routes = [
         name: 'recours-public',
         component: () => import('../views/public/Recours.vue'),
       },
+      {
+        path: 'ville-examen',
+        name: 'ville-examen',
+        component: () => import('../views/public/VilleExamen.vue'),
+      },
     ],
   },
   {

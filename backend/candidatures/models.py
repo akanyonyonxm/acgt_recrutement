@@ -68,6 +68,11 @@ class AppelCandidature(models.Model):
     message_retenus_definitif = models.TextField(
         'message public (liste définitive)', blank=True,
     )
+    # Instructions du test affichées aux retenus (bouton « Instructions » sur la
+    # page publique de la liste définitive). Vide = texte par défaut côté front.
+    instructions_examen = models.TextField(
+        'instructions du test (liste définitive)', blank=True,
+    )
     # Communiqué affiché en haut de la page publique des retenus (échéances de
     # recours, critères, date de la liste définitive…). Vide = aucun bandeau.
     message_retenus = models.TextField(
@@ -957,6 +962,11 @@ class RetenuDefinitif(models.Model):
         LISTE = 'liste', 'Retenu (liste provisoire)'
         RECOURS = 'recours', 'Validé après recours'
 
+    class Ville(models.TextChoices):
+        KINSHASA = 'kinshasa', 'Kinshasa'
+        LUBUMBASHI = 'lubumbashi', 'Lubumbashi'
+        MBUJI_MAYI = 'mbuji_mayi', 'Mbuji-Mayi'
+
     appel = models.ForeignKey(
         AppelCandidature, on_delete=models.CASCADE,
         related_name='retenus_definitifs', verbose_name='appel à candidature',
@@ -978,6 +988,26 @@ class RetenuDefinitif(models.Model):
         Recours, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='entrees_definitives', verbose_name='recours',
     )
+    # Ville OFFICIELLE du test (confirmée). Kinshasa par défaut ; elle ne change
+    # QUE lorsqu'un agent valide une demande (jamais directement depuis le public).
+    ville_examen = models.CharField(
+        'ville du test', max_length=20, choices=Ville.choices, default=Ville.KINSHASA,
+    )
+    # Demande de ville déposée par le candidat (formulaire public) EN ATTENTE de
+    # validation par un agent. Vide = aucune demande en cours. À la validation,
+    # `ville_demandee` est appliquée à `ville_examen` puis remise à vide.
+    ville_demandee = models.CharField(
+        'ville demandée', max_length=20, choices=Ville.choices, blank=True,
+    )
+    ville_demandee_le = models.DateTimeField('demande reçue le', null=True, blank=True)
+    # Date de naissance déclarée lors de la demande (vérification par l'agent).
+    date_naissance = models.DateField('date de naissance', null=True, blank=True)
+    ville_choisie_le = models.DateTimeField('ville confirmée le', null=True, blank=True)
+    ville_traite_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='villes_examen_traitees', verbose_name='ville traitée par',
+    )
+
     # Forme normalisée de « nom postnom prénom » : recherche + déduplication.
     texte_recherche = models.CharField(
         'texte de recherche', max_length=320, editable=False, db_index=True, default='',

@@ -72,9 +72,12 @@ class RetenuDefinitifSerializer(serializers.ModelSerializer):
     """Vue publique d'une entrée de la liste DÉFINITIVE : CODE + identité +
     domaine. Le code est figé à la publication (stable et définitif)."""
 
+    ville_examen_libelle = serializers.CharField(source='get_ville_examen_display', read_only=True)
+
     class Meta:
         model = RetenuDefinitif
-        fields = ['id', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle', 'origine']
+        fields = ['id', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle', 'origine',
+                  'ville_examen', 'ville_examen_libelle']
 
 
 class EligibiliteAdminSerializer(serializers.ModelSerializer):
@@ -575,7 +578,7 @@ class AppelCandidatureSerializer(serializers.ModelSerializer):
             'id', 'titre', 'description', 'statut', 'statut_libelle',
             'date_ouverture', 'date_cloture', 'liste_retenus_publiee',
             'message_retenus', 'liste_definitive_publiee', 'message_retenus_definitif',
-            'date_limite_recours', 'candidature_unique',
+            'instructions_examen', 'date_limite_recours', 'candidature_unique',
             'pieces_exigees', 'nb_dossiers', 'cree_le', 'modifie_le',
         ]
 

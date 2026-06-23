@@ -8,6 +8,7 @@ const auth = useAuthStore()
 
 const appels = ref([])
 const appelId = ref(null)
+const onglet = ref('provisoire')   // 'provisoire' | 'definitive'
 const retenus = ref([])
 const total = ref(0)            // vrai nombre de retenus (toutes pages)
 const chargement = ref(false)
@@ -87,8 +88,12 @@ const ENTETES_DEF = [
   { title: 'Postnom', key: 'postnom' },
   { title: 'Prénom', key: 'prenom' },
   { title: 'Domaine', key: 'poste_libelle' },
+  { title: 'Ville du test', key: 'ville_examen', sortable: false },
   { title: 'Origine', key: 'origine', sortable: false },
 ]
+function exporterDefinitive() {
+  window.open(`/api/appels/${appelId.value}/liste-definitive-export/`, '_blank')
+}
 
 async function chargerDefinitif() {
   if (!appelId.value) { definitif.value = { publiee: false, total: 0, nb_recours: 0, nb_codes: 0, results: [] }; return }
@@ -118,8 +123,37 @@ async function depublierDefinitive() {
   } catch (e) { notifier(e.response?.data?.detail || 'Action impossible.', 'error') }
 }
 
-// Recharge la définitive quand on change d'appel.
-watch(appelId, chargerDefinitif)
+// --- Demandes de ville d'examen (validées par un agent) ---
+const demandes = ref([])
+const chargementDem = ref(false)
+const ENTETES_DEM = [
+  { title: 'Code', key: 'code', width: 90 },
+  { title: 'Candidat', key: 'nom' },
+  { title: 'Né(e) le', key: 'date_naissance', sortable: false },
+  { title: 'Ville actuelle', key: 'ville_actuelle', sortable: false },
+  { title: 'Ville demandée', key: 'ville_demandee', sortable: false },
+  { title: 'Demandé le', key: 'demande_le', sortable: false },
+  { title: '', key: 'actions', sortable: false, align: 'end' },
+]
+async function chargerDemandes() {
+  if (!appelId.value) { demandes.value = []; return }
+  chargementDem.value = true
+  try {
+    const { data } = await api.get(`/appels/${appelId.value}/demandes-ville/`)
+    demandes.value = data.results
+  } finally { chargementDem.value = false }
+}
+async function traiterDemande(id, action) {
+  try {
+    await api.post(`/appels/${appelId.value}/traiter-demande-ville/`, { id, action })
+    notifier(action === 'valider' ? 'Demande validée — ville officielle mise à jour.' : 'Demande rejetée.')
+    await Promise.all([chargerDemandes(), chargerDefinitif()])
+  } catch (e) { notifier(e.response?.data?.detail || 'Action impossible.', 'error') }
+}
+const dateFr = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '—')
+
+// Recharge la définitive et les demandes quand on change d'appel.
+watch(appelId, () => { chargerDefinitif(); chargerDemandes() })
 
 onMounted(rechargerAppels)
 </script>
@@ -139,19 +173,50 @@ onMounted(rechargerAppels)
     </v-card>
 
     <template v-if="appelId">
-      <!-- KPI -->
+      <!-- Stats : état global des deux listes -->
       <v-row dense class="mb-5">
         <v-col cols="6" md="3">
-          <StatCard icon="mdi-account-check" :value="total" label="Personnes retenues"
-                    description="Pour cet appel" color="#2E7D32" />
+          <StatCard icon="mdi-account-check" :value="total" label="Retenus (provisoire)"
+                    description="Présélectionnés" color="#2E7D32" />
         </v-col>
         <v-col cols="6" md="3">
           <StatCard :icon="publiee ? 'mdi-earth' : 'mdi-earth-off'" :value="publiee ? 'Oui' : 'Non'"
-                    label="Liste publiée" :description="publiee ? 'Visible publiquement' : 'Non publiée'"
+                    label="Liste provisoire" :description="publiee ? 'Publiée' : 'Non publiée'"
                     :color="publiee ? '#0288D1' : '#607D8B'" />
+        </v-col>
+        <v-col cols="6" md="3">
+          <StatCard icon="mdi-seal-variant" :value="definitif.total" label="Liste définitive"
+                    :description="definitif.nb_recours ? `dont ${definitif.nb_recours} via recours` : 'Retenus + recours'"
+                    color="#5E35B1" />
+        </v-col>
+        <v-col cols="6" md="3">
+          <StatCard :icon="defPubliee ? 'mdi-earth' : 'mdi-earth-off'" :value="defPubliee ? 'Oui' : 'Non'"
+                    label="Définitive publiée" :description="defPubliee ? 'Visible publiquement' : 'Non publiée'"
+                    :color="defPubliee ? '#5E35B1' : '#607D8B'" />
         </v-col>
       </v-row>
 
+      <!-- Onglets -->
+      <v-card flat border rounded="lg" class="mb-4 onglets-barre">
+        <v-tabs v-model="onglet" color="primary" align-tabs="start" height="56" slider-color="primary">
+          <v-tab value="provisoire" prepend-icon="mdi-format-list-bulleted-square" class="text-none font-weight-bold">
+            Liste provisoire
+            <v-chip size="x-small" class="ml-2" variant="flat" color="primary">{{ total }}</v-chip>
+          </v-tab>
+          <v-tab value="definitive" prepend-icon="mdi-seal-variant" class="text-none font-weight-bold">
+            Liste définitive
+            <v-chip size="x-small" class="ml-2" variant="flat" color="#5E35B1">{{ definitif.total }}</v-chip>
+          </v-tab>
+          <v-tab value="demandes" prepend-icon="mdi-map-marker-radius-outline" class="text-none font-weight-bold">
+            Demandes de ville
+            <v-chip v-if="demandes.length" size="x-small" class="ml-2" variant="flat" color="#EF6C00">{{ demandes.length }}</v-chip>
+          </v-tab>
+        </v-tabs>
+      </v-card>
+
+      <v-window v-model="onglet">
+      <!-- ===== Onglet : LISTE PROVISOIRE ===== -->
+      <v-window-item value="provisoire">
       <v-card flat border>
         <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
           <span class="text-subtitle-1 font-weight-bold">Personnes retenues</span>
@@ -187,9 +252,11 @@ onMounted(rechargerAppels)
           Les candidats retenus ont déjà été notifiés individuellement.
         </v-card-text>
       </v-card>
+      </v-window-item>
 
-      <!-- LISTE DÉFINITIVE : retenus publiés + recours validés, code stable -->
-      <v-card flat border class="mt-6">
+      <!-- ===== Onglet : LISTE DÉFINITIVE (retenus publiés + recours validés) ===== -->
+      <v-window-item value="definitive">
+      <v-card flat border>
         <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
           <v-icon color="#5E35B1">mdi-seal-variant</v-icon>
           <span class="text-subtitle-1 font-weight-bold">Liste définitive</span>
@@ -200,6 +267,8 @@ onMounted(rechargerAppels)
           <v-text-field v-model="qDef" @update:modelValue="rechercherDef" placeholder="Rechercher un nom…"
                         prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
                         clearable style="max-width: 260px" @click:clear="qDef = ''; chargerDefinitif()" />
+          <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
+                 :disabled="!definitif.total" @click="exporterDefinitive">Exporter Excel</v-btn>
           <v-chip v-if="defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-earth">Publiée</v-chip>
           <template v-if="auth.estAdmin || auth.peutSuperviser">
             <v-btn v-if="!defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-publish"
@@ -225,6 +294,10 @@ onMounted(rechargerAppels)
           </template>
           <template #item.nom="{ item }"><span class="font-weight-bold">{{ item.nom }}</span></template>
           <template #item.poste_libelle="{ item }"><span class="text-medium-emphasis">{{ item.poste_libelle || '—' }}</span></template>
+          <template #item.ville_examen="{ item }">
+            <v-chip size="x-small" label variant="tonal"
+                    :color="item.ville_examen === 'Kinshasa' ? 'grey' : '#EF6C00'">{{ item.ville_examen }}</v-chip>
+          </template>
           <template #item.origine="{ item }">
             <v-chip v-if="item.origine === 'recours'" size="x-small" label color="#00838F" variant="tonal">Recours</v-chip>
             <v-chip v-else size="x-small" label color="grey" variant="tonal">Liste</v-chip>
@@ -236,6 +309,47 @@ onMounted(rechargerAppels)
           Le message public spécifique se règle dans la console (champ « message public (liste définitive) »).
         </v-card-text>
       </v-card>
+      </v-window-item>
+
+      <!-- ===== Onglet : DEMANDES DE VILLE (à valider par un agent) ===== -->
+      <v-window-item value="demandes">
+      <v-card flat border>
+        <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
+          <v-icon color="#EF6C00">mdi-map-marker-radius-outline</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Demandes de ville d'examen</span>
+          <v-chip color="#EF6C00" variant="tonal" size="small">{{ demandes.length }} en attente</v-chip>
+        </v-card-title>
+        <v-divider />
+        <v-alert type="info" variant="tonal" density="compact" class="ma-3" icon="mdi-shield-check-outline">
+          Les candidats hors Kinshasa <strong>demandent</strong> leur ville sur le portail ; la ville officielle
+          ne change qu'après <strong>votre validation</strong> (vérifiez la date de naissance avec leur pièce d'identité).
+        </v-alert>
+        <v-data-table
+          :headers="ENTETES_DEM" :items="demandes" :loading="chargementDem"
+          :items-per-page="25" :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
+          class="tableau-admin" no-data-text="Aucune demande de ville en attente." loading-text="Chargement…">
+          <template #item.code="{ item }"><span class="font-weight-bold text-primary">{{ item.code }}</span></template>
+          <template #item.nom="{ item }">
+            <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
+          </template>
+          <template #item.date_naissance="{ item }">{{ dateFr(item.date_naissance) }}</template>
+          <template #item.ville_actuelle="{ item }"><span class="text-medium-emphasis">{{ item.ville_actuelle }}</span></template>
+          <template #item.ville_demandee="{ item }">
+            <v-chip color="#EF6C00" size="small" variant="tonal" label>{{ item.ville_demandee_libelle }}</v-chip>
+          </template>
+          <template #item.demande_le="{ item }">{{ dateFr(item.demande_le) }}</template>
+          <template #item.actions="{ item }">
+            <div class="d-flex ga-2 justify-end" v-if="auth.peutTraiter">
+              <v-btn color="success" variant="flat" size="small" prepend-icon="mdi-check"
+                     @click="traiterDemande(item.id, 'valider')">Valider</v-btn>
+              <v-btn color="grey" variant="outlined" size="small" prepend-icon="mdi-close"
+                     @click="traiterDemande(item.id, 'rejeter')">Rejeter</v-btn>
+            </div>
+          </template>
+        </v-data-table>
+      </v-card>
+      </v-window-item>
+      </v-window>
     </template>
 
     <v-card v-else flat border class="pa-10 text-center">
@@ -249,4 +363,7 @@ onMounted(rechargerAppels)
 
 <style scoped>
 .tableau-admin :deep(thead th) { background: #f4f5f9; font-weight: 700 !important; color: #1a237e !important; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.onglets-barre { overflow: hidden; }
+.onglets-barre :deep(.v-tab) { letter-spacing: 0.01em; }
+.onglets-barre :deep(.v-tab--selected) { background: #f5f6fb; }
 </style>

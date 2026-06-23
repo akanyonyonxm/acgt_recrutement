@@ -376,9 +376,16 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         if not roles.acces_backoffice(request.user):
             raise PermissionDenied("Réservé au back-office.")
         appel = self.get_object()
-        codes = {e.texte_recherche: e.code for e in appel.retenus_definitifs.all()}
-        rows = [{**s, 'code': codes.get(s['texte_recherche'], '')}
-                for s in _sources_liste_definitive(appel)]
+        entrees = {e.texte_recherche: e for e in appel.retenus_definitifs.all()}
+        rows = []
+        for s in _sources_liste_definitive(appel):
+            e = entrees.get(s['texte_recherche'])
+            rows.append({
+                **s,
+                'code': e.code if e else '',
+                'ville_examen': e.get_ville_examen_display() if e else '',
+                'ville_choisie': bool(e and e.ville_choisie_le) if e else False,
+            })
         for token in tokens_recherche(request.query_params.get('q', '')):
             rows = [r for r in rows if token in r['texte_recherche']]
         nb_recours = sum(1 for r in rows if r['origine'] == RetenuDefinitif.Origine.RECOURS)
@@ -386,7 +393,7 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             'publiee': appel.liste_definitive_publiee,
             'total': len(rows),
             'nb_recours': nb_recours,
-            'nb_codes': len(codes),
+            'nb_codes': len(entrees),
             'message': appel.message_retenus_definitif,
             'results': rows,
         })
@@ -423,6 +430,102 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         appel.save(update_fields=['liste_definitive_publiee'])
         return Response({'detail': "Liste définitive retirée de l'affichage public."})
 
+    # --- Demandes de ville d'examen (validées par un agent) -------------
+
+    @action(detail=True, methods=['get'], url_path='demandes-ville',
+            permission_classes=[IsAuthenticated])
+    def demandes_ville(self, request, pk=None):
+        """Demandes de ville EN ATTENTE pour cet appel (back-office)."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        appel = self.get_object()
+        qs = (appel.retenus_definitifs.exclude(ville_demandee='')
+              .order_by('ville_demandee_le'))
+        rows = [{
+            'id': e.id, 'code': e.code,
+            'nom': e.nom, 'postnom': e.postnom, 'prenom': e.prenom,
+            'poste_libelle': e.poste_libelle,
+            'ville_actuelle': e.get_ville_examen_display(),
+            'ville_demandee': e.ville_demandee,
+            'ville_demandee_libelle': e.get_ville_demandee_display(),
+            'date_naissance': e.date_naissance,
+            'demande_le': e.ville_demandee_le,
+        } for e in qs]
+        return Response({'total': len(rows), 'results': rows})
+
+    @action(detail=True, methods=['post'], url_path='traiter-demande-ville',
+            permission_classes=[IsAuthenticated])
+    def traiter_demande_ville(self, request, pk=None):
+        """Valide ou rejette une demande de ville (back-office). Corps :
+        { id, action: 'valider'|'rejeter' }. À la validation, la ville demandée
+        devient la ville officielle ; au rejet, la demande est annulée (la ville
+        reste inchangée)."""
+        if not roles.peut_traiter(request.user):
+            raise PermissionDenied("Réservé aux administrateurs, superviseurs et validateurs.")
+        appel = self.get_object()
+        entree = get_object_or_404(
+            RetenuDefinitif, pk=request.data.get('id'), appel=appel,
+        )
+        if not entree.ville_demandee:
+            raise ValidationError("Aucune demande de ville en attente pour ce candidat.")
+        action_ = request.data.get('action')
+        if action_ == 'valider':
+            entree.ville_examen = entree.ville_demandee
+            entree.ville_choisie_le = timezone.now()
+            entree.ville_traite_par = request.user
+            entree.ville_demandee = ''
+            entree.save(update_fields=['ville_examen', 'ville_choisie_le',
+                                       'ville_traite_par', 'ville_demandee'])
+        elif action_ == 'rejeter':
+            entree.ville_demandee = ''
+            entree.ville_traite_par = request.user
+            entree.save(update_fields=['ville_demandee', 'ville_traite_par'])
+        else:
+            raise ValidationError({'action': "Action invalide (valider/rejeter)."})
+        return Response({
+            'detail': 'Demande validée.' if action_ == 'valider' else 'Demande rejetée.',
+            'ville_examen': entree.ville_examen,
+            'ville_examen_libelle': entree.get_ville_examen_display(),
+        })
+
+    @action(detail=True, methods=['get'], url_path='liste-definitive-export',
+            permission_classes=[IsAuthenticated])
+    def liste_definitive_export(self, request, pk=None):
+        """Exporte la liste définitive en Excel (back-office) : code, identité,
+        domaine, ville du test, demande de ville en attente, origine."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        appel = self.get_object()
+
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Liste définitive'
+        entetes = ['Code', 'Nom', 'Postnom', 'Prénom', 'Domaine', 'Ville du test',
+                   'Demande en attente', 'Origine']
+        ws.append(entetes)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        for e in appel.retenus_definitifs.all().order_by('code'):
+            ws.append([
+                e.code, e.nom, e.postnom, e.prenom, e.poste_libelle,
+                e.get_ville_examen_display(),
+                e.get_ville_demandee_display() if e.ville_demandee else '',
+                e.get_origine_display(),
+            ])
+        for i, largeur in enumerate([10, 20, 20, 20, 28, 16, 18, 22], start=1):
+            ws.column_dimensions[get_column_letter(i)].width = largeur
+
+        reponse = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        reponse['Content-Disposition'] = 'attachment; filename="liste_definitive.xlsx"'
+        wb.save(reponse)
+        return reponse
+
 
 class RetenusViewSet(viewsets.ReadOnlyModelViewSet):
     """Liste publique des personnes retenues (lecture seule, recherche tolérante).
@@ -449,22 +552,71 @@ class RetenusViewSet(viewsets.ReadOnlyModelViewSet):
         return qs.order_by('nom', 'postnom', 'prenom')
 
 
+class VilleExamenThrottle(AnonRateThrottle):
+    """Limite le formulaire public de choix de ville (anti-spam)."""
+
+    scope = 'reclamation'
+
+
 class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
     """Liste publique DÉFINITIVE (lecture seule) : CODE stable + identité +
-    domaine, pour les appels dont la liste définitive est publiée. `?appel=`/`?q=`."""
+    domaine, pour les appels dont la liste définitive est publiée. `?appel=`/`?q=`.
+
+    Action publique `choisir-ville` : un retenu hors Kinshasa précise la ville
+    du test (Lubumbashi / Mbuji-Mayi). Kinshasa reste la valeur par défaut."""
 
     serializer_class = RetenuDefinitifSerializer
     permission_classes = [AllowAny]
     pagination_class = PaginationPublique
+
+    def get_throttles(self):
+        if self.action == 'choisir_ville':
+            return [VilleExamenThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
         qs = RetenuDefinitif.objects.filter(appel__liste_definitive_publiee=True)
         appel = self.request.query_params.get('appel')
         if appel:
             qs = qs.filter(appel_id=appel)
+        # Recherche par CODE (ex. « 0001 » ou « 1 ») : utilisée par le formulaire
+        # de choix de ville (le candidat saisit son code et retrouve son nom).
+        code = (self.request.query_params.get('code') or '').strip()
+        if code:
+            qs = qs.filter(code=code.zfill(4) if code.isdigit() else code)
         for token in tokens_recherche(self.request.query_params.get('q', '')):
             qs = qs.filter(texte_recherche__contains=token)
         return qs.order_by('code')
+
+    @action(detail=False, methods=['post'], url_path='choisir-ville',
+            permission_classes=[AllowAny])
+    def choisir_ville(self, request):
+        """Le retenu DEMANDE sa ville de test (public). Corps : { id,
+        date_naissance, ville }. `ville` ∈ {lubumbashi, mbuji_mayi}.
+
+        SÉCURITÉ : on n'écrit PAS la ville officielle ici (un formulaire public
+        ne doit pas pouvoir modifier directement la ville de n'importe qui). On
+        enregistre une DEMANDE en attente, qu'un agent valide en back-office."""
+        entree = get_object_or_404(
+            RetenuDefinitif, pk=request.data.get('id'),
+            appel__liste_definitive_publiee=True,
+        )
+        ville = request.data.get('ville')
+        # On n'autorise que les villes hors Kinshasa (Kinshasa = défaut, pas de demande).
+        if ville not in (RetenuDefinitif.Ville.LUBUMBASHI, RetenuDefinitif.Ville.MBUJI_MAYI):
+            raise ValidationError({'ville': "Choisissez Lubumbashi ou Mbuji-Mayi."})
+        dn = request.data.get('date_naissance')
+        if not dn:
+            raise ValidationError({'date_naissance': "La date de naissance est requise."})
+        entree.ville_demandee = ville
+        entree.date_naissance = dn
+        entree.ville_demandee_le = timezone.now()
+        entree.save(update_fields=['ville_demandee', 'date_naissance', 'ville_demandee_le'])
+        return Response({
+            'detail': 'Demande enregistrée (en attente de validation).',
+            'ville': entree.ville_demandee,
+            'ville_libelle': entree.get_ville_demandee_display(),
+        })
 
 
 class DossierViewSet(viewsets.ModelViewSet):
