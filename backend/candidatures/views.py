@@ -2008,6 +2008,14 @@ class RapportsView(APIView):
             row['statut']: row['n']
             for row in soumis.values('statut').annotate(n=Count('id'))
         }
+        # Ventilation par statut des SEULS vrais dépôts en ligne (deposant
+        # renseigné) : permet de savoir, parmi ces dépôts, combien retenus /
+        # rejetés — sans le bruit des ajouts par validation (réclamation).
+        ds_par_statut_en_ligne = {
+            row['statut']: row['n']
+            for row in soumis.filter(deposant__isnull=False)
+                             .values('statut').annotate(n=Count('id'))
+        }
         # Provenance fiable via `deposant` (jamais modifié) : vrais dépôts en
         # ligne (deposant renseigné) vs ajouts par validation de réclamation
         # (deposant=None). Le lien dossier_cree est effacé à l'annulation, donc
@@ -2087,6 +2095,7 @@ class RapportsView(APIView):
                     'annule': cat_annule,
                 },
                 'par_statut': ds_par_statut,
+                'par_statut_en_ligne': ds_par_statut_en_ligne,
                 'par_poste': par_poste,
             },
             'reclamations': {

@@ -55,7 +55,7 @@ const pct = (v, t) => (t ? Math.round((v / t) * 100) : 0)
 
 // --- Données dérivées ---
 const r = computed(() => rapport.value)
-const segDossiers = computed(() => Object.entries(r.value?.dossiers?.par_statut || {})
+const segDossiers = computed(() => Object.entries(r.value?.dossiers?.par_statut_en_ligne || {})
   .map(([k, v]) => ({ key: k, label: STATUT_DOSSIER[k]?.label || k, color: STATUT_DOSSIER[k]?.color || '#999', value: v }))
   .filter((s) => s.value > 0))
 const totalDossiers = computed(() => segDossiers.value.reduce((s, x) => s + x.value, 0))
@@ -130,10 +130,10 @@ onMounted(async () => { await chargerAppels(); await charger() })
       <v-row dense class="mb-2">
         <v-col cols="12" md="3">
           <v-card flat border class="pa-5 h-100">
-            <div class="carte-titre">Dossiers par statut</div>
+            <div class="carte-titre">Dépôts en ligne par statut</div>
             <div class="donut-zone">
               <div class="donut" :style="donutStyle(segDossiers)">
-                <div class="donut-hole"><span class="donut-val">{{ totalDossiers }}</span><span class="donut-lib">dossiers</span></div>
+                <div class="donut-hole"><span class="donut-val">{{ totalDossiers }}</span><span class="donut-lib">en ligne</span></div>
               </div>
               <div class="legende">
                 <div v-for="s in segDossiers" :key="s.key" class="legende-l">
