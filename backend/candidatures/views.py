@@ -510,6 +510,11 @@ class DossierViewSet(viewsets.ModelViewSet):
         elif origine == 'en_ligne':
             qs = qs.filter(est_reclamation=False)
 
+        # Exclure les résidus annulés (dossiers de validation orphelins :
+        # deposant=None + non liés à une réclamation) — vue « dossiers reçus réels ».
+        if self.request.query_params.get('hors_residus') in ('1', 'true'):
+            qs = qs.exclude(deposant__isnull=True, est_reclamation=False)
+
         # Tri demandé par le tableau (sinon : plus récents d'abord).
         ordering = self.request.query_params.get('ordering', '')
         if ordering.lstrip('-') in self.TRI_AUTORISE:
@@ -616,9 +621,19 @@ class DossierViewSet(viewsets.ModelViewSet):
         ).count()
         nb_retenu = retenus.count()
         total = sum(par_statut.values())
+        # Reçus « réels » = hors brouillon ET hors résidus annulés (dossiers
+        # créés en validant une réclamation puis annulés : deposant=None +
+        # orphelins, lien dossier_cree retiré). Ces résidus ne sont pas de vrais
+        # dossiers reçus.
+        soumis = qs.exclude(statut=Dossier.Statut.BROUILLON)
+        residus = soumis.filter(deposant__isnull=True).annotate(
+            _lie=Exists(ReclamationEligibilite.objects.filter(dossier_cree=OuterRef('pk')))
+        ).filter(_lie=False).count()
         return Response({
             'total': total,
             'par_statut': par_statut,
+            'residus': residus,
+            'recus_reels': soumis.count() - residus,
             'par_origine': {
                 'reclamation': nb_reclam_val,
                 'en_ligne': nb_retenu - nb_reclam_val,
