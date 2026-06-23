@@ -95,8 +95,11 @@ const notifier = (text, color = 'success') => (snack.value = { show: true, color
 
 // « À valider » regroupe DÉPOSÉ et EN_EXAMEN (l'étape examen n'est plus
 // utilisée : les dossiers qui y restent sont traités comme « à valider »).
+// Dossiers REÇUS = tous les statuts SAUF brouillon (les brouillons, non soumis,
+// ne sont pas des dossiers à traiter ; ils restent visibles dans l'histogramme).
+const STATUTS_RECUS = 'depose,en_examen,retenu,non_retenu,rejete'
 const KPIS = [
-  { key: '', label: 'Total', desc: 'Tous les dossiers', icon: 'mdi-folder-multiple', color: '#1a237e' },
+  { key: STATUTS_RECUS, label: 'Reçus', desc: 'Hors brouillon', icon: 'mdi-folder-multiple', color: '#1a237e' },
   { key: 'depose,en_examen', label: 'À valider', desc: 'En attente', icon: 'mdi-inbox-arrow-down', color: '#EF6C00' },
   { key: 'retenu', label: 'Retenus', desc: 'Candidats retenus', icon: 'mdi-check-circle', color: '#2E7D32' },
   { key: 'rejete', label: 'Rejetés', desc: 'Refusés', icon: 'mdi-cancel', color: '#607D8B' },
