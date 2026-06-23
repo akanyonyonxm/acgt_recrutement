@@ -95,21 +95,20 @@ const notifier = (text, color = 'success') => (snack.value = { show: true, color
 
 // « À valider » regroupe DÉPOSÉ et EN_EXAMEN (l'étape examen n'est plus
 // utilisée : les dossiers qui y restent sont traités comme « à valider »).
-// Dossiers REÇUS RÉELS = hors brouillon ET hors résidus annulés (dossiers de
-// validation orphelins). Clé sentinelle 'recus' (pas une liste de statuts) :
-// gérée à part dans charger() (statut hors brouillon + hors_residus=1). Les
-// brouillons et les résidus restent visibles via leurs propres filtres/histo.
-const STATUTS_RECUS = 'depose,en_examen,retenu,non_retenu,rejete'
+// Carte « Dossiers » = dossiers réellement déposés + brouillons − résidus
+// annulés (dossiers de validation orphelins). Autrement dit tout SAUF les
+// résidus. Clé sentinelle 'dossiers' : gérée à part dans charger() (tous statuts
+// + hors_residus=1). Les résidus restent atteignables via le filtre « Rejetés ».
 const KPIS = [
-  { key: 'recus', label: 'Reçus', desc: 'Hors brouillon & résidus', icon: 'mdi-folder-multiple', color: '#1a237e' },
+  { key: 'dossiers', label: 'Dossiers', desc: 'Déposés + brouillons, hors résidus', icon: 'mdi-folder-multiple', color: '#1a237e' },
   { key: 'depose,en_examen', label: 'À valider', desc: 'En attente', icon: 'mdi-inbox-arrow-down', color: '#EF6C00' },
   { key: 'retenu', label: 'Retenus', desc: 'Candidats retenus', icon: 'mdi-check-circle', color: '#2E7D32' },
   { key: 'rejete', label: 'Rejetés', desc: 'Refusés', icon: 'mdi-cancel', color: '#607D8B' },
 ]
-// Clé 'recus' → comptes « réels » du back ; clé composite (« depose,en_examen »)
-// → somme des statuts ; '' → total brut.
+// Clé 'dossiers' → total brut moins les résidus ; clé composite
+// (« depose,en_examen ») → somme des statuts ; '' → total brut.
 const compte = (key) => {
-  if (key === 'recus') return stats.value.recus_reels || 0
+  if (key === 'dossiers') return (stats.value.total || 0) - (stats.value.residus || 0)
   if (key === '') return stats.value.total
   return key.split(',').reduce((n, k) => n + (stats.value.par_statut[k] || 0), 0)
 }
@@ -159,9 +158,8 @@ async function charger({ page = 1, itemsPerPage = 25, sortBy } = {}) {
     if (sortBy !== undefined) tri.value = sortBy
     const s = tri.value && tri.value[0]
     const params = { page, page_size: itemsPerPage > 0 ? itemsPerPage : 25 }
-    if (statut.value === 'recus') {
-      // Vue « reçus réels » : hors brouillon + hors résidus annulés.
-      params.statut = STATUTS_RECUS
+    if (statut.value === 'dossiers') {
+      // Vue « Dossiers » : tous statuts (brouillons inclus) SAUF les résidus.
       params.hors_residus = 1
     } else if (statut.value) {
       params.statut = statut.value
