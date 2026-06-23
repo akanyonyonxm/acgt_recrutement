@@ -163,16 +163,30 @@ function imprimerBadge(e) {
   w.document.close()
 }
 
+// `pret` : on ne rend la page qu'une fois les appels chargés, pour connaître
+// d'emblée le mode (provisoire / définitive) et éviter le flash de transition
+// du titre et de la couleur du hero.
+const pret = ref(false)
 onMounted(async () => {
-  const { data } = await api.get('/appels/')
-  // Appels visibles publiquement : liste provisoire OU définitive publiée.
-  appels.value = data.results.filter((a) => a.liste_retenus_publiee || a.liste_definitive_publiee)
+  try {
+    const { data } = await api.get('/appels/')
+    // Appels visibles publiquement : liste provisoire OU définitive publiée.
+    appels.value = data.results.filter((a) => a.liste_retenus_publiee || a.liste_definitive_publiee)
+  } finally {
+    pret.value = true
+  }
   charger()
 })
 </script>
 
 <template>
   <div>
+    <!-- Attente du chargement des appels : évite le flash de bascule du hero -->
+    <div v-if="!pret" class="chargement-page">
+      <div class="spinner" />
+    </div>
+
+    <template v-else>
     <!-- HERO -->
     <section class="hero" :class="{ 'hero--def': modeDefinitif }">
       <svg class="hero-courbes" viewBox="0 0 1440 420" preserveAspectRatio="none" aria-hidden="true">
@@ -278,6 +292,7 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+    </template>
 
     <!-- Modal Instructions -->
     <div v-if="showInstructions" class="modal-fond" @click.self="showInstructions = false">
@@ -296,6 +311,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.chargement-page { min-height: 60vh; display: flex; align-items: center; justify-content: center; }
+.spinner { width: 42px; height: 42px; border: 4px solid #e0e3ee; border-top-color: #1a237e; border-radius: 50%; animation: tourner 0.8s linear infinite; }
+@keyframes tourner { to { transform: rotate(360deg); } }
 .hero { background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%); position: relative; overflow: hidden; padding: 56px 24px 64px; }
 .hero--def { background: linear-gradient(135deg, #1b5e20 0%, #0b3d1a 100%); }
 .hero--def .hero-sous strong { color: #FDD835; }
