@@ -5,15 +5,26 @@ import api from '../../api'
 const appels = ref([])
 const appelId = ref('')
 
-// Communiqué à afficher : celui de l'appel sélectionné, sinon le premier appel
-// publié qui en a un (cas « Tous les appels »).
-const messageActif = computed(() => {
-  if (appelId.value) {
-    const a = appels.value.find((x) => x.id === appelId.value)
-    return (a?.message_retenus || '').trim()
-  }
-  return (appels.value.find((x) => (x.message_retenus || '').trim())?.message_retenus || '').trim()
-})
+const appelCourant = computed(() => appels.value.find((x) => x.id === appelId.value))
+
+// Mode DÉFINITIF : si l'appel sélectionné (ou, en « Tous », au moins un appel) a
+// publié sa liste définitive → on affiche la définitive (codes) à la place de la
+// provisoire (« la définitive remplace la provisoire »).
+const modeDefinitif = computed(() => appelId.value
+  ? !!appelCourant.value?.liste_definitive_publiee
+  : appels.value.some((a) => a.liste_definitive_publiee))
+
+// Communiqué : message définitif si on est en mode définitif, sinon le message
+// de la liste provisoire. Celui de l'appel sélectionné, sinon le premier qui en a un.
+function _msg(champ) {
+  if (appelId.value) return (appelCourant.value?.[champ] || '').trim()
+  return (appels.value.find((x) => (x[champ] || '').trim())?.[champ] || '').trim()
+}
+const MSG_DEFINITIF_DEFAUT = "La liste définitive des candidats retenus sera publiée le jeudi 24 juin 2026. "
+  + "Les candidats résidant en dehors de Kinshasa pourront préciser la ville dans laquelle ils souhaitent passer l'examen."
+const messageActif = computed(() => modeDefinitif.value
+  ? (_msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT)
+  : _msg('message_retenus'))
 const items = ref([])
 const total = ref(0)
 const loading = ref(false)
@@ -26,7 +37,8 @@ async function charger() {
   try {
     const params = { q: q.value, page: page.value }
     if (appelId.value) params.appel = appelId.value
-    const { data } = await api.get('/retenus/', { params })
+    const url = modeDefinitif.value ? '/retenus-definitifs/' : '/retenus/'
+    const { data } = await api.get(url, { params })
     items.value = data.results
     total.value = data.count
   } finally {
@@ -64,9 +76,51 @@ function aller(p) {
   charger()
 }
 
+// Impression d'un badge d'accès au test (code + nom complet + domaine + zone à
+// signer), à présenter le jour de l'examen. Ouvre une fenêtre prête à imprimer.
+function imprimerBadge(e) {
+  const nom = `${aff(e.nom)} ${aff(e.postnom)} ${aff(e.prenom)}`.replace(/\s+/g, ' ').trim()
+  const w = window.open('', '_blank', 'width=760,height=540')
+  if (!w) return
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
+    <title>Badge ${e.code} — ${nom}</title>
+    <style>
+      *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px;color:#1b1b21}
+      .badge{max-width:620px;margin:0 auto;border:2px solid #1a237e;border-radius:16px;overflow:hidden}
+      .tete{background:#1a237e;color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center}
+      .tete .org{font-size:1.3rem;font-weight:800;letter-spacing:.5px}
+      .tete .sous{font-size:.78rem;opacity:.9}
+      .corps{padding:22px}
+      .code{font-size:2.6rem;font-weight:800;color:#1a237e;letter-spacing:2px}
+      .code-lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+      .ligne{margin-top:14px} .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
+      .v{font-size:1.15rem;font-weight:700;text-transform:uppercase}
+      .vd{font-size:1rem;color:#374151}
+      .sign{margin-top:30px;display:flex;justify-content:space-between;gap:24px}
+      .sign div{flex:1;border-top:1px solid #9ca3af;padding-top:6px;font-size:.75rem;color:#6b7280;text-align:center}
+      .note{margin-top:18px;font-size:.72rem;color:#6b7280;border-top:1px dashed #d1d5db;padding-top:10px}
+      @media print{body{padding:0}}
+    </style></head><body>
+    <div class="badge">
+      <div class="tete"><div><div class="org">ACGT</div><div class="sous">Agence Congolaise des Grands Travaux</div></div>
+        <div style="text-align:right"><div class="sous">Badge d'accès au test</div></div></div>
+      <div class="corps">
+        <div class="code-lbl">Code candidat</div><div class="code">${e.code}</div>
+        <div class="ligne"><div class="k">Nom complet</div><div class="v">${nom}</div></div>
+        <div class="ligne"><div class="k">Domaine</div><div class="vd">${e.poste_libelle || '—'}</div></div>
+        <div class="sign"><div>Signature du candidat</div><div>Visa ACGT</div></div>
+        <div class="note">À imprimer, signer et présenter le jour du test avec une pièce d'identité.</div>
+      </div>
+    </div>
+    <script>window.onload=function(){window.print()}<\/script>
+    </body></html>`)
+  w.document.close()
+}
+
 onMounted(async () => {
   const { data } = await api.get('/appels/')
-  appels.value = data.results.filter((a) => a.liste_retenus_publiee)
+  // Appels visibles publiquement : liste provisoire OU définitive publiée.
+  appels.value = data.results.filter((a) => a.liste_retenus_publiee || a.liste_definitive_publiee)
   charger()
 })
 </script>
@@ -91,7 +145,12 @@ onMounted(async () => {
       </svg>
       <div class="hero-inner">
         <h1 class="hero-titre">Candidats retenus</h1>
-        <p class="hero-sous">
+        <p v-if="modeDefinitif" class="hero-sous">
+          <strong>Liste définitive</strong> des candidats retenus.
+          Chaque candidat dispose d'un <mark class="surbrillance-claire">code unique</mark> ;
+          imprimez votre <strong>badge d'accès</strong> et présentez-le, signé, le jour du test.
+        </p>
+        <p v-else class="hero-sous">
           Liste provisoire des candidats présélectionnés.
           Les candidats dont le nom n'apparaît pas et qui estiment remplir les critères requis
           (<i>âge maximum de 40 ans, niveau minimum requis de BAC&nbsp;+5, soumission des dossiers dans la période requise, domaines de métier publiés</i>)
@@ -128,18 +187,26 @@ onMounted(async () => {
         <div class="tableau-scroll">
           <table class="tableau">
             <thead>
-              <tr><th class="num">#</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th></tr>
+              <tr>
+                <th v-if="modeDefinitif" class="num">CODE</th>
+                <th class="num">#</th><th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th>
+                <th v-if="modeDefinitif" class="badge-col">BADGE</th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="(e, i) in items" :key="e.id" :class="{ zebra: i % 2 }">
+                <td v-if="modeDefinitif" class="code-cell">{{ e.code }}</td>
                 <td class="num">{{ debut + i }}</td>
                 <td class="nom-cell">{{ aff(e.nom) }}</td>
                 <td class="nom-cell">{{ aff(e.postnom) }}</td>
                 <td class="nom-cell">{{ aff(e.prenom) }}</td>
                 <td class="muted">{{ e.poste_libelle || '—' }}</td>
+                <td v-if="modeDefinitif" class="badge-col">
+                  <button class="btn-badge" @click="imprimerBadge(e)">🖨️ Badge</button>
+                </td>
               </tr>
               <tr v-if="!loading && !items.length">
-                <td colspan="5" class="vide">Aucune liste de retenus publiée pour le moment.</td>
+                <td :colspan="modeDefinitif ? 7 : 5" class="vide">Aucune liste de retenus publiée pour le moment.</td>
               </tr>
             </tbody>
           </table>
@@ -197,6 +264,11 @@ onMounted(async () => {
 .tableau tr.zebra { background: #fcfbff; }
 .num { width: 64px; color: #767683; font-weight: 600; }
 .nom-cell { font-weight: 600; color: #1b1b21; text-transform: uppercase; }
+.code-cell { font-weight: 800; color: #1a237e; letter-spacing: 1px; white-space: nowrap; }
+.badge-col { width: 120px; text-align: center; }
+.btn-badge { background: #1a237e; color: #fff; border: none; border-radius: 9999px; padding: 7px 14px;
+  font-size: 0.82rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+.btn-badge:hover { background: #283593; }
 .muted { color: #525f71; }
 .vide { text-align: center; color: #767683; padding: 32px; }
 

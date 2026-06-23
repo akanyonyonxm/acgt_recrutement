@@ -53,9 +53,20 @@ class AppelCandidature(models.Model):
     )
     date_ouverture = models.DateField("date d'ouverture", null=True, blank=True)
     date_cloture = models.DateField('date de clôture', null=True, blank=True)
-    # Pilote l'affichage public de la liste des personnes retenues.
+    # Pilote l'affichage public de la liste (PROVISOIRE) des personnes retenues.
     liste_retenus_publiee = models.BooleanField(
         'liste des retenus publiée', default=False,
+    )
+    # Liste DÉFINITIVE : retenus publiés + recours validés, figée avec un code
+    # stable par personne. Quand elle est publiée, elle REMPLACE la provisoire
+    # sur la page publique des retenus.
+    liste_definitive_publiee = models.BooleanField(
+        'liste définitive publiée', default=False,
+    )
+    # Message spécifique affiché sur la page publique quand la liste DÉFINITIVE
+    # est publiée (échéance du test, ville d'examen hors Kinshasa, etc.).
+    message_retenus_definitif = models.TextField(
+        'message public (liste définitive)', blank=True,
     )
     # Communiqué affiché en haut de la page publique des retenus (échéances de
     # recours, critères, date de la liste définitive…). Vide = aucun bandeau.
@@ -929,3 +940,64 @@ class Recours(models.Model):
 
     def __str__(self):
         return f'Recours {self.nom} {self.prenom} — {self.get_statut_display()}'
+
+
+class RetenuDefinitif(models.Model):
+    """Entrée FIGÉE de la liste définitive des retenus d'un appel.
+
+    La liste définitive = retenus publiés (dossiers RETENU) + recours VALIDÉS,
+    dédupliqués par identité normalisée. Elle est générée à la publication :
+    chaque personne reçoit un CODE séquentiel (0001, 0002, …) **stable et
+    définitif** (les entrées déjà codées ne sont jamais renumérotées ; les
+    nouvelles personnes prennent les codes suivants). On fige le nom et le
+    domaine (snapshot) pour rester lisible même si la source évolue.
+    """
+
+    class Origine(models.TextChoices):
+        LISTE = 'liste', 'Retenu (liste provisoire)'
+        RECOURS = 'recours', 'Validé après recours'
+
+    appel = models.ForeignKey(
+        AppelCandidature, on_delete=models.CASCADE,
+        related_name='retenus_definitifs', verbose_name='appel à candidature',
+    )
+    code = models.CharField('code', max_length=10, db_index=True)
+    nom = models.CharField('nom', max_length=100)
+    postnom = models.CharField('postnom', max_length=100, blank=True)
+    prenom = models.CharField('prénom', max_length=100)
+    poste_libelle = models.CharField('domaine', max_length=120, blank=True)
+    origine = models.CharField(
+        'origine', max_length=10, choices=Origine.choices, default=Origine.LISTE,
+    )
+    # Traçabilité de la source (facultative : SET_NULL pour survivre à une purge).
+    dossier = models.ForeignKey(
+        Dossier, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='entrees_definitives', verbose_name='dossier',
+    )
+    recours = models.ForeignKey(
+        Recours, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='entrees_definitives', verbose_name='recours',
+    )
+    # Forme normalisée de « nom postnom prénom » : recherche + déduplication.
+    texte_recherche = models.CharField(
+        'texte de recherche', max_length=320, editable=False, db_index=True, default='',
+    )
+    cree_le = models.DateTimeField('créé le', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'retenu (liste définitive)'
+        verbose_name_plural = 'retenus (liste définitive)'
+        ordering = ['code']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['appel', 'code'], name='unique_code_definitif_par_appel',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        from .utils import normaliser_texte
+        self.texte_recherche = normaliser_texte(f'{self.nom} {self.postnom} {self.prenom}')
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.code} — {self.nom} {self.postnom} {self.prenom}'.strip()

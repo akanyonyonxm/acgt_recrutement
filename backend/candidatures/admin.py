@@ -25,6 +25,7 @@ from .models import (
     Poste,
     ReclamationEligibilite,
     Recours,
+    RetenuDefinitif,
     TypePiece,
 )
 
@@ -99,9 +100,11 @@ class PieceExigeeInline(admin.TabularInline):
 @admin.register(AppelCandidature)
 class AppelCandidatureAdmin(admin.ModelAdmin):
     list_display = ('titre', 'statut', 'candidature_unique', 'date_ouverture',
-                    'date_cloture', 'liste_retenus_publiee', 'cree_le')
+                    'date_cloture', 'liste_retenus_publiee', 'liste_definitive_publiee',
+                    'cree_le')
     list_editable = ('candidature_unique',)
-    list_filter = ('statut', 'liste_retenus_publiee', 'candidature_unique')
+    list_filter = ('statut', 'liste_retenus_publiee', 'liste_definitive_publiee',
+                   'candidature_unique')
     search_fields = ('titre',)
     inlines = [PieceExigeeInline]
 
@@ -263,3 +266,14 @@ class RecoursAdmin(admin.ModelAdmin):
     search_fields = ('nom', 'postnom', 'prenom', 'email')
     readonly_fields = ('dossier', 'reclamation', 'nom', 'postnom', 'prenom',
                        'date_naissance', 'email', 'message', 'cree_le')
+
+
+@admin.register(RetenuDefinitif)
+class RetenuDefinitifAdmin(admin.ModelAdmin):
+    """Liste définitive figée — inspection (génération via le back-office Vue)."""
+
+    list_display = ('code', 'nom', 'postnom', 'prenom', 'poste_libelle', 'origine', 'appel')
+    list_filter = ('appel', 'origine')
+    search_fields = ('code', 'nom', 'postnom', 'prenom')
+    readonly_fields = ('appel', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle',
+                       'origine', 'dossier', 'recours', 'texte_recherche', 'cree_le')

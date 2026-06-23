@@ -17,6 +17,7 @@ from .models import (
     Poste,
     ReclamationEligibilite,
     Recours,
+    RetenuDefinitif,
     TypePiece,
 )
 
@@ -65,6 +66,15 @@ class RetenuPubliqueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dossier
         fields = ['id', 'nom', 'postnom', 'prenom', 'poste_libelle']
+
+
+class RetenuDefinitifSerializer(serializers.ModelSerializer):
+    """Vue publique d'une entrée de la liste DÉFINITIVE : CODE + identité +
+    domaine. Le code est figé à la publication (stable et définitif)."""
+
+    class Meta:
+        model = RetenuDefinitif
+        fields = ['id', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle', 'origine']
 
 
 class EligibiliteAdminSerializer(serializers.ModelSerializer):
@@ -564,7 +574,8 @@ class AppelCandidatureSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'titre', 'description', 'statut', 'statut_libelle',
             'date_ouverture', 'date_cloture', 'liste_retenus_publiee',
-            'message_retenus', 'date_limite_recours', 'candidature_unique',
+            'message_retenus', 'liste_definitive_publiee', 'message_retenus_definitif',
+            'date_limite_recours', 'candidature_unique',
             'pieces_exigees', 'nb_dossiers', 'cree_le', 'modifie_le',
         ]
 

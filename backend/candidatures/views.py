@@ -39,6 +39,7 @@ from .models import (
     Poste,
     ReclamationEligibilite,
     Recours,
+    RetenuDefinitif,
     TypePiece,
 )
 from .pagination import PaginationPublique, PaginationStandard
@@ -64,6 +65,7 @@ from .serializers import (
     RecoursAdminSerializer,
     RecoursCreationSerializer,
     RecoursModificationSerializer,
+    RetenuDefinitifSerializer,
     RetenuPubliqueSerializer,
     TypePieceSerializer,
 )
@@ -231,6 +233,67 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         return reponse
 
 
+def _sources_liste_definitive(appel):
+    """Liste combinée de la liste DÉFINITIVE : retenus publiés (dossiers RETENU)
+    + recours VALIDÉS rattachés à cet appel, dédupliqués par identité normalisée
+    (un retenu prime sur son éventuel recours). Triée par nom. Renvoie des dicts."""
+    vus = set()
+    out = []
+    for d in (appel.dossiers.filter(statut=Dossier.Statut.RETENU)
+              .select_related('poste')):
+        tr = d.texte_recherche or normaliser_texte(f'{d.nom} {d.postnom} {d.prenom}')
+        if tr in vus:
+            continue
+        vus.add(tr)
+        out.append({
+            'texte_recherche': tr, 'nom': d.nom, 'postnom': d.postnom, 'prenom': d.prenom,
+            'poste_libelle': d.poste.libelle if d.poste else '',
+            'origine': RetenuDefinitif.Origine.LISTE, 'dossier_id': d.id, 'recours_id': None,
+        })
+    rec_qs = (Recours.objects.filter(statut=Recours.Statut.VALIDE)
+              .filter(Q(dossier__appel=appel) | Q(reclamation__appel=appel))
+              .select_related('dossier__poste', 'reclamation__poste'))
+    for r in rec_qs:
+        tr = normaliser_texte(f'{r.nom} {r.postnom} {r.prenom}')
+        if tr in vus:
+            continue
+        vus.add(tr)
+        poste = ''
+        if r.dossier and r.dossier.poste:
+            poste = r.dossier.poste.libelle
+        elif r.reclamation and r.reclamation.poste:
+            poste = r.reclamation.poste.libelle
+        out.append({
+            'texte_recherche': tr, 'nom': r.nom, 'postnom': r.postnom, 'prenom': r.prenom,
+            'poste_libelle': poste,
+            'origine': RetenuDefinitif.Origine.RECOURS, 'dossier_id': None, 'recours_id': r.id,
+        })
+    out.sort(key=lambda s: (s['nom'].lower(), s['postnom'].lower(), s['prenom'].lower()))
+    return out
+
+
+def _generer_liste_definitive(appel):
+    """Génère/complète les entrées figées de la liste définitive. Les codes déjà
+    attribués sont CONSERVÉS (stables) ; les nouvelles personnes prennent les
+    codes suivants. Renvoie le nombre de nouvelles entrées créées."""
+    existants = {e.texte_recherche: e for e in appel.retenus_definitifs.all()}
+    codes = [int(e.code) for e in existants.values() if e.code.isdigit()]
+    prochain = (max(codes) + 1) if codes else 1
+    crees = 0
+    for s in _sources_liste_definitive(appel):
+        if s['texte_recherche'] in existants:
+            continue
+        RetenuDefinitif.objects.create(
+            appel=appel, code=f'{prochain:04d}',
+            nom=s['nom'], postnom=s['postnom'], prenom=s['prenom'],
+            poste_libelle=s['poste_libelle'], origine=s['origine'],
+            dossier_id=s['dossier_id'], recours_id=s['recours_id'],
+        )
+        prochain += 1
+        crees += 1
+    return crees
+
+
 class AppelCandidatureViewSet(viewsets.ModelViewSet):
     queryset = (
         AppelCandidature.objects
@@ -303,6 +366,63 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         appel.save(update_fields=['liste_retenus_publiee'])
         return Response({'detail': 'Liste des retenus dépubliée.'})
 
+    # --- Liste DÉFINITIVE (retenus publiés + recours validés) -----------
+
+    @action(detail=True, methods=['get'], url_path='liste-definitive',
+            permission_classes=[IsAuthenticated])
+    def liste_definitive(self, request, pk=None):
+        """Aperçu (back-office) de la liste définitive : combinaison retenus +
+        recours validés, avec le code déjà attribué (si publiée). Recherche `?q=`."""
+        if not roles.acces_backoffice(request.user):
+            raise PermissionDenied("Réservé au back-office.")
+        appel = self.get_object()
+        codes = {e.texte_recherche: e.code for e in appel.retenus_definitifs.all()}
+        rows = [{**s, 'code': codes.get(s['texte_recherche'], '')}
+                for s in _sources_liste_definitive(appel)]
+        for token in tokens_recherche(request.query_params.get('q', '')):
+            rows = [r for r in rows if token in r['texte_recherche']]
+        nb_recours = sum(1 for r in rows if r['origine'] == RetenuDefinitif.Origine.RECOURS)
+        return Response({
+            'publiee': appel.liste_definitive_publiee,
+            'total': len(rows),
+            'nb_recours': nb_recours,
+            'nb_codes': len(codes),
+            'message': appel.message_retenus_definitif,
+            'results': rows,
+        })
+
+    @action(detail=True, methods=['post'], url_path='publier-liste-definitive',
+            permission_classes=[IsAuthenticated])
+    def publier_liste_definitive(self, request, pk=None):
+        """Publie la liste définitive (admin/superviseur) : fige les entrées,
+        attribue les codes stables, et la rend publique (elle remplace alors la
+        liste provisoire sur la page publique). Idempotent : republier n'ajoute
+        que les nouvelles personnes (codes existants conservés)."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        appel = self.get_object()
+        with transaction.atomic():
+            crees = _generer_liste_definitive(appel)
+            appel.liste_definitive_publiee = True
+            appel.save(update_fields=['liste_definitive_publiee'])
+        return Response({
+            'detail': 'Liste définitive publiée.',
+            'nouveaux_codes': crees,
+            'total': appel.retenus_definitifs.count(),
+        })
+
+    @action(detail=True, methods=['post'], url_path='depublier-liste-definitive',
+            permission_classes=[IsAuthenticated])
+    def depublier_liste_definitive(self, request, pk=None):
+        """Retire la liste définitive de l'affichage public (les codes déjà
+        attribués sont conservés : ils restent stables si on republie)."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        appel = self.get_object()
+        appel.liste_definitive_publiee = False
+        appel.save(update_fields=['liste_definitive_publiee'])
+        return Response({'detail': "Liste définitive retirée de l'affichage public."})
+
 
 class RetenusViewSet(viewsets.ReadOnlyModelViewSet):
     """Liste publique des personnes retenues (lecture seule, recherche tolérante).
@@ -327,6 +447,24 @@ class RetenusViewSet(viewsets.ReadOnlyModelViewSet):
         for token in tokens_recherche(self.request.query_params.get('q', '')):
             qs = qs.filter(texte_recherche__contains=token)
         return qs.order_by('nom', 'postnom', 'prenom')
+
+
+class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
+    """Liste publique DÉFINITIVE (lecture seule) : CODE stable + identité +
+    domaine, pour les appels dont la liste définitive est publiée. `?appel=`/`?q=`."""
+
+    serializer_class = RetenuDefinitifSerializer
+    permission_classes = [AllowAny]
+    pagination_class = PaginationPublique
+
+    def get_queryset(self):
+        qs = RetenuDefinitif.objects.filter(appel__liste_definitive_publiee=True)
+        appel = self.request.query_params.get('appel')
+        if appel:
+            qs = qs.filter(appel_id=appel)
+        for token in tokens_recherche(self.request.query_params.get('q', '')):
+            qs = qs.filter(texte_recherche__contains=token)
+        return qs.order_by('code')
 
 
 class DossierViewSet(viewsets.ModelViewSet):

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import api from '../../api'
 import StatCard from '../../components/StatCard.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -76,6 +76,51 @@ async function depublier() {
   } catch (e) { notifier(e.response?.data?.detail || 'Action impossible.', 'error') }
 }
 
+// --- Liste DÉFINITIVE (retenus publiés + recours validés, code stable) ---
+const definitif = ref({ publiee: false, total: 0, nb_recours: 0, nb_codes: 0, results: [] })
+const qDef = ref('')
+const chargementDef = ref(false)
+const defPubliee = computed(() => !!appelCourant.value?.liste_definitive_publiee)
+const ENTETES_DEF = [
+  { title: 'Code', key: 'code', width: 90 },
+  { title: 'Nom', key: 'nom' },
+  { title: 'Postnom', key: 'postnom' },
+  { title: 'Prénom', key: 'prenom' },
+  { title: 'Domaine', key: 'poste_libelle' },
+  { title: 'Origine', key: 'origine', sortable: false },
+]
+
+async function chargerDefinitif() {
+  if (!appelId.value) { definitif.value = { publiee: false, total: 0, nb_recours: 0, nb_codes: 0, results: [] }; return }
+  chargementDef.value = true
+  try {
+    const params = {}
+    if (qDef.value) params.q = qDef.value
+    const { data } = await api.get(`/appels/${appelId.value}/liste-definitive/`, { params })
+    definitif.value = data
+  } finally { chargementDef.value = false }
+}
+let minuteurDef
+function rechercherDef() { clearTimeout(minuteurDef); minuteurDef = setTimeout(chargerDefinitif, 300) }
+
+async function publierDefinitive() {
+  try {
+    const { data } = await api.post(`/appels/${appelId.value}/publier-liste-definitive/`)
+    notifier(`Liste définitive publiée — ${data.total} personne(s), ${data.nouveaux_codes} nouveau(x) code(s).`)
+    await Promise.all([rechargerAppels(), chargerDefinitif()])
+  } catch (e) { notifier(e.response?.data?.detail || 'Publication impossible.', 'error') }
+}
+async function depublierDefinitive() {
+  try {
+    await api.post(`/appels/${appelId.value}/depublier-liste-definitive/`)
+    notifier("Liste définitive retirée de l'affichage public.")
+    await Promise.all([rechargerAppels(), chargerDefinitif()])
+  } catch (e) { notifier(e.response?.data?.detail || 'Action impossible.', 'error') }
+}
+
+// Recharge la définitive quand on change d'appel.
+watch(appelId, chargerDefinitif)
+
 onMounted(rechargerAppels)
 </script>
 
@@ -140,6 +185,55 @@ onMounted(rechargerAppels)
         <v-card-text class="text-caption text-medium-emphasis">
           Publier rend cette liste consultable publiquement (NOM · POSTNOM · PRÉNOM).
           Les candidats retenus ont déjà été notifiés individuellement.
+        </v-card-text>
+      </v-card>
+
+      <!-- LISTE DÉFINITIVE : retenus publiés + recours validés, code stable -->
+      <v-card flat border class="mt-6">
+        <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
+          <v-icon color="#5E35B1">mdi-seal-variant</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Liste définitive</span>
+          <v-chip color="#5E35B1" variant="tonal" size="small">{{ definitif.total }}</v-chip>
+          <v-chip v-if="definitif.nb_recours" color="#00838F" variant="tonal" size="small"
+                  prepend-icon="mdi-gavel">{{ definitif.nb_recours }} via recours</v-chip>
+          <v-spacer />
+          <v-text-field v-model="qDef" @update:modelValue="rechercherDef" placeholder="Rechercher un nom…"
+                        prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
+                        clearable style="max-width: 260px" @click:clear="qDef = ''; chargerDefinitif()" />
+          <v-chip v-if="defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-earth">Publiée</v-chip>
+          <template v-if="auth.estAdmin || auth.peutSuperviser">
+            <v-btn v-if="!defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-publish"
+                   :disabled="!definitif.total" @click="publierDefinitive">
+              {{ definitif.nb_codes ? 'Republier' : 'Publier' }} la définitive
+            </v-btn>
+            <v-btn v-else color="grey" variant="outlined" prepend-icon="mdi-publish-off"
+                   @click="depublierDefinitive">Dépublier</v-btn>
+          </template>
+        </v-card-title>
+        <v-divider />
+        <v-alert v-if="defPubliee" type="success" variant="tonal" density="compact" class="ma-3" icon="mdi-information-outline">
+          La liste définitive est publiée : elle <strong>remplace la liste provisoire</strong> sur la page publique des retenus.
+        </v-alert>
+        <v-data-table
+          :headers="ENTETES_DEF" :items="definitif.results" :loading="chargementDef"
+          :items-per-page="25" :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
+          class="tableau-admin" no-data-text="Aucune personne (retenus publiés + recours validés)." loading-text="Chargement…">
+          <template #item.code="{ item }">
+            <span class="font-weight-bold" :class="item.code ? 'text-primary' : 'text-medium-emphasis'">
+              {{ item.code || '—' }}
+            </span>
+          </template>
+          <template #item.nom="{ item }"><span class="font-weight-bold">{{ item.nom }}</span></template>
+          <template #item.poste_libelle="{ item }"><span class="text-medium-emphasis">{{ item.poste_libelle || '—' }}</span></template>
+          <template #item.origine="{ item }">
+            <v-chip v-if="item.origine === 'recours'" size="x-small" label color="#00838F" variant="tonal">Recours</v-chip>
+            <v-chip v-else size="x-small" label color="grey" variant="tonal">Liste</v-chip>
+          </template>
+        </v-data-table>
+        <v-card-text class="text-caption text-medium-emphasis">
+          La définitive combine les retenus publiés et les recours validés (dédupliqués). À la publication,
+          chaque personne reçoit un <strong>code stable</strong> (0001…) conservé même si on republie après ajout.
+          Le message public spécifique se règle dans la console (champ « message public (liste définitive) »).
         </v-card-text>
       </v-card>
     </template>
