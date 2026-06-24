@@ -20,9 +20,10 @@ function _msg(champ) {
   if (appelId.value) return (appelCourant.value?.[champ] || '').trim()
   return (appels.value.find((x) => (x[champ] || '').trim())?.[champ] || '').trim()
 }
-const MSG_DEFINITIF_DEFAUT = "Le test sera organisé le **dimanche 28 juin 2026 à 07h00 (TU+1)** simultanément à "
-  + "**Kinshasa, Lubumbashi et Mbuji-Mayi**. Les candidats souhaitant passer le test dans un autre site en "
-  + "dehors de Kinshasa sont invités **à sélectionner l'un des deux** au plus tard le **jeudi 25 juin 2026 à 12h00 (TU+1)**."
+const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement est prévu le **dimanche 28 juin 2026 à 07h00 (TU+1)** "
+  + "à Kinshasa, à **l'Institut de la Gombe (en diagonal du Palais de Justice)**. Toutefois, les candidats "
+  + "souhaitant passer le test dans un autre site en dehors de Kinshasa sont invités **à sélectionner** "
+  + "Lubumbashi ou Mbuji-Mayi sur le portail au plus tard le **jeudi 25 juin 2026 à 12h00 (TU+1)**."
 const messageActif = computed(() => modeDefinitif.value
   ? (_msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT)
   : _msg('message_retenus'))
