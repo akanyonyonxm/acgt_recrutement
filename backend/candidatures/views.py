@@ -294,6 +294,64 @@ def _generer_liste_definitive(appel):
     return crees
 
 
+def _resultats_emails(appel):
+    """Consolide les e-mails de résultat à envoyer pour un appel, UN par personne
+    (dédup par nom normalisé) :
+
+    - **admis** = personnes de la liste DÉFINITIVE (RetenuDefinitif) ;
+    - **non retenu** = personnes décidées défavorablement et PAS sur la définitive,
+      d'après leur **dernier traitement** (recours / réclamation / dossier, celui
+      dont la date de décision est la plus récente) + le motif correspondant.
+
+    Renvoie (admis: list, non_retenus: list) de dicts."""
+    # 1) Admis = liste définitive (déjà dédupliquée, code stable)
+    admis = {}
+    for e in appel.retenus_definitifs.select_related('dossier', 'recours').all():
+        cle = e.texte_recherche or normaliser_texte(f'{e.nom} {e.postnom} {e.prenom}')
+        email = ''
+        if e.dossier_id and e.dossier:
+            email = e.dossier.email
+        elif e.recours_id and e.recours:
+            email = e.recours.email
+        admis[cle] = {
+            'type': 'admis', 'cle': cle, 'nom': e.nom, 'postnom': e.postnom, 'prenom': e.prenom,
+            'email': (email or '').strip(), 'code': e.code, 'ville': e.get_ville_examen_display(),
+        }
+    noms_admis = set(admis)
+
+    # 2) Non retenus = dernier traitement défavorable des personnes hors définitive
+    cands = {}
+
+    def maj(cle, date, type_, motif, nom, postnom, prenom, email):
+        if not cle or cle in noms_admis or date is None:
+            return
+        cur = cands.get(cle)
+        if cur is None or date > cur['date']:
+            cands[cle] = {'date': date, 'dernier_traitement': type_, 'motif': (motif or '').strip(),
+                          'nom': nom, 'postnom': postnom, 'prenom': prenom, 'email': (email or '').strip()}
+
+    for d in (appel.dossiers
+              .filter(statut__in=[Dossier.Statut.REJETE, Dossier.Statut.NON_RETENU])
+              .prefetch_related('historique')):
+        h = next((x for x in d.historique.all() if x.nouveau_statut == d.statut), None)
+        maj(d.texte_recherche, h.horodatage if h else d.modifie_le, 'dossier',
+            h.motif if h else '', d.nom, d.postnom, d.prenom, d.email)
+
+    for r in appel.reclamations.filter(statut=ReclamationEligibilite.Statut.REJETEE):
+        maj(r.texte_recherche, r.traite_le, 'reclamation', r.motif, r.nom, r.postnom, r.prenom, r.email)
+
+    for r in (Recours.objects.filter(statut=Recours.Statut.REJETE)
+              .filter(Q(dossier__appel=appel) | Q(reclamation__appel=appel))):
+        cle = normaliser_texte(f'{r.nom} {r.postnom} {r.prenom}')
+        maj(cle, r.traite_le, 'recours', r.reponse, r.nom, r.postnom, r.prenom, r.email)
+
+    non_retenus = [{'type': 'non_retenu', 'cle': k, 'nom': v['nom'], 'postnom': v['postnom'],
+                    'prenom': v['prenom'], 'email': v['email'], 'motif': v['motif'],
+                    'dernier_traitement': v['dernier_traitement'], 'date': v['date']}
+                   for k, v in cands.items()]
+    return list(admis.values()), non_retenus
+
+
 class AppelCandidatureViewSet(viewsets.ModelViewSet):
     queryset = (
         AppelCandidature.objects
@@ -523,6 +581,63 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         reponse['Content-Disposition'] = 'attachment; filename="liste_definitive.xlsx"'
+        wb.save(reponse)
+        return reponse
+
+    # --- E-mails de résultat (aperçu / export ; envoi en phase 2) --------
+
+    @action(detail=True, methods=['get'], url_path='resultats-apercu',
+            permission_classes=[IsAuthenticated])
+    def resultats_apercu(self, request, pk=None):
+        """APERÇU (aucun envoi) des e-mails de résultat : 1 par personne, admis
+        (liste définitive) + non retenus (dernier traitement). Réservé admin."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        appel = self.get_object()
+        admis, non_retenus = _resultats_emails(appel)
+        rows = admis + non_retenus
+        sans_email = sum(1 for r in rows if not r['email'])
+        return Response({
+            'admis': len(admis),
+            'non_retenus': len(non_retenus),
+            'total': len(rows),
+            'sans_email': sans_email,
+            'results': rows,
+        })
+
+    @action(detail=True, methods=['get'], url_path='resultats-export',
+            permission_classes=[IsAuthenticated])
+    def resultats_export(self, request, pk=None):
+        """Export Excel de l'aperçu des e-mails de résultat (admin)."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        appel = self.get_object()
+        admis, non_retenus = _resultats_emails(appel)
+
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Résultats e-mail'
+        ws.append(['Résultat', 'Code', 'Nom', 'Postnom', 'Prénom', 'E-mail',
+                   'Dernier traitement', 'Ville / Motif'])
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        for r in admis:
+            ws.append(['ADMIS', r['code'], r['nom'], r['postnom'], r['prenom'],
+                       r['email'], 'liste définitive', r['ville']])
+        for r in non_retenus:
+            ws.append(['NON RETENU', '', r['nom'], r['postnom'], r['prenom'],
+                       r['email'], r['dernier_traitement'], r['motif']])
+        for i, largeur in enumerate([13, 10, 20, 20, 20, 28, 18, 40], start=1):
+            ws.column_dimensions[get_column_letter(i)].width = largeur
+
+        reponse = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        reponse['Content-Disposition'] = 'attachment; filename="resultats_emails.xlsx"'
         wb.save(reponse)
         return reponse
 

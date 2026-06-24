@@ -152,8 +152,35 @@ async function traiterDemande(id, action) {
 }
 const dateFr = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '—')
 
-// Recharge la définitive et les demandes quand on change d'appel.
-watch(appelId, () => { chargerDefinitif(); chargerDemandes() })
+// --- Aperçu des e-mails de résultat (admin) : admis (liste définitive) +
+//     non retenus (dernier traitement), 1 par personne. Aucun envoi ici. ---
+const resultats = ref({ admis: 0, non_retenus: 0, total: 0, sans_email: 0, results: [] })
+const chargementRes = ref(false)
+const ENTETES_RES = [
+  { title: 'Résultat', key: 'type' },
+  { title: 'Code', key: 'code', sortable: false },
+  { title: 'Nom', key: 'nom' },
+  { title: 'Postnom', key: 'postnom', sortable: false },
+  { title: 'Prénom', key: 'prenom', sortable: false },
+  { title: 'E-mail', key: 'email', sortable: false },
+  { title: 'Dernier traitement', key: 'dernier_traitement', sortable: false },
+  { title: 'Ville / Motif', key: 'detail', sortable: false },
+]
+async function chargerResultats() {
+  if (!appelId.value || !auth.estAdmin) return
+  chargementRes.value = true
+  try {
+    const { data } = await api.get(`/appels/${appelId.value}/resultats-apercu/`)
+    resultats.value = data
+  } finally { chargementRes.value = false }
+}
+function exporterResultats() {
+  window.open(`/api/appels/${appelId.value}/resultats-export/`, '_blank')
+}
+const LBL_TRAIT = { dossier: 'Dossier', reclamation: 'Réclamation', recours: 'Recours', '': 'Liste définitive' }
+
+// Recharge la définitive, les demandes et l'aperçu des résultats au changement d'appel.
+watch(appelId, () => { chargerDefinitif(); chargerDemandes(); chargerResultats() })
 
 onMounted(rechargerAppels)
 </script>
@@ -210,6 +237,9 @@ onMounted(rechargerAppels)
           <v-tab value="demandes" prepend-icon="mdi-map-marker-radius-outline" class="text-none font-weight-bold">
             Demandes de ville
             <v-chip v-if="demandes.length" size="x-small" class="ml-2" variant="flat" color="#EF6C00">{{ demandes.length }}</v-chip>
+          </v-tab>
+          <v-tab v-if="auth.estAdmin" value="resultats" prepend-icon="mdi-email-multiple-outline" class="text-none font-weight-bold">
+            Résultats e-mail
           </v-tab>
         </v-tabs>
       </v-card>
@@ -347,6 +377,56 @@ onMounted(rechargerAppels)
             </div>
           </template>
         </v-data-table>
+      </v-card>
+      </v-window-item>
+
+      <!-- ===== Onglet : RÉSULTATS E-MAIL (aperçu, admin) ===== -->
+      <v-window-item v-if="auth.estAdmin" value="resultats">
+      <v-row dense class="mb-4">
+        <v-col cols="6" md="3"><StatCard icon="mdi-email-check-outline" :value="resultats.admis" label="Admis" description="Liste définitive" color="#2E7D32" /></v-col>
+        <v-col cols="6" md="3"><StatCard icon="mdi-email-remove-outline" :value="resultats.non_retenus" label="Non retenus" description="Dernier traitement" color="#C62828" /></v-col>
+        <v-col cols="6" md="3"><StatCard icon="mdi-email-multiple-outline" :value="resultats.total" label="E-mails (total)" description="1 par personne" color="#1a237e" /></v-col>
+        <v-col cols="6" md="3"><StatCard icon="mdi-email-alert-outline" :value="resultats.sans_email" label="Sans e-mail" description="À vérifier" color="#EF6C00" /></v-col>
+      </v-row>
+      <v-card flat border>
+        <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
+          <v-icon color="primary">mdi-email-multiple-outline</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Aperçu des e-mails de résultat</span>
+          <v-spacer />
+          <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
+                 :disabled="!resultats.total" @click="exporterResultats">Exporter Excel</v-btn>
+        </v-card-title>
+        <v-divider />
+        <v-alert type="warning" variant="tonal" density="compact" class="ma-3" icon="mdi-information-outline">
+          <strong>Aperçu uniquement — aucun e-mail n'est envoyé.</strong> 1 e-mail par personne :
+          <strong>admis</strong> (liste définitive) ou <strong>non retenu</strong> (selon le dernier traitement :
+          recours → réclamation → dossier). Vérifie les chiffres et exporte avant d'activer l'envoi.
+        </v-alert>
+        <v-data-table
+          :headers="ENTETES_RES" :items="resultats.results" :loading="chargementRes"
+          :items-per-page="25" :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
+          class="tableau-admin" no-data-text="Aucun e-mail à envoyer (publie d'abord la liste définitive)." loading-text="Chargement…">
+          <template #item.type="{ item }">
+            <v-chip size="small" label variant="flat" :color="item.type === 'admis' ? 'success' : 'error'">
+              {{ item.type === 'admis' ? 'Admis' : 'Non retenu' }}
+            </v-chip>
+          </template>
+          <template #item.code="{ item }"><span class="font-weight-bold text-primary">{{ item.code || '—' }}</span></template>
+          <template #item.nom="{ item }"><span class="font-weight-bold">{{ item.nom }}</span></template>
+          <template #item.email="{ item }">
+            <span :class="{ 'text-error font-weight-bold': !item.email }">{{ item.email || '⚠ aucun' }}</span>
+          </template>
+          <template #item.dernier_traitement="{ item }">
+            <span class="text-medium-emphasis">{{ LBL_TRAIT[item.dernier_traitement] ?? 'Liste définitive' }}</span>
+          </template>
+          <template #item.detail="{ item }">
+            <span class="text-medium-emphasis">{{ item.type === 'admis' ? item.ville : (item.motif || '—') }}</span>
+          </template>
+        </v-data-table>
+        <v-card-text class="text-caption text-medium-emphasis">
+          Prochaine étape (après ta validation) : test d'envoi sur ton adresse, puis envoi en masse
+          (file lissée) avec confirmation. Rien n'est envoyé tant que ce n'est pas activé.
+        </v-card-text>
       </v-card>
       </v-window-item>
       </v-window>
