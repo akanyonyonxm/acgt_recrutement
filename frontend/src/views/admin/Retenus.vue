@@ -142,12 +142,15 @@ const ENTETES_DEM = [
   { title: 'Demandé le', key: 'demande_le', sortable: false },
   { title: '', key: 'actions', sortable: false, align: 'end' },
 ]
+const demandeStatut = ref('en_attente')
+const demandesCounts = ref({ en_attente: 0, validees: 0, rejetees: 0 })
 async function chargerDemandes() {
-  if (!appelId.value) { demandes.value = []; return }
+  if (!appelId.value) { demandes.value = []; demandesCounts.value = { en_attente: 0, validees: 0, rejetees: 0 }; return }
   chargementDem.value = true
   try {
-    const { data } = await api.get(`/appels/${appelId.value}/demandes-ville/`)
+    const { data } = await api.get(`/appels/${appelId.value}/demandes-ville/`, { params: { statut: demandeStatut.value } })
     demandes.value = data.results
+    demandesCounts.value = { en_attente: data.en_attente, validees: data.validees, rejetees: data.rejetees }
   } finally { chargementDem.value = false }
 }
 // Examen d'une demande : voir les pièces + la date de naissance avant de trancher.
@@ -314,7 +317,7 @@ onMounted(rechargerAppels)
           </v-tab>
           <v-tab value="demandes" prepend-icon="mdi-map-marker-radius-outline" class="text-none font-weight-bold">
             Demandes de ville
-            <v-chip v-if="demandes.length" size="x-small" class="ml-2" variant="flat" color="#EF6C00">{{ demandes.length }}</v-chip>
+            <v-chip v-if="demandesCounts.en_attente" size="x-small" class="ml-2" variant="flat" color="#EF6C00">{{ demandesCounts.en_attente }}</v-chip>
           </v-tab>
           <v-tab v-if="auth.estAdmin" value="resultats" prepend-icon="mdi-email-multiple-outline" class="text-none font-weight-bold">
             Résultats e-mail
@@ -428,17 +431,23 @@ onMounted(rechargerAppels)
         <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
           <v-icon color="#EF6C00">mdi-map-marker-radius-outline</v-icon>
           <span class="text-subtitle-1 font-weight-bold">Demandes de ville d'examen</span>
-          <v-chip color="#EF6C00" variant="tonal" size="small">{{ demandes.length }} en attente</v-chip>
+          <v-spacer />
+          <v-btn-toggle v-model="demandeStatut" mandatory density="compact" variant="outlined"
+                        divided @update:modelValue="chargerDemandes">
+            <v-btn value="en_attente" size="small">En attente ({{ demandesCounts.en_attente }})</v-btn>
+            <v-btn value="validee" size="small">Validées ({{ demandesCounts.validees }})</v-btn>
+            <v-btn value="rejetee" size="small">Rejetées ({{ demandesCounts.rejetees }})</v-btn>
+          </v-btn-toggle>
         </v-card-title>
         <v-divider />
         <v-alert type="info" variant="tonal" density="compact" class="ma-3" icon="mdi-shield-check-outline">
           Les candidats hors Kinshasa <strong>demandent</strong> leur ville sur le portail ; la ville officielle
-          ne change qu'après <strong>votre validation</strong> (vérifiez la date de naissance avec leur pièce d'identité).
+          ne change qu'après <strong>validation</strong> (vérifiez la date de naissance avec leur pièce d'identité).
         </v-alert>
         <v-data-table
           :headers="ENTETES_DEM" :items="demandes" :loading="chargementDem"
           :items-per-page="25" :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
-          class="tableau-admin" no-data-text="Aucune demande de ville en attente." loading-text="Chargement…">
+          class="tableau-admin" no-data-text="Aucune demande dans cette catégorie." loading-text="Chargement…">
           <template #item.code="{ item }"><span class="font-weight-bold text-primary">{{ item.code }}</span></template>
           <template #item.nom="{ item }">
             <span class="font-weight-bold">{{ item.nom }}</span> {{ item.postnom }} {{ item.prenom }}
@@ -574,15 +583,21 @@ onMounted(rechargerAppels)
                    @click="voirDocument(d)">{{ d.libelle }}</v-btn>
           </div>
           <div v-else class="text-body-2 text-medium-emphasis">Aucun document transmis pour ce candidat.</div>
+          <v-alert v-if="demandeDetail.statut !== 'en_attente'" class="mt-3" density="compact" variant="tonal"
+                   :type="demandeDetail.statut === 'validee' ? 'success' : 'error'">
+            Demande déjà <strong>{{ demandeDetail.statut === 'validee' ? 'validée' : 'rejetée' }}</strong>{{ demandeDetail.traite_par ? ` par ${demandeDetail.traite_par}` : '' }}.
+          </v-alert>
         </v-card-text>
         <v-divider />
         <v-card-actions class="pa-3">
           <v-btn variant="text" @click="dialogDemande = false">Fermer</v-btn>
           <v-spacer />
-          <v-btn color="grey" variant="outlined" prepend-icon="mdi-close-circle-outline"
-                 @click="traiterDemande(demandeDetail.id, 'rejeter')">Rejeter</v-btn>
-          <v-btn color="success" variant="flat" prepend-icon="mdi-check-circle-outline"
-                 @click="traiterDemande(demandeDetail.id, 'valider')">Valider la ville</v-btn>
+          <template v-if="demandeDetail.statut === 'en_attente' && auth.peutTraiter">
+            <v-btn color="grey" variant="outlined" prepend-icon="mdi-close-circle-outline"
+                   @click="traiterDemande(demandeDetail.id, 'rejeter')">Rejeter</v-btn>
+            <v-btn color="success" variant="flat" prepend-icon="mdi-check-circle-outline"
+                   @click="traiterDemande(demandeDetail.id, 'valider')">Valider la ville</v-btn>
+          </template>
         </v-card-actions>
       </v-card>
     </v-dialog>

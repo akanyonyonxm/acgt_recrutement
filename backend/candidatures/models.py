@@ -974,6 +974,11 @@ class RetenuDefinitif(models.Model):
         LUBUMBASHI = 'lubumbashi', 'Lubumbashi'
         MBUJI_MAYI = 'mbuji_mayi', 'Mbuji-Mayi'
 
+    class DemandeStatut(models.TextChoices):
+        EN_ATTENTE = 'en_attente', 'En attente'
+        VALIDEE = 'validee', 'Validée'
+        REJETEE = 'rejetee', 'Rejetée'
+
     appel = models.ForeignKey(
         AppelCandidature, on_delete=models.CASCADE,
         related_name='retenus_definitifs', verbose_name='appel à candidature',
@@ -1005,6 +1010,12 @@ class RetenuDefinitif(models.Model):
     # `ville_demandee` est appliquée à `ville_examen` puis remise à vide.
     ville_demandee = models.CharField(
         'ville demandée', max_length=20, choices=Ville.choices, blank=True,
+    )
+    # Statut de la demande de ville : '' = aucune demande ; sinon en_attente /
+    # validee / rejetee (conservé après décision pour l'historique et le filtre).
+    ville_demande_statut = models.CharField(
+        'statut de la demande de ville', max_length=12,
+        choices=DemandeStatut.choices, blank=True, db_index=True,
     )
     ville_demandee_le = models.DateTimeField('demande reçue le', null=True, blank=True)
     # Date de naissance déclarée lors de la demande (vérification par l'agent).

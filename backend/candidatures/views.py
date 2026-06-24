@@ -522,8 +522,19 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         if not roles.acces_backoffice(request.user):
             raise PermissionDenied("Réservé au back-office.")
         appel = self.get_object()
-        qs = (appel.retenus_definitifs.exclude(ville_demandee='')
-              .select_related('dossier', 'recours__dossier', 'recours__reclamation')
+        S = RetenuDefinitif.DemandeStatut
+        base = appel.retenus_definitifs.exclude(ville_demande_statut='')
+        counts = {
+            'en_attente': base.filter(ville_demande_statut=S.EN_ATTENTE).count(),
+            'validees': base.filter(ville_demande_statut=S.VALIDEE).count(),
+            'rejetees': base.filter(ville_demande_statut=S.REJETEE).count(),
+        }
+        statut = self.request.query_params.get('statut') or S.EN_ATTENTE
+        qs = base
+        if statut in (S.EN_ATTENTE, S.VALIDEE, S.REJETEE):
+            qs = base.filter(ville_demande_statut=statut)
+        qs = (qs.select_related('dossier', 'recours__dossier', 'recours__reclamation',
+                                'ville_traite_par')
               .order_by('ville_demandee_le'))
         rows = [{
             'id': e.id, 'code': e.code,
@@ -532,11 +543,13 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             'ville_actuelle': e.get_ville_examen_display(),
             'ville_demandee': e.ville_demandee,
             'ville_demandee_libelle': e.get_ville_demandee_display(),
+            'statut': e.ville_demande_statut,
+            'traite_par': (e.ville_traite_par.get_full_name() or e.ville_traite_par.email) if e.ville_traite_par else '',
             'date_naissance': e.date_naissance,
             'demande_le': e.ville_demandee_le,
             'documents': _docs_retenu_definitif(e),
         } for e in qs]
-        return Response({'total': len(rows), 'results': rows})
+        return Response({**counts, 'statut': statut, 'total': len(rows), 'results': rows})
 
     @action(detail=True, methods=['post'], url_path='traiter-demande-ville',
             permission_classes=[IsAuthenticated])
@@ -551,20 +564,21 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         entree = get_object_or_404(
             RetenuDefinitif, pk=request.data.get('id'), appel=appel,
         )
-        if not entree.ville_demandee:
+        if entree.ville_demande_statut != RetenuDefinitif.DemandeStatut.EN_ATTENTE:
             raise ValidationError("Aucune demande de ville en attente pour ce candidat.")
         action_ = request.data.get('action')
+        # On CONSERVE `ville_demandee` (historique) ; seul le statut change.
         if action_ == 'valider':
             entree.ville_examen = entree.ville_demandee
             entree.ville_choisie_le = timezone.now()
             entree.ville_traite_par = request.user
-            entree.ville_demandee = ''
+            entree.ville_demande_statut = RetenuDefinitif.DemandeStatut.VALIDEE
             entree.save(update_fields=['ville_examen', 'ville_choisie_le',
-                                       'ville_traite_par', 'ville_demandee'])
+                                       'ville_traite_par', 'ville_demande_statut'])
         elif action_ == 'rejeter':
-            entree.ville_demandee = ''
             entree.ville_traite_par = request.user
-            entree.save(update_fields=['ville_demandee', 'ville_traite_par'])
+            entree.ville_demande_statut = RetenuDefinitif.DemandeStatut.REJETEE
+            entree.save(update_fields=['ville_traite_par', 'ville_demande_statut'])
         else:
             raise ValidationError({'action': "Action invalide (valider/rejeter)."})
         return Response({
@@ -870,7 +884,12 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
         entree.ville_demandee = ville
         entree.date_naissance = dn
         entree.ville_demandee_le = timezone.now()
-        entree.save(update_fields=['ville_demandee', 'date_naissance', 'ville_demandee_le'])
+        entree.ville_demande_statut = RetenuDefinitif.DemandeStatut.EN_ATTENTE
+        # Nouvelle demande : on repart d'une décision vierge.
+        entree.ville_choisie_le = None
+        entree.ville_traite_par = None
+        entree.save(update_fields=['ville_demandee', 'date_naissance', 'ville_demandee_le',
+                                   'ville_demande_statut', 'ville_choisie_le', 'ville_traite_par'])
         return Response({
             'detail': 'Demande enregistrée (en attente de validation).',
             'ville': entree.ville_demandee,
