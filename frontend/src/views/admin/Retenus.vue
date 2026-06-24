@@ -147,7 +147,28 @@ async function chargerDemandes() {
 const demandeDetail = ref(null)
 const dialogDemande = ref(false)
 function ouvrirDemande(item) { demandeDetail.value = item; dialogDemande.value = true }
-const lienDocInline = (url) => `${url}${url.includes('?') ? '&' : '?'}inline=1`
+
+// --- Visionneuse de document (image : rotation/zoom ; PDF : iframe) ---
+const EXT_IMAGE = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']
+const apercu = ref({ show: false, url: '', urlDl: '', titre: '', estImage: false })
+const rotation = ref(0)
+const zoom = ref(1)
+function voirDocument(doc) {
+  const nom = (doc.nom_original || doc.url || '').toLowerCase()
+  const ext = nom.split('.').pop().split('?')[0]
+  rotation.value = 0; zoom.value = 1
+  apercu.value = {
+    show: true,
+    url: `${doc.url}${doc.url.includes('?') ? '&' : '?'}inline=1`,
+    urlDl: doc.url,
+    titre: doc.libelle || doc.nom_original || 'Document',
+    estImage: EXT_IMAGE.includes(ext),
+  }
+}
+const pivoter = (sens) => { rotation.value = (rotation.value + sens * 90 + 360) % 360 }
+const zoomer = (pas) => { zoom.value = Math.min(4, Math.max(0.25, +(zoom.value + pas).toFixed(2))) }
+const reinitVue = () => { rotation.value = 0; zoom.value = 1 }
+const styleImage = computed(() => ({ transform: `rotate(${rotation.value}deg) scale(${zoom.value})` }))
 async function traiterDemande(id, action) {
   try {
     await api.post(`/appels/${appelId.value}/traiter-demande-ville/`, { id, action })
@@ -540,7 +561,7 @@ onMounted(rechargerAppels)
           <div v-if="demandeDetail.documents && demandeDetail.documents.length" class="d-flex flex-wrap ga-2">
             <v-btn v-for="(d, i) in demandeDetail.documents" :key="i" variant="outlined" size="small"
                    color="primary" prepend-icon="mdi-file-eye-outline"
-                   :href="lienDocInline(d.url)" target="_blank">{{ d.libelle }}</v-btn>
+                   @click="voirDocument(d)">{{ d.libelle }}</v-btn>
           </div>
           <div v-else class="text-body-2 text-medium-emphasis">Aucun document transmis pour ce candidat.</div>
         </v-card-text>
@@ -553,6 +574,36 @@ onMounted(rechargerAppels)
           <v-btn color="success" variant="flat" prepend-icon="mdi-check-circle-outline"
                  @click="traiterDemande(demandeDetail.id, 'valider')">Valider la ville</v-btn>
         </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Visionneuse de document (image : rotation/zoom ; PDF : iframe) -->
+    <v-dialog v-model="apercu.show" max-width="1000" scrollable>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex align-center ga-1 pa-2 pl-3">
+          <v-icon color="primary" class="mr-1">mdi-file-eye-outline</v-icon>
+          <span class="text-subtitle-1 text-truncate" style="max-width: 220px">{{ apercu.titre }}</span>
+          <v-spacer />
+          <template v-if="apercu.estImage">
+            <v-btn icon="mdi-rotate-left" variant="text" size="small" title="Pivoter à gauche" @click="pivoter(-1)" />
+            <v-btn icon="mdi-rotate-right" variant="text" size="small" title="Pivoter à droite" @click="pivoter(1)" />
+            <v-btn icon="mdi-magnify-minus-outline" variant="text" size="small" title="Dézoomer" @click="zoomer(-0.25)" />
+            <span class="text-caption" style="min-width: 38px; text-align:center">{{ Math.round(zoom * 100) }}%</span>
+            <v-btn icon="mdi-magnify-plus-outline" variant="text" size="small" title="Zoomer" @click="zoomer(0.25)" />
+            <v-btn icon="mdi-backup-restore" variant="text" size="small" title="Réinitialiser" @click="reinitVue" />
+            <v-divider vertical class="mx-1" />
+          </template>
+          <v-btn icon="mdi-download" variant="text" size="small" title="Télécharger" :href="apercu.urlDl" />
+          <v-btn icon="mdi-open-in-new" variant="text" size="small" title="Ouvrir dans un onglet" :href="apercu.url" target="_blank" />
+          <v-btn icon="mdi-close" variant="text" size="small" @click="apercu.show = false" />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-0">
+          <div v-if="apercu.estImage" class="apercu-img-zone">
+            <img :src="apercu.url" :style="styleImage" class="apercu-img" alt="aperçu" />
+          </div>
+          <iframe v-else-if="apercu.url" :src="apercu.url" title="Aperçu" class="apercu-frame" />
+        </v-card-text>
       </v-card>
     </v-dialog>
 
@@ -589,4 +640,7 @@ onMounted(rechargerAppels)
 .onglets-barre { overflow: hidden; }
 .onglets-barre :deep(.v-tab) { letter-spacing: 0.01em; }
 .onglets-barre :deep(.v-tab--selected) { background: #f5f6fb; }
+.apercu-frame { width: 100%; height: 72vh; border: 0; }
+.apercu-img-zone { height: 72vh; display: flex; align-items: center; justify-content: center; overflow: auto; background: #2b2b33; padding: 12px; }
+.apercu-img { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.2s ease; box-shadow: 0 4px 24px rgba(0,0,0,0.35); background: #fff; }
 </style>
