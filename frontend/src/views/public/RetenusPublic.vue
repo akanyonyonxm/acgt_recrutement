@@ -260,6 +260,7 @@ onMounted(async () => {
                 <th v-if="modeDefinitif" class="num">CODE</th>
                 <th v-else class="num">#</th>
                 <th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th>
+                <th v-if="modeDefinitif">VILLE</th>
                 <th v-if="modeDefinitif" class="badge-col">BADGE</th>
               </tr>
             </thead>
@@ -271,12 +272,13 @@ onMounted(async () => {
                 <td class="nom-cell" data-label="Postnom">{{ aff(e.postnom) }}</td>
                 <td class="nom-cell" data-label="Prénom">{{ aff(e.prenom) }}</td>
                 <td class="muted" data-label="Domaine">{{ e.poste_libelle || '—' }}</td>
+                <td v-if="modeDefinitif" class="ville-cell" data-label="Ville">{{ e.ville_examen_libelle || '—' }}</td>
                 <td v-if="modeDefinitif" class="badge-col" data-label="">
                   <button class="btn-badge" @click="imprimerBadge(e)">Badge</button>
                 </td>
               </tr>
               <tr v-if="!loading && !items.length">
-                <td :colspan="modeDefinitif ? 6 : 5" class="vide">{{ messageVide }}</td>
+                <td :colspan="modeDefinitif ? 7 : 5" class="vide">{{ messageVide }}</td>
               </tr>
             </tbody>
           </table>
@@ -401,6 +403,8 @@ onMounted(async () => {
   .tableau td.nom-cell + .nom-cell { margin-left: 4px; }
   .tableau td.muted { margin-top: 8px; color: #525f71; }
   .tableau td.muted::before { content: 'Domaine : '; font-size: 0.78rem; color: #6b7280; }
+  .tableau td.ville-cell { margin-top: 4px; }
+  .tableau td.ville-cell::before { content: 'Ville : '; font-size: 0.78rem; color: #6b7280; }
   .tableau td.badge-col { margin-top: 14px; }
   .btn-badge { width: 100%; padding: 12px; font-size: 0.95rem; }
 }
