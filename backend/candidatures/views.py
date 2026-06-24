@@ -233,6 +233,31 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         return reponse
 
 
+def _docs_retenu_definitif(e):
+    """Documents (pièces dossier + justificatifs réclamation) rattachés à une
+    entrée définitive, pour vérifier l'identité (ex. date de naissance)."""
+    dossiers, reclams = [], []
+    if e.dossier_id and e.dossier:
+        dossiers.append(e.dossier)
+        reclams += list(e.dossier.reclamation_origine.all())
+    if e.recours_id and e.recours:
+        if e.recours.dossier_id and e.recours.dossier:
+            dossiers.append(e.recours.dossier)
+            reclams += list(e.recours.dossier.reclamation_origine.all())
+        if e.recours.reclamation_id and e.recours.reclamation:
+            reclams.append(e.recours.reclamation)
+    docs = []
+    for d in dossiers:
+        for p in d.pieces.all():
+            docs.append({'libelle': p.type_piece.libelle, 'nom_original': p.nom_original,
+                         'url': f'/api/dossiers/{d.id}/pieces/{p.id}/telecharger/'})
+    for rc in reclams:
+        for doc in rc.documents.all():
+            docs.append({'libelle': doc.get_type_display(), 'nom_original': doc.nom_original,
+                         'url': f'/api/reclamations/{rc.id}/documents/{doc.id}/'})
+    return docs
+
+
 def _sources_liste_definitive(appel):
     """Liste combinée de la liste DÉFINITIVE : retenus publiés (dossiers RETENU)
     + recours VALIDÉS rattachés à cet appel, dédupliqués par identité normalisée
@@ -498,6 +523,7 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Réservé au back-office.")
         appel = self.get_object()
         qs = (appel.retenus_definitifs.exclude(ville_demandee='')
+              .select_related('dossier', 'recours__dossier', 'recours__reclamation')
               .order_by('ville_demandee_le'))
         rows = [{
             'id': e.id, 'code': e.code,
@@ -508,6 +534,7 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             'ville_demandee_libelle': e.get_ville_demandee_display(),
             'date_naissance': e.date_naissance,
             'demande_le': e.ville_demandee_le,
+            'documents': _docs_retenu_definitif(e),
         } for e in qs]
         return Response({'total': len(rows), 'results': rows})
 

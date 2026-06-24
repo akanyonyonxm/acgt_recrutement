@@ -143,10 +143,16 @@ async function chargerDemandes() {
     demandes.value = data.results
   } finally { chargementDem.value = false }
 }
+// Examen d'une demande : voir les pièces + la date de naissance avant de trancher.
+const demandeDetail = ref(null)
+const dialogDemande = ref(false)
+function ouvrirDemande(item) { demandeDetail.value = item; dialogDemande.value = true }
+const lienDocInline = (url) => `${url}${url.includes('?') ? '&' : '?'}inline=1`
 async function traiterDemande(id, action) {
   try {
     await api.post(`/appels/${appelId.value}/traiter-demande-ville/`, { id, action })
     notifier(action === 'valider' ? 'Demande validée — ville officielle mise à jour.' : 'Demande rejetée.')
+    dialogDemande.value = false
     await Promise.all([chargerDemandes(), chargerDefinitif()])
   } catch (e) { notifier(e.response?.data?.detail || 'Action impossible.', 'error') }
 }
@@ -413,12 +419,8 @@ onMounted(rechargerAppels)
           </template>
           <template #item.demande_le="{ item }">{{ dateFr(item.demande_le) }}</template>
           <template #item.actions="{ item }">
-            <div class="d-flex ga-2 justify-end" v-if="auth.peutTraiter">
-              <v-btn color="success" variant="flat" size="small" prepend-icon="mdi-check"
-                     @click="traiterDemande(item.id, 'valider')">Valider</v-btn>
-              <v-btn color="grey" variant="outlined" size="small" prepend-icon="mdi-close"
-                     @click="traiterDemande(item.id, 'rejeter')">Rejeter</v-btn>
-            </div>
+            <v-btn v-if="auth.peutTraiter" color="primary" variant="text" size="small"
+                   append-icon="mdi-arrow-right" @click="ouvrirDemande(item)">Examiner</v-btn>
           </template>
         </v-data-table>
       </v-card>
@@ -514,6 +516,45 @@ onMounted(rechargerAppels)
       <v-icon size="48" color="grey-lighten-1" class="mb-2">mdi-trophy-outline</v-icon>
       <p class="text-body-2 text-medium-emphasis mb-0">Sélectionnez un appel à candidature pour gérer sa liste de retenus.</p>
     </v-card>
+
+    <!-- Examen d'une demande de ville -->
+    <v-dialog v-model="dialogDemande" max-width="560">
+      <v-card v-if="demandeDetail" rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 pa-4">
+          <v-icon color="#EF6C00">mdi-map-marker-radius-outline</v-icon>
+          <span class="text-h6">{{ demandeDetail.code }} — {{ demandeDetail.nom }} {{ demandeDetail.postnom }} {{ demandeDetail.prenom }}</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <div class="d-flex flex-wrap ga-4 mb-3 text-body-2">
+            <span><span class="text-medium-emphasis">Ville actuelle :</span> <strong>{{ demandeDetail.ville_actuelle }}</strong></span>
+            <span><span class="text-medium-emphasis">Ville demandée :</span>
+              <v-chip color="#EF6C00" size="small" variant="tonal" label>{{ demandeDetail.ville_demandee_libelle }}</v-chip>
+            </span>
+          </div>
+          <v-alert type="info" variant="tonal" density="compact" class="mb-3" icon="mdi-card-account-details-outline">
+            Date de naissance déclarée : <strong>{{ dateFr(demandeDetail.date_naissance) }}</strong>.
+            Vérifiez-la avec la <strong>pièce d'identité</strong> ci-dessous.
+          </v-alert>
+          <div class="text-caption font-weight-bold text-primary mb-2">Documents transmis</div>
+          <div v-if="demandeDetail.documents && demandeDetail.documents.length" class="d-flex flex-wrap ga-2">
+            <v-btn v-for="(d, i) in demandeDetail.documents" :key="i" variant="outlined" size="small"
+                   color="primary" prepend-icon="mdi-file-eye-outline"
+                   :href="lienDocInline(d.url)" target="_blank">{{ d.libelle }}</v-btn>
+          </div>
+          <div v-else class="text-body-2 text-medium-emphasis">Aucun document transmis pour ce candidat.</div>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-3">
+          <v-btn variant="text" @click="dialogDemande = false">Fermer</v-btn>
+          <v-spacer />
+          <v-btn color="grey" variant="outlined" prepend-icon="mdi-close-circle-outline"
+                 @click="traiterDemande(demandeDetail.id, 'rejeter')">Rejeter</v-btn>
+          <v-btn color="success" variant="flat" prepend-icon="mdi-check-circle-outline"
+                 @click="traiterDemande(demandeDetail.id, 'valider')">Valider la ville</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Confirmation envoi en masse -->
     <v-dialog v-model="dialogEnvoi" max-width="480">
