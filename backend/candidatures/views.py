@@ -69,7 +69,7 @@ from .serializers import (
     RetenuPubliqueSerializer,
     TypePieceSerializer,
 )
-from .services.email import envoyer_email
+from .services.email import EmailError, envoyer_email
 from .services.import_eligibilite import ImportEligibiliteErreur, importer_eligibles
 from .utils import normaliser_texte, tokens_recherche
 
@@ -640,6 +640,118 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         reponse['Content-Disposition'] = 'attachment; filename="resultats_emails.xlsx"'
         wb.save(reponse)
         return reponse
+
+    # --- Envoi des e-mails de résultat (file EmailQueue, progression) ----
+
+    SUJET_RESULTAT = 'Résultat de votre candidature — ACGT'
+
+    @staticmethod
+    def _email_resultat(row):
+        """(template, contexte) pour une ligne consolidée (admis / non retenu)."""
+        nom = ' '.join(x for x in [row['nom'], row.get('postnom', ''), row['prenom']] if x).strip()
+        if row['type'] == 'admis':
+            return 'resultat_admis.html', {'nom': nom, 'code': row.get('code', ''), 'ville': row.get('ville', '')}
+        return 'resultat_non_retenu.html', {'nom': nom, 'motif': row.get('motif', '')}
+
+    def _etat_resultats(self, appel):
+        qs = EmailQueue.objects.filter(appel=appel, categorie='resultat')
+        total = qs.count()
+        envoyes = qs.filter(statut=EmailQueue.Statut.ENVOYE).count()
+        echecs = qs.filter(statut=EmailQueue.Statut.ECHEC).count()
+        restants = qs.filter(statut=EmailQueue.Statut.EN_ATTENTE).count()
+        return {'total': total, 'envoyes': envoyes, 'echecs': echecs,
+                'restants': restants, 'termine': restants == 0}
+
+    @action(detail=True, methods=['get'], url_path='resultats-etat',
+            permission_classes=[IsAuthenticated])
+    def resultats_etat(self, request, pk=None):
+        """État de la campagne d'envoi des résultats (progression)."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        return Response(self._etat_resultats(self.get_object()))
+
+    @action(detail=True, methods=['post'], url_path='resultats-test',
+            permission_classes=[IsAuthenticated])
+    def resultats_test(self, request, pk=None):
+        """Envoie les 2 exemples (admis + non retenu) à l'adresse de l'admin."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        appel = self.get_object()
+        admis, non = _resultats_emails(appel)
+        ex_a = admis[0] if admis else {'type': 'admis', 'nom': 'NOM POSTNOM PRÉNOM', 'postnom': '', 'prenom': '', 'code': '0001', 'ville': 'Kinshasa'}
+        ex_n = non[0] if non else {'type': 'non_retenu', 'nom': 'NOM POSTNOM PRÉNOM', 'postnom': '', 'prenom': '', 'motif': 'Critères non remplis'}
+        dest = request.user.email
+        try:
+            for ex in (ex_a, ex_n):
+                tmpl, ctx = self._email_resultat(ex)
+                envoyer_email(dest, '[TEST] ' + self.SUJET_RESULTAT, tmpl, ctx)
+        except EmailError:
+            return Response({'detail': "Échec de l'envoi de test (service e-mail)."}, status=502)
+        return Response({'detail': f'2 exemples envoyés à {dest}.'})
+
+    @action(detail=True, methods=['post'], url_path='resultats-preparer',
+            permission_classes=[IsAuthenticated])
+    def resultats_preparer(self, request, pk=None):
+        """Met en file les e-mails de résultat (idempotent, 1 par adresse).
+        N'envoie rien : prépare la file que `resultats-envoyer-lot` videra."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        appel = self.get_object()
+        admis, non = _resultats_emails(appel)
+        existants = set(
+            EmailQueue.objects.filter(appel=appel, categorie='resultat')
+            .values_list('destinataire', flat=True)
+        )
+        a_creer, vus = [], set()
+        prepares = deja = sans_email = 0
+        for r in admis + non:
+            em = (r['email'] or '').strip().lower()
+            if not em:
+                sans_email += 1
+                continue
+            if em in existants or em in vus:
+                deja += 1
+                continue
+            vus.add(em)
+            tmpl, ctx = self._email_resultat(r)
+            a_creer.append(EmailQueue(
+                appel=appel, categorie='resultat', destinataire=em,
+                sujet=self.SUJET_RESULTAT, template=tmpl, contexte=ctx,
+                statut=EmailQueue.Statut.EN_ATTENTE,
+            ))
+            prepares += 1
+        EmailQueue.objects.bulk_create(a_creer)
+        etat = self._etat_resultats(appel)
+        return Response({'prepares': prepares, 'deja_en_file': deja,
+                         'sans_email': sans_email, **etat})
+
+    @action(detail=True, methods=['post'], url_path='resultats-envoyer-lot',
+            permission_classes=[IsAuthenticated])
+    def resultats_envoyer_lot(self, request, pk=None):
+        """Envoie le prochain lot d'e-mails de résultat en attente (progression).
+        Appelé en boucle par le front jusqu'à `termine`."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        appel = self.get_object()
+        limite = max(1, min(int(request.data.get('limite') or 30), 100))
+        lot = list(
+            EmailQueue.objects.filter(appel=appel, categorie='resultat',
+                                      statut=EmailQueue.Statut.EN_ATTENTE)
+            .order_by('cree_le')[:limite]
+        )
+        for e in lot:
+            try:
+                envoyer_email(e.destinataire, e.sujet, e.template, e.contexte)
+            except EmailError:
+                e.tentatives += 1
+                if e.tentatives >= EmailQueue.MAX_TENTATIVES:
+                    e.statut = EmailQueue.Statut.ECHEC
+                e.save(update_fields=['tentatives', 'statut'])
+                continue
+            e.statut = EmailQueue.Statut.ENVOYE
+            e.envoye_le = timezone.now()
+            e.save(update_fields=['statut', 'envoye_le'])
+        return Response(self._etat_resultats(appel))
 
 
 class RetenusViewSet(viewsets.ReadOnlyModelViewSet):

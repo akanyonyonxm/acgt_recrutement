@@ -647,6 +647,13 @@ class EmailQueue(models.Model):
         related_name='emails',
         verbose_name='dossier',
     )
+    # Campagne d'envoi (ex. résultats d'un appel) : permet de suivre la
+    # progression et d'éviter les doublons par destinataire au sein d'un appel.
+    appel = models.ForeignKey(
+        AppelCandidature, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='emails_queue', verbose_name='appel à candidature',
+    )
+    categorie = models.CharField('catégorie', max_length=30, blank=True, db_index=True)
     destinataire = models.EmailField('destinataire')
     sujet = models.CharField('sujet', max_length=255)
     template = models.CharField('template', max_length=100)

@@ -179,8 +179,52 @@ function exporterResultats() {
 }
 const LBL_TRAIT = { dossier: 'Dossier', reclamation: 'Réclamation', recours: 'Recours', '': 'Liste définitive' }
 
+// --- Envoi des e-mails de résultat (test / préparer / envoyer + progression) ---
+const etatEnvoi = ref({ total: 0, envoyes: 0, echecs: 0, restants: 0, termine: false })
+const enTest = ref(false)
+const enPrep = ref(false)
+const envoiEnCours = ref(false)
+const dialogEnvoi = ref(false)
+const pctEnvoi = computed(() => etatEnvoi.value.total
+  ? Math.round((etatEnvoi.value.envoyes + etatEnvoi.value.echecs) / etatEnvoi.value.total * 100) : 0)
+
+async function chargerEtatEnvoi() {
+  if (!appelId.value || !auth.estAdmin) return
+  try { etatEnvoi.value = (await api.get(`/appels/${appelId.value}/resultats-etat/`)).data } catch { /* */ }
+}
+async function testerEnvoi() {
+  enTest.value = true
+  try {
+    const { data } = await api.post(`/appels/${appelId.value}/resultats-test/`)
+    notifier(data.detail || 'Exemples envoyés.')
+  } catch (e) { notifier(e.response?.data?.detail || 'Échec du test.', 'error') } finally { enTest.value = false }
+}
+async function preparerEnvoi() {
+  enPrep.value = true
+  try {
+    const { data } = await api.post(`/appels/${appelId.value}/resultats-preparer/`)
+    etatEnvoi.value = data
+    notifier(`${data.prepares} e-mail(s) préparé(s) · ${data.deja_en_file} déjà en file · ${data.sans_email} sans e-mail.`)
+  } catch (e) { notifier(e.response?.data?.detail || 'Préparation impossible.', 'error') } finally { enPrep.value = false }
+}
+async function envoyerTout() {
+  dialogEnvoi.value = false
+  envoiEnCours.value = true
+  try {
+    let termine = false
+    while (!termine) {
+      const { data } = await api.post(`/appels/${appelId.value}/resultats-envoyer-lot/`, { limite: 30 })
+      etatEnvoi.value = data
+      termine = data.termine
+    }
+    notifier(`Envoi terminé : ${etatEnvoi.value.envoyes} envoyé(s), ${etatEnvoi.value.echecs} échec(s).`)
+  } catch (e) {
+    notifier(e.response?.data?.detail || 'Envoi interrompu — relancez pour reprendre.', 'error')
+  } finally { envoiEnCours.value = false }
+}
+
 // Recharge la définitive, les demandes et l'aperçu des résultats au changement d'appel.
-watch(appelId, () => { chargerDefinitif(); chargerDemandes(); chargerResultats() })
+watch(appelId, () => { chargerDefinitif(); chargerDemandes(); chargerResultats(); chargerEtatEnvoi() })
 
 onMounted(rechargerAppels)
 </script>
@@ -388,6 +432,40 @@ onMounted(rechargerAppels)
         <v-col cols="6" md="3"><StatCard icon="mdi-email-multiple-outline" :value="resultats.total" label="E-mails (total)" description="1 par personne" color="#1a237e" /></v-col>
         <v-col cols="6" md="3"><StatCard icon="mdi-email-alert-outline" :value="resultats.sans_email" label="Sans e-mail" description="À vérifier" color="#EF6C00" /></v-col>
       </v-row>
+      <!-- Bloc d'envoi : test -> préparer -> envoyer (progression) -->
+      <v-card flat border class="mb-4 pa-4">
+        <div class="d-flex align-center flex-wrap ga-3">
+          <v-icon color="#1a237e">mdi-send-outline</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Envoi des e-mails de résultat</span>
+          <v-spacer />
+          <v-btn variant="outlined" color="primary" prepend-icon="mdi-email-fast-outline"
+                 :loading="enTest" @click="testerEnvoi">Test (m'envoyer un exemple)</v-btn>
+          <v-btn variant="tonal" color="primary" prepend-icon="mdi-playlist-check"
+                 :loading="enPrep" :disabled="!resultats.total" @click="preparerEnvoi">Préparer l'envoi</v-btn>
+          <v-btn color="error" variant="flat" prepend-icon="mdi-send"
+                 :loading="envoiEnCours" :disabled="!etatEnvoi.restants" @click="dialogEnvoi = true">
+            Envoyer à tous ({{ etatEnvoi.restants }})
+          </v-btn>
+        </div>
+        <div v-if="etatEnvoi.total" class="mt-4">
+          <v-progress-linear :model-value="pctEnvoi" color="#2E7D32" height="20" rounded>
+            <span class="text-caption font-weight-bold">{{ pctEnvoi }}%</span>
+          </v-progress-linear>
+          <div class="d-flex flex-wrap ga-4 mt-2 text-body-2">
+            <span><strong>{{ etatEnvoi.envoyes }}</strong> envoyé(s)</span>
+            <span class="text-error"><strong>{{ etatEnvoi.echecs }}</strong> échec(s)</span>
+            <span class="text-medium-emphasis"><strong>{{ etatEnvoi.restants }}</strong> restant(s)</span>
+            <span class="text-medium-emphasis">sur {{ etatEnvoi.total }}</span>
+            <span v-if="envoiEnCours" class="text-primary">Envoi en cours…</span>
+            <span v-else-if="etatEnvoi.termine && etatEnvoi.total" class="text-success font-weight-bold">✓ Terminé</span>
+          </div>
+        </div>
+        <div class="text-caption text-medium-emphasis mt-3">
+          1. <strong>Test</strong> (vérifie le rendu sur ton adresse) → 2. <strong>Préparer</strong> (met en file, sans envoi)
+          → 3. <strong>Envoyer à tous</strong> (envoi réel, progressif, reprise possible). 1 e-mail par personne, déjà envoyés ignorés.
+        </div>
+      </v-card>
+
       <v-card flat border>
         <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
           <v-icon color="primary">mdi-email-multiple-outline</v-icon>
@@ -436,6 +514,30 @@ onMounted(rechargerAppels)
       <v-icon size="48" color="grey-lighten-1" class="mb-2">mdi-trophy-outline</v-icon>
       <p class="text-body-2 text-medium-emphasis mb-0">Sélectionnez un appel à candidature pour gérer sa liste de retenus.</p>
     </v-card>
+
+    <!-- Confirmation envoi en masse -->
+    <v-dialog v-model="dialogEnvoi" max-width="480">
+      <v-card rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 pa-4">
+          <v-icon color="error">mdi-email-alert-outline</v-icon>
+          <span class="text-h6">Envoyer les e-mails ?</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          Vous allez envoyer <strong>{{ etatEnvoi.restants }}</strong> e-mail(s) de résultat
+          (admis / non retenu) aux candidats. <strong>Cette action est irréversible.</strong>
+          Assurez-vous d'avoir fait un <strong>test</strong> au préalable.
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-3">
+          <v-spacer />
+          <v-btn variant="text" @click="dialogEnvoi = false">Annuler</v-btn>
+          <v-btn color="error" variant="flat" prepend-icon="mdi-send" @click="envoyerTout">
+            Oui, envoyer à tous
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-snackbar v-model="snack.show" :color="snack.color" timeout="3000">{{ snack.text }}</v-snackbar>
   </div>

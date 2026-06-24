@@ -1,0 +1,27 @@
+{% extends "emails/base.html" %}
+{% block contenu %}
+  <p>Madame, Monsieur <strong>{{ nom }}</strong>,</p>
+  <p>
+    Nous avons le plaisir de vous informer que votre candidature au recrutement de
+    l'ACGT a été <strong>retenue</strong>. Vous êtes <strong>admis(e)</strong> à
+    passer le test de sélection.
+  </p>
+  <p style="margin:18px 0;padding:14px 18px;background:#e8f5e9;border-radius:8px;font-size:17px;">
+    Votre code candidat : <strong style="color:#1a237e;letter-spacing:1px;">{{ code }}</strong>
+  </p>
+  <p>
+    Le test est prévu le <strong>dimanche 28 juin 2026 à 07h00 (TU+1)</strong>{% if ville %},
+    à <strong>{{ ville }}</strong>{% endif %}.
+  </p>
+  <p>
+    Merci d'<strong>imprimer votre badge d'accès</strong> depuis la plateforme
+    <a href="https://recrutement.acgt.cd/retenus">recrutement.acgt.cd/retenus</a>
+    (avec votre code) et de le présenter, <strong>signé</strong>, accompagné d'une
+    <strong>pièce d'identité valide</strong>, le jour du test.
+  </p>
+  <p>Veuillez consulter les instructions complètes sur la plateforme.</p>
+  <p style="margin-top:22px;">
+    Cordialement,<br>
+    <strong>La Direction — Agence Congolaise des Grands Travaux (ACGT)</strong>
+  </p>
+{% endblock %}
