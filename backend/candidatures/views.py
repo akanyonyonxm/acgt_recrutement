@@ -603,6 +603,9 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             ])
         for i, largeur in enumerate([10, 20, 20, 20, 28, 16, 18, 22], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
+        # En-tête figé + tri/filtre Excel activé sur les colonnes.
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = ws.dimensions
 
         reponse = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -660,6 +663,8 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
                        r['email'], r['dernier_traitement'], r['motif']])
         for i, largeur in enumerate([13, 10, 20, 20, 20, 28, 18, 40], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = ws.dimensions
 
         reponse = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

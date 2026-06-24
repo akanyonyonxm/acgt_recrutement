@@ -88,9 +88,16 @@ const ENTETES_DEF = [
   { title: 'Postnom', key: 'postnom' },
   { title: 'Prénom', key: 'prenom' },
   { title: 'Domaine', key: 'poste_libelle' },
-  { title: 'Ville du test', key: 'ville_examen', sortable: false },
+  { title: 'Ville du test', key: 'ville_examen' },
   { title: 'Origine', key: 'origine', sortable: false },
 ]
+// Filtre par ville du test (côté client, sur les libellés renvoyés).
+const villeFiltre = ref('')
+const VILLES_FILTRE = ['Kinshasa', 'Lubumbashi', 'Mbuji-Mayi']
+const definitifAffiche = computed(() => {
+  const r = definitif.value.results || []
+  return villeFiltre.value ? r.filter((x) => x.ville_examen === villeFiltre.value) : r
+})
 function exporterDefinitive() {
   window.open(`/api/appels/${appelId.value}/liste-definitive-export/`, '_blank')
 }
@@ -365,6 +372,9 @@ onMounted(rechargerAppels)
           <v-chip v-if="definitif.nb_recours" color="#00838F" variant="tonal" size="small"
                   prepend-icon="mdi-gavel">{{ definitif.nb_recours }} via recours</v-chip>
           <v-spacer />
+          <v-select v-model="villeFiltre" :items="VILLES_FILTRE" label="Ville du test" clearable
+                    hide-details density="compact" variant="outlined" style="max-width: 180px"
+                    prepend-inner-icon="mdi-map-marker-outline" />
           <v-text-field v-model="qDef" @update:modelValue="rechercherDef" placeholder="Rechercher un nom…"
                         prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
                         clearable style="max-width: 260px" @click:clear="qDef = ''; chargerDefinitif()" />
@@ -385,7 +395,7 @@ onMounted(rechargerAppels)
           La liste définitive est publiée : elle <strong>remplace la liste provisoire</strong> sur la page publique des retenus.
         </v-alert>
         <v-data-table
-          :headers="ENTETES_DEF" :items="definitif.results" :loading="chargementDef"
+          :headers="ENTETES_DEF" :items="definitifAffiche" :loading="chargementDef"
           :items-per-page="25" :items-per-page-options="[{ value: 25, title: '25' }, { value: 50, title: '50' }, { value: 100, title: '100' }]"
           class="tableau-admin" no-data-text="Aucune personne (retenus publiés + recours validés)." loading-text="Chargement…">
           <template #item.code="{ item }">
