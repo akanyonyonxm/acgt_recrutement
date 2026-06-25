@@ -165,7 +165,7 @@ async function exporterSallesPdf() {
             x = 12 + w + 6
           }
           doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(26, 35, 126)
-          doc.text('Liste des candidats admis au test', x, 16)
+          doc.text('LISTE DES CANDIDATS ADMIS AU TEST', x, 16)
           doc.setFontSize(12); doc.setTextColor(55, 55, 55)
           doc.text(`Salle ${g.salle} - ${g.ville}`, x, 23)
           const t = `Codes ${premier} à ${dernier}`
