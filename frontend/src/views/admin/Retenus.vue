@@ -144,7 +144,7 @@ async function exporterSallesPdf() {
       const dernier = g.items[g.items.length - 1]?.code || ''
       autoTable(doc, {
         head: [['Code', 'Nom', 'Postnom', 'Prénom', 'Domaine']],
-        body: g.items.map((r) => [r.code, affNom(r.nom), affNom(r.postnom), affNom(r.prenom), r.poste_libelle || '']),
+        body: g.items.map((r) => [r.code, affNom(r.nom).toUpperCase(), affNom(r.postnom).toUpperCase(), affNom(r.prenom).toUpperCase(), r.poste_libelle || '']),
         startY: 40,
         margin: { top: 40, left: 12, right: 12 },
         headStyles: { fillColor: [26, 35, 126], textColor: 255, fontStyle: 'bold' },
