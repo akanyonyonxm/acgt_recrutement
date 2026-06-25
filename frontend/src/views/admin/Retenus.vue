@@ -152,7 +152,11 @@ async function exporterSallesPdf() {
         alternateRowStyles: { fillColor: [245, 246, 251] },
         columnStyles: { 0: { fontStyle: 'bold', textColor: [26, 35, 126], cellWidth: 22 } },
         didDrawPage: () => {
-          if (logo) doc.addImage(logo, 'PNG', 12, 9, 22, 22)
+          if (logo) {
+            const h = 18  // hauteur fixe (mm) ; largeur proportionnelle au ratio réel
+            const w = h * ((logo.naturalWidth || 1) / (logo.naturalHeight || 1))
+            doc.addImage(logo, 'PNG', 12, 9, w, h)
+          }
           doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(26, 35, 126)
           doc.text('Liste des candidats admis au test', 40, 16)
           doc.setFontSize(12); doc.setTextColor(55, 55, 55)
