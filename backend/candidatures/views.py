@@ -643,6 +643,18 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             'non_affectes': non_affectes,
         })
 
+    @action(detail=True, methods=['post'], url_path='afficher-salle-public',
+            permission_classes=[IsAuthenticated])
+    def afficher_salle_public(self, request, pk=None):
+        """Active/désactive l'affichage de la salle sur la page publique (badge
+        + liste définitive). Corps : { afficher: bool } (superviseur)."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        appel = self.get_object()
+        appel.afficher_salle_public = bool(request.data.get('afficher'))
+        appel.save(update_fields=['afficher_salle_public'])
+        return Response({'afficher_salle_public': appel.afficher_salle_public})
+
     @action(detail=True, methods=['get'], url_path='liste-definitive-export',
             permission_classes=[IsAuthenticated])
     def liste_definitive_export(self, request, pk=None):

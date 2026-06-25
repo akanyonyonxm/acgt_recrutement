@@ -14,6 +14,12 @@ const modeDefinitif = computed(() => appelId.value
   ? !!appelCourant.value?.liste_definitive_publiee
   : appels.value.some((a) => a.liste_definitive_publiee))
 
+// Affichage de la salle au public : seulement en mode définitif et si l'appel
+// concerné l'a activé.
+const afficherSalle = computed(() => modeDefinitif.value && (appelId.value
+  ? !!appelCourant.value?.afficher_salle_public
+  : appels.value.some((a) => a.liste_definitive_publiee && a.afficher_salle_public)))
+
 // Communiqué : message définitif si on est en mode définitif, sinon le message
 // de la liste provisoire. Celui de l'appel sélectionné, sinon le premier qui en a un.
 function _msg(champ) {
@@ -156,6 +162,7 @@ function imprimerBadge(e) {
         <div class="code-lbl">Code candidat</div><div class="code">${e.code}</div>
         <div class="ligne"><div class="k">Nom complet</div><div class="v">${nom}</div></div>
         <div class="ligne"><div class="k">Domaine</div><div class="vd">${e.poste_libelle || '—'}</div></div>
+        ${(afficherSalle.value && e.salle) ? `<div class="ligne"><div class="k">Salle</div><div class="v">${e.salle}</div></div>` : ''}
         <div class="sign"><div>Signature du candidat</div></div>
         <div class="note">À imprimer, signer et présenter le jour du test avec une pièce d'identité.</div>
       </div>
@@ -261,6 +268,7 @@ onMounted(async () => {
                 <th v-else class="num">#</th>
                 <th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th>
                 <th v-if="modeDefinitif">VILLE</th>
+                <th v-if="afficherSalle">SALLE</th>
                 <th v-if="modeDefinitif" class="badge-col">BADGE</th>
               </tr>
             </thead>
@@ -273,12 +281,13 @@ onMounted(async () => {
                 <td class="nom-cell" data-label="Prénom">{{ aff(e.prenom) }}</td>
                 <td class="muted" data-label="Domaine">{{ e.poste_libelle || '—' }}</td>
                 <td v-if="modeDefinitif" class="ville-cell" data-label="Ville">{{ e.ville_examen_libelle || '—' }}</td>
+                <td v-if="afficherSalle" class="salle-cell" data-label="Salle">{{ e.salle || '—' }}</td>
                 <td v-if="modeDefinitif" class="badge-col" data-label="">
                   <button class="btn-badge" @click="imprimerBadge(e)">Badge</button>
                 </td>
               </tr>
               <tr v-if="!loading && !items.length">
-                <td :colspan="modeDefinitif ? 7 : 5" class="vide">{{ messageVide }}</td>
+                <td :colspan="modeDefinitif ? (afficherSalle ? 8 : 7) : 5" class="vide">{{ messageVide }}</td>
               </tr>
             </tbody>
           </table>
@@ -405,6 +414,7 @@ onMounted(async () => {
   .tableau td.muted::before { content: 'Domaine : '; font-size: 0.78rem; color: #6b7280; }
   .tableau td.ville-cell { margin-top: 4px; }
   .tableau td.ville-cell::before { content: 'Ville : '; font-size: 0.78rem; color: #6b7280; }
+  .tableau td.salle-cell::before { content: 'Salle : '; font-size: 0.78rem; color: #6b7280; }
   .tableau td.badge-col { margin-top: 14px; }
   .btn-badge { width: 100%; padding: 12px; font-size: 0.95rem; }
 }

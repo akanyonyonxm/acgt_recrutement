@@ -73,6 +73,10 @@ class AppelCandidature(models.Model):
     instructions_examen = models.TextField(
         'instructions du test (liste définitive)', blank=True,
     )
+    # Affiche la salle d'examen sur la page publique (liste définitive + badge).
+    afficher_salle_public = models.BooleanField(
+        'afficher la salle au public', default=False,
+    )
     # Communiqué affiché en haut de la page publique des retenus (échéances de
     # recours, critères, date de la liste définitive…). Vide = aucun bandeau.
     message_retenus = models.TextField(

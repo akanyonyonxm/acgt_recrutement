@@ -77,7 +77,7 @@ class RetenuDefinitifSerializer(serializers.ModelSerializer):
     class Meta:
         model = RetenuDefinitif
         fields = ['id', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle', 'origine',
-                  'ville_examen', 'ville_examen_libelle']
+                  'ville_examen', 'ville_examen_libelle', 'salle']
 
 
 class EligibiliteAdminSerializer(serializers.ModelSerializer):
@@ -578,7 +578,7 @@ class AppelCandidatureSerializer(serializers.ModelSerializer):
             'id', 'titre', 'description', 'statut', 'statut_libelle',
             'date_ouverture', 'date_cloture', 'liste_retenus_publiee',
             'message_retenus', 'liste_definitive_publiee', 'message_retenus_definitif',
-            'instructions_examen', 'date_limite_recours', 'candidature_unique',
+            'instructions_examen', 'afficher_salle_public', 'date_limite_recours', 'candidature_unique',
             'pieces_exigees', 'nb_dossiers', 'cree_le', 'modifie_le',
         ]
 

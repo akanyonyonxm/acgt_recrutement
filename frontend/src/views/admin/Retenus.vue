@@ -113,6 +113,19 @@ const LBL_VILLE = { kinshasa: 'Kinshasa', lubumbashi: 'Lubumbashi', mbuji_mayi: 
 // Nombre de candidats de la ville choisie (depuis la liste définitive chargée).
 const nbVilleChoisie = computed(() =>
   (definitif.value.results || []).filter((x) => x.ville_examen === LBL_VILLE[salleForm.value.ville]).length)
+// Affichage de la salle sur la page publique (interrupteur)
+const sallePublic = ref(false)
+watch(() => appelCourant.value?.afficher_salle_public, (v) => { sallePublic.value = !!v }, { immediate: true })
+async function basculerSallePublic(val) {
+  try {
+    await api.post(`/appels/${appelId.value}/afficher-salle-public/`, { afficher: val })
+    notifier(val ? 'Salle désormais visible sur la page publique.' : 'Salle masquée au public.')
+    await rechargerAppels()
+  } catch (e) {
+    notifier(e.response?.data?.detail || 'Action impossible.', 'error')
+    sallePublic.value = !val
+  }
+}
 async function affecterSalles() {
   enSalles.value = true
   try {
@@ -408,6 +421,9 @@ onMounted(rechargerAppels)
           <v-text-field v-model="qDef" @update:modelValue="rechercherDef" placeholder="Rechercher un nom…"
                         prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
                         clearable style="max-width: 260px" @click:clear="qDef = ''; chargerDefinitif()" />
+          <v-switch v-if="auth.peutSuperviser" v-model="sallePublic" @update:modelValue="basculerSallePublic"
+                    color="#00838F" hide-details density="compact" inset
+                    label="Salle visible au public" class="flex-grow-0 mr-1" />
           <v-btn v-if="auth.peutSuperviser" color="#00838F" variant="tonal" prepend-icon="mdi-door-open"
                  :disabled="!definitif.total" @click="dialogSalles = true">Affecter les salles</v-btn>
           <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
