@@ -114,9 +114,10 @@ const LBL_VILLE = { kinshasa: 'Kinshasa', lubumbashi: 'Lubumbashi', mbuji_mayi: 
 // Nombre de candidats de la ville choisie (depuis la liste définitive chargée).
 const nbVilleChoisie = computed(() =>
   (definitif.value.results || []).filter((x) => x.ville_examen === LBL_VILLE[salleForm.value.ville]).length)
-// Impression des feuilles de salle (1 page par salle, en-tête ACGT).
+// Export des feuilles de salle en PDF (1 page par salle, en-tête ACGT).
 const affNom = (v) => (v || '').normalize('NFKC')
-function imprimerSalles() {
+const enPdf = ref(false)
+async function exporterSallesPdf() {
   const rows = (definitifAffiche.value || []).filter((r) => r.salle)
   if (!rows.length) { notifier("Aucune salle affectée — utilisez d'abord « Affecter les salles ».", 'error'); return }
   const groupes = {}
@@ -128,60 +129,48 @@ function imprimerSalles() {
   const liste = Object.values(groupes)
     .sort((a, b) => a.ville.localeCompare(b.ville) || a.salle.localeCompare(b.salle, 'fr', { numeric: true }))
   liste.forEach((g) => g.items.sort((x, y) => x.code.localeCompare(y.code)))
-  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const pages = liste.map((g, gi) => {
-    const premier = esc(g.items[0]?.code || '')
-    const dernier = esc(g.items[g.items.length - 1]?.code || '')
-    return `
-    <section class="page"${gi < liste.length - 1 ? ' style="page-break-after:always"' : ''}>
-      <header class="tete">
-        <img src="${logoAcgt}" class="logo" alt="ACGT" />
-        <div class="titres">
-          <div class="t1">Liste des candidats admis au test</div>
-          <div class="t2">Salle ${esc(g.salle)} · ${esc(g.ville)}</div>
-          <div class="plage">Codes ${premier} — ${dernier}</div>
-        </div>
-      </header>
-      <table class="tbl">
-        <thead><tr><th>Code</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Domaine</th></tr></thead>
-        <tbody>
-          ${g.items.map((r) => `<tr><td class="code">${esc(r.code)}</td><td class="nom">${esc(affNom(r.nom))}</td><td>${esc(affNom(r.postnom))}</td><td>${esc(affNom(r.prenom))}</td><td class="dom">${esc(r.poste_libelle || '')}</td></tr>`).join('')}
-        </tbody>
-      </table>
-      <div class="pied">Salle ${esc(g.salle)} · ${esc(g.ville)} — <strong>${g.items.length}</strong> candidat(s)</div>
-    </section>`
-  }).join('')
-  const w = window.open('', '_blank', 'width=1000,height=800')
-  if (!w) return
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Feuilles de salle</title>
-    <style>
-      *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#1b1b21}
-      .toolbar{position:sticky;top:0;background:#f4f5f7;padding:10px 16px;display:flex;gap:10px;justify-content:flex-end;border-bottom:1px solid #ddd}
-      .toolbar button{border:none;border-radius:9999px;padding:9px 18px;font-size:.9rem;font-weight:700;cursor:pointer}
-      .b-print{background:#1a237e;color:#fff} .b-close{background:#e5e7eb;color:#374151}
-      .page{padding:24px 28px}
-      .tete{display:flex;align-items:center;gap:16px;border-bottom:3px solid #1a237e;padding-bottom:12px;margin-bottom:16px}
-      .logo{height:64px;width:auto}
-      .titres .t1{font-size:1.3rem;font-weight:800;color:#1a237e}
-      .titres .t2{font-size:1.05rem;font-weight:700;color:#374151;margin-top:2px}
-      .titres .plage{display:inline-block;margin-top:6px;background:#C62828;color:#fff;padding:3px 12px;border-radius:6px;font-size:1.05rem;font-weight:800;letter-spacing:.5px}
-      .tbl{width:100%;border-collapse:collapse;font-size:.86rem}
-      .tbl th,.tbl td{border:1px solid #b9bed0;padding:6px 8px;text-align:left}
-      .tbl th{background:#eef0f7;color:#1a237e;text-transform:uppercase;font-size:.72rem;letter-spacing:.03em}
-      .tbl td.n{width:34px;text-align:center;color:#6b7280} .tbl td.code{font-weight:800;color:#1a237e}
-      .tbl td.nom{font-weight:700;text-transform:uppercase} .tbl td.dom{color:#374151}
-      .tbl th.sig{width:170px}
-      .pied{margin-top:10px;font-size:.85rem;color:#374151}
-      @page{size:A4;margin:12mm}
-      @media print{.toolbar{display:none} .page{padding:0}}
-    </style></head><body>
-    <div class="toolbar">
-      <button class="b-print" onclick="window.print()">🖨️ Imprimer</button>
-      <button class="b-close" onclick="window.close()">Fermer</button>
-    </div>
-    ${pages}
-    </body></html>`)
-  w.document.close()
+
+  enPdf.value = true
+  try {
+    const { jsPDF } = await import('jspdf')
+    const autoTable = (await import('jspdf-autotable')).default
+    const logo = await new Promise((res) => {
+      const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = logoAcgt
+    })
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    liste.forEach((g, gi) => {
+      if (gi > 0) doc.addPage()
+      const premier = g.items[0]?.code || ''
+      const dernier = g.items[g.items.length - 1]?.code || ''
+      autoTable(doc, {
+        head: [['Code', 'Nom', 'Postnom', 'Prénom', 'Domaine']],
+        body: g.items.map((r) => [r.code, affNom(r.nom), affNom(r.postnom), affNom(r.prenom), r.poste_libelle || '']),
+        startY: 40,
+        margin: { top: 40, left: 12, right: 12 },
+        headStyles: { fillColor: [26, 35, 126], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+        alternateRowStyles: { fillColor: [245, 246, 251] },
+        columnStyles: { 0: { fontStyle: 'bold', textColor: [26, 35, 126], cellWidth: 22 } },
+        didDrawPage: () => {
+          if (logo) doc.addImage(logo, 'PNG', 12, 9, 22, 22)
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(26, 35, 126)
+          doc.text('Liste des candidats admis au test', 40, 16)
+          doc.setFontSize(12); doc.setTextColor(55, 55, 55)
+          doc.text(`Salle ${g.salle} - ${g.ville}`, 40, 23)
+          const t = `Codes ${premier} à ${dernier}`
+          doc.setFontSize(11)
+          const tw = doc.getTextWidth(t) + 8
+          doc.setFillColor(198, 40, 40); doc.roundedRect(40, 26, tw, 7.5, 1.5, 1.5, 'F')
+          doc.setTextColor(255, 255, 255); doc.text(t, 44, 31.2)
+          doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal')
+        },
+        didDrawCell: () => {},
+      })
+    })
+    doc.save(`feuilles_salle_${villeFiltre.value || 'toutes'}.pdf`)
+  } catch (e) {
+    notifier('Génération du PDF impossible.', 'error')
+  } finally { enPdf.value = false }
 }
 
 // Affichage de la salle sur la page publique (interrupteur)
@@ -497,8 +486,8 @@ onMounted(rechargerAppels)
                     label="Salle visible au public" class="flex-grow-0 mr-1" />
           <v-btn v-if="auth.peutSuperviser" color="#00838F" variant="tonal" prepend-icon="mdi-door-open"
                  :disabled="!definitif.total" @click="dialogSalles = true">Affecter les salles</v-btn>
-          <v-btn color="#5E35B1" variant="tonal" prepend-icon="mdi-printer-outline"
-                 :disabled="!definitif.total" @click="imprimerSalles">Feuilles de salle</v-btn>
+          <v-btn color="#5E35B1" variant="tonal" prepend-icon="mdi-file-pdf-box" :loading="enPdf"
+                 :disabled="!definitif.total" @click="exporterSallesPdf">Feuilles de salle (PDF)</v-btn>
           <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
                  :disabled="!definitif.total" @click="exporterDefinitive">Exporter Excel</v-btn>
           <v-chip v-if="defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-earth">Publiée</v-chip>
