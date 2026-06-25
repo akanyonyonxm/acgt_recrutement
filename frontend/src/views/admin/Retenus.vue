@@ -152,20 +152,25 @@ async function exporterSallesPdf() {
         alternateRowStyles: { fillColor: [245, 246, 251] },
         columnStyles: { 0: { fontStyle: 'bold', textColor: [26, 35, 126], cellWidth: 22 } },
         didDrawPage: () => {
+          // Logo borné dans une boîte (ratio conservé) ; le texte est placé à
+          // DROITE du logo réellement dessiné → pas de superposition.
+          let x = 12
           if (logo) {
-            const h = 18  // hauteur fixe (mm) ; largeur proportionnelle au ratio réel
-            const w = h * ((logo.naturalWidth || 1) / (logo.naturalHeight || 1))
+            const s = Math.min(30 / (logo.naturalWidth || 1), 20 / (logo.naturalHeight || 1))
+            const w = (logo.naturalWidth || 1) * s
+            const h = (logo.naturalHeight || 1) * s
             doc.addImage(logo, 'PNG', 12, 9, w, h)
+            x = 12 + w + 6
           }
           doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(26, 35, 126)
-          doc.text('Liste des candidats admis au test', 40, 16)
+          doc.text('Liste des candidats admis au test', x, 16)
           doc.setFontSize(12); doc.setTextColor(55, 55, 55)
-          doc.text(`Salle ${g.salle} - ${g.ville}`, 40, 23)
+          doc.text(`Salle ${g.salle} - ${g.ville}`, x, 23)
           const t = `Codes ${premier} à ${dernier}`
           doc.setFontSize(11)
           const tw = doc.getTextWidth(t) + 8
-          doc.setFillColor(198, 40, 40); doc.roundedRect(40, 26, tw, 7.5, 1.5, 1.5, 'F')
-          doc.setTextColor(255, 255, 255); doc.text(t, 44, 31.2)
+          doc.setFillColor(198, 40, 40); doc.roundedRect(x, 26, tw, 7.5, 1.5, 1.5, 'F')
+          doc.setTextColor(255, 255, 255); doc.text(t, x + 4, 31.2)
           doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal')
         },
         didDrawCell: () => {},
