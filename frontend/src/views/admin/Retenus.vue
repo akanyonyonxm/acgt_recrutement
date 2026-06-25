@@ -129,23 +129,28 @@ function imprimerSalles() {
     .sort((a, b) => a.ville.localeCompare(b.ville) || a.salle.localeCompare(b.salle, 'fr', { numeric: true }))
   liste.forEach((g) => g.items.sort((x, y) => x.code.localeCompare(y.code)))
   const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const pages = liste.map((g, gi) => `
+  const pages = liste.map((g, gi) => {
+    const premier = esc(g.items[0]?.code || '')
+    const dernier = esc(g.items[g.items.length - 1]?.code || '')
+    return `
     <section class="page"${gi < liste.length - 1 ? ' style="page-break-after:always"' : ''}>
       <header class="tete">
         <img src="${logoAcgt}" class="logo" alt="ACGT" />
         <div class="titres">
           <div class="t1">Liste des candidats admis au test</div>
           <div class="t2">Salle ${esc(g.salle)} · ${esc(g.ville)}</div>
+          <div class="plage">Codes ${premier} — ${dernier}</div>
         </div>
       </header>
       <table class="tbl">
-        <thead><tr><th class="n">#</th><th>Code</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Domaine</th><th class="sig">Émargement</th></tr></thead>
+        <thead><tr><th>Code</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Domaine</th></tr></thead>
         <tbody>
-          ${g.items.map((r, i) => `<tr><td class="n">${i + 1}</td><td class="code">${esc(r.code)}</td><td class="nom">${esc(affNom(r.nom))}</td><td>${esc(affNom(r.postnom))}</td><td>${esc(affNom(r.prenom))}</td><td class="dom">${esc(r.poste_libelle || '')}</td><td></td></tr>`).join('')}
+          ${g.items.map((r) => `<tr><td class="code">${esc(r.code)}</td><td class="nom">${esc(affNom(r.nom))}</td><td>${esc(affNom(r.postnom))}</td><td>${esc(affNom(r.prenom))}</td><td class="dom">${esc(r.poste_libelle || '')}</td></tr>`).join('')}
         </tbody>
       </table>
       <div class="pied">Salle ${esc(g.salle)} · ${esc(g.ville)} — <strong>${g.items.length}</strong> candidat(s)</div>
-    </section>`).join('')
+    </section>`
+  }).join('')
   const w = window.open('', '_blank', 'width=1000,height=800')
   if (!w) return
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Feuilles de salle</title>
@@ -159,6 +164,7 @@ function imprimerSalles() {
       .logo{height:64px;width:auto}
       .titres .t1{font-size:1.3rem;font-weight:800;color:#1a237e}
       .titres .t2{font-size:1.05rem;font-weight:700;color:#374151;margin-top:2px}
+      .titres .plage{display:inline-block;margin-top:6px;background:#C62828;color:#fff;padding:3px 12px;border-radius:6px;font-size:1.05rem;font-weight:800;letter-spacing:.5px}
       .tbl{width:100%;border-collapse:collapse;font-size:.86rem}
       .tbl th,.tbl td{border:1px solid #b9bed0;padding:6px 8px;text-align:left}
       .tbl th{background:#eef0f7;color:#1a237e;text-transform:uppercase;font-size:.72rem;letter-spacing:.03em}
