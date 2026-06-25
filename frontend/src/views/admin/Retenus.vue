@@ -479,28 +479,14 @@ onMounted(rechargerAppels)
       <!-- ===== Onglet : LISTE DÉFINITIVE (retenus publiés + recours validés) ===== -->
       <v-window-item value="definitive">
       <v-card flat border>
-        <v-card-title class="d-flex align-center flex-wrap ga-3 py-4">
+        <!-- Ligne 1 : titre + état de publication -->
+        <div class="d-flex align-center flex-wrap ga-3 px-4 pt-4 pb-2">
           <v-icon color="#5E35B1">mdi-seal-variant</v-icon>
           <span class="text-subtitle-1 font-weight-bold">Liste définitive</span>
           <v-chip color="#5E35B1" variant="tonal" size="small">{{ definitif.total }}</v-chip>
           <v-chip v-if="definitif.nb_recours" color="#00838F" variant="tonal" size="small"
                   prepend-icon="mdi-gavel">{{ definitif.nb_recours }} via recours</v-chip>
           <v-spacer />
-          <v-select v-model="villeFiltre" :items="VILLES_FILTRE" label="Ville du test" clearable
-                    hide-details density="compact" variant="outlined" style="max-width: 180px"
-                    prepend-inner-icon="mdi-map-marker-outline" />
-          <v-text-field v-model="qDef" @update:modelValue="rechercherDef" placeholder="Rechercher un nom…"
-                        prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
-                        clearable style="max-width: 260px" @click:clear="qDef = ''; chargerDefinitif()" />
-          <v-switch v-if="auth.peutSuperviser" v-model="sallePublic" @update:modelValue="basculerSallePublic"
-                    color="#00838F" hide-details density="compact" inset
-                    label="Salle visible au public" class="flex-grow-0 mr-1" />
-          <v-btn v-if="auth.peutSuperviser" color="#00838F" variant="tonal" prepend-icon="mdi-door-open"
-                 :disabled="!definitif.total" @click="dialogSalles = true">Affecter les salles</v-btn>
-          <v-btn color="#5E35B1" variant="tonal" prepend-icon="mdi-file-pdf-box" :loading="enPdf"
-                 :disabled="!definitif.total" @click="exporterSallesPdf">Feuilles de salle (PDF)</v-btn>
-          <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
-                 :disabled="!definitif.total" @click="exporterDefinitive">Exporter Excel</v-btn>
           <v-chip v-if="defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-earth">Publiée</v-chip>
           <template v-if="auth.estAdmin || auth.peutSuperviser">
             <v-btn v-if="!defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-publish"
@@ -510,7 +496,27 @@ onMounted(rechargerAppels)
             <v-btn v-else color="grey" variant="outlined" prepend-icon="mdi-publish-off"
                    @click="depublierDefinitive">Dépublier</v-btn>
           </template>
-        </v-card-title>
+        </div>
+        <v-divider />
+        <!-- Ligne 2 : filtres + outils (salles, exports) -->
+        <div class="d-flex align-center flex-wrap ga-3 px-4 py-3">
+          <v-select v-model="villeFiltre" :items="VILLES_FILTRE" label="Ville du test" clearable
+                    hide-details density="compact" variant="outlined" style="max-width: 200px"
+                    prepend-inner-icon="mdi-map-marker-outline" />
+          <v-text-field v-model="qDef" @update:modelValue="rechercherDef" placeholder="Rechercher un nom…"
+                        prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
+                        clearable style="max-width: 240px" @click:clear="qDef = ''; chargerDefinitif()" />
+          <v-spacer />
+          <v-switch v-if="auth.peutSuperviser" v-model="sallePublic" @update:modelValue="basculerSallePublic"
+                    color="#00838F" hide-details density="compact" inset
+                    label="Salle visible au public" class="flex-grow-0 mr-1" />
+          <v-btn v-if="auth.peutSuperviser" color="#00838F" variant="tonal" prepend-icon="mdi-door-open"
+                 :disabled="!definitif.total" @click="dialogSalles = true">Affecter les salles</v-btn>
+          <v-btn color="#5E35B1" variant="tonal" prepend-icon="mdi-file-pdf-box" :loading="enPdf"
+                 :disabled="!definitif.total" @click="exporterSallesPdf">Feuilles de salle (PDF)</v-btn>
+          <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
+                 :disabled="!definitif.total" @click="exporterDefinitive">Exporter Excel</v-btn>
+        </div>
         <v-divider />
         <v-alert v-if="defPubliee" type="success" variant="tonal" density="compact" class="ma-3" icon="mdi-information-outline">
           La liste définitive est publiée : elle <strong>remplace la liste provisoire</strong> sur la page publique des retenus.
