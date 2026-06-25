@@ -159,7 +159,9 @@ async function exporterSallesPdf() {
             const s = Math.min(30 / (logo.naturalWidth || 1), 20 / (logo.naturalHeight || 1))
             const w = (logo.naturalWidth || 1) * s
             const h = (logo.naturalHeight || 1) * s
-            doc.addImage(logo, 'PNG', 12, 9, w, h)
+            // Centré verticalement sur le bloc de texte (≈ y 11 → 33).
+            const y = Math.max(8, 22 - h / 2)
+            doc.addImage(logo, 'PNG', 12, y, w, h)
             x = 12 + w + 6
           }
           doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(26, 35, 126)
