@@ -991,6 +991,9 @@ class RetenuDefinitif(models.Model):
     origine = models.CharField(
         'origine', max_length=10, choices=Origine.choices, default=Origine.LISTE,
     )
+    # Salle d'examen (libellé alphabétique A, B, C…), attribuée automatiquement
+    # par ville selon l'ordre des codes. Vide = non encore affectée.
+    salle = models.CharField('salle', max_length=4, blank=True, db_index=True)
     # Traçabilité de la source (facultative : SET_NULL pour survivre à une purge).
     dossier = models.ForeignKey(
         Dossier, on_delete=models.SET_NULL, null=True, blank=True,

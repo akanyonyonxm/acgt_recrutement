@@ -233,6 +233,16 @@ class EligibiliteViewSet(viewsets.ReadOnlyModelViewSet):
         return reponse
 
 
+def _lettre_salle(n):
+    """0 -> A, 1 -> B, … 25 -> Z, 26 -> AA (libellés de salle, style Excel)."""
+    s = ''
+    n += 1
+    while n:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
 def _docs_retenu_definitif(e):
     """Documents (pièces dossier + justificatifs réclamation) rattachés à une
     entrée définitive, pour vérifier l'identité (ex. date de naissance)."""
@@ -467,6 +477,7 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
                 **s,
                 'code': e.code if e else '',
                 'ville_examen': e.get_ville_examen_display() if e else '',
+                'salle': e.salle if e else '',
                 'ville_choisie': bool(e and e.ville_choisie_le) if e else False,
             })
         for token in tokens_recherche(request.query_params.get('q', '')):
@@ -587,6 +598,51 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             'ville_examen_libelle': entree.get_ville_examen_display(),
         })
 
+    @action(detail=True, methods=['post'], url_path='affecter-salles',
+            permission_classes=[IsAuthenticated])
+    def affecter_salles(self, request, pk=None):
+        """Affecte automatiquement les salles d'une ville : les candidats de cette
+        ville (triés par CODE) sont répartis par paquets de `par_salle` dans des
+        salles A, B, C… (jusqu'à `nombre_salles`). Ré-exécutable : les codes étant
+        stables, chacun retrouve la même salle."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        appel = self.get_object()
+        ville = request.data.get('ville')
+        if ville not in RetenuDefinitif.Ville.values:
+            raise ValidationError({'ville': 'Ville invalide.'})
+        try:
+            nb_salles = int(request.data.get('nombre_salles'))
+            par_salle = int(request.data.get('par_salle'))
+        except (TypeError, ValueError):
+            raise ValidationError("Indiquez le nombre de salles et le nombre de personnes par salle.")
+        if nb_salles < 1 or par_salle < 1:
+            raise ValidationError("Le nombre de salles et de personnes par salle doit être ≥ 1.")
+
+        from collections import defaultdict
+        entries = appel.retenus_definitifs.filter(ville_examen=ville).order_by('code')
+        ids = list(entries.values_list('id', flat=True))
+        par_room = defaultdict(list)
+        non_affectes = 0
+        for i, id_ in enumerate(ids):
+            ri = i // par_salle
+            if ri >= nb_salles:
+                non_affectes += 1
+                continue
+            par_room[ri].append(id_)
+        with transaction.atomic():
+            entries.update(salle='')   # réinitialise la ville
+            for ri, group in par_room.items():
+                RetenuDefinitif.objects.filter(id__in=group).update(salle=_lettre_salle(ri))
+        return Response({
+            'ville': ville,
+            'total': len(ids),
+            'affectes': len(ids) - non_affectes,
+            'salles_utilisees': len(par_room),
+            'par_salle': par_salle,
+            'non_affectes': non_affectes,
+        })
+
     @action(detail=True, methods=['get'], url_path='liste-definitive-export',
             permission_classes=[IsAuthenticated])
     def liste_definitive_export(self, request, pk=None):
@@ -604,18 +660,18 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         ws = wb.active
         ws.title = 'Liste définitive'
         entetes = ['Code', 'Nom', 'Postnom', 'Prénom', 'Domaine', 'Ville du test',
-                   'Demande en attente', 'Origine']
+                   'Salle', 'Demande en attente', 'Origine']
         ws.append(entetes)
         for cell in ws[1]:
             cell.font = Font(bold=True)
         for e in appel.retenus_definitifs.all().order_by('code'):
             ws.append([
                 e.code, e.nom, e.postnom, e.prenom, e.poste_libelle,
-                e.get_ville_examen_display(),
+                e.get_ville_examen_display(), e.salle,
                 e.get_ville_demandee_display() if e.ville_demandee else '',
                 e.get_origine_display(),
             ])
-        for i, largeur in enumerate([10, 20, 20, 20, 28, 16, 18, 22], start=1):
+        for i, largeur in enumerate([10, 20, 20, 20, 28, 16, 8, 18, 22], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
         # En-tête figé + tri/filtre Excel activé sur les colonnes.
         ws.freeze_panes = 'A2'

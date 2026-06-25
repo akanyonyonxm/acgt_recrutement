@@ -89,6 +89,7 @@ const ENTETES_DEF = [
   { title: 'Prénom', key: 'prenom' },
   { title: 'Domaine', key: 'poste_libelle' },
   { title: 'Ville du test', key: 'ville_examen' },
+  { title: 'Salle', key: 'salle' },
   { title: 'Origine', key: 'origine', sortable: false },
 ]
 // Filtre par ville du test (côté client, sur les libellés renvoyés).
@@ -98,6 +99,32 @@ const definitifAffiche = computed(() => {
   const r = definitif.value.results || []
   return villeFiltre.value ? r.filter((x) => x.ville_examen === villeFiltre.value) : r
 })
+
+// Affectation automatique des salles (par ville)
+const dialogSalles = ref(false)
+const salleForm = ref({ ville: 'kinshasa', nombre_salles: 10, par_salle: 50 })
+const enSalles = ref(false)
+const VILLES_VAL = [
+  { value: 'kinshasa', title: 'Kinshasa' },
+  { value: 'lubumbashi', title: 'Lubumbashi' },
+  { value: 'mbuji_mayi', title: 'Mbuji-Mayi' },
+]
+const LBL_VILLE = { kinshasa: 'Kinshasa', lubumbashi: 'Lubumbashi', mbuji_mayi: 'Mbuji-Mayi' }
+// Nombre de candidats de la ville choisie (depuis la liste définitive chargée).
+const nbVilleChoisie = computed(() =>
+  (definitif.value.results || []).filter((x) => x.ville_examen === LBL_VILLE[salleForm.value.ville]).length)
+async function affecterSalles() {
+  enSalles.value = true
+  try {
+    const { data } = await api.post(`/appels/${appelId.value}/affecter-salles/`, salleForm.value)
+    notifier(`Salles affectées (${LBL_VILLE[data.ville]}) : ${data.affectes} personne(s) sur ${data.salles_utilisees} salle(s)`
+      + (data.non_affectes ? ` — ⚠ ${data.non_affectes} non affecté(s), capacité insuffisante.` : '.'))
+    dialogSalles.value = false
+    await chargerDefinitif()
+  } catch (e) {
+    notifier(e.response?.data?.ville || e.response?.data?.detail || 'Affectation impossible.', 'error')
+  } finally { enSalles.value = false }
+}
 function exporterDefinitive() {
   window.open(`/api/appels/${appelId.value}/liste-definitive-export/`, '_blank')
 }
@@ -381,6 +408,8 @@ onMounted(rechargerAppels)
           <v-text-field v-model="qDef" @update:modelValue="rechercherDef" placeholder="Rechercher un nom…"
                         prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
                         clearable style="max-width: 260px" @click:clear="qDef = ''; chargerDefinitif()" />
+          <v-btn v-if="auth.peutSuperviser" color="#00838F" variant="tonal" prepend-icon="mdi-door-open"
+                 :disabled="!definitif.total" @click="dialogSalles = true">Affecter les salles</v-btn>
           <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
                  :disabled="!definitif.total" @click="exporterDefinitive">Exporter Excel</v-btn>
           <v-chip v-if="defPubliee" color="#5E35B1" variant="flat" prepend-icon="mdi-earth">Publiée</v-chip>
@@ -411,6 +440,10 @@ onMounted(rechargerAppels)
           <template #item.ville_examen="{ item }">
             <v-chip size="x-small" label variant="tonal"
                     :color="item.ville_examen === 'Kinshasa' ? 'grey' : '#EF6C00'">{{ item.ville_examen }}</v-chip>
+          </template>
+          <template #item.salle="{ item }">
+            <v-chip v-if="item.salle" size="x-small" label color="#00838F" variant="flat">{{ item.salle }}</v-chip>
+            <span v-else class="text-medium-emphasis">—</span>
           </template>
           <template #item.origine="{ item }">
             <v-chip v-if="item.origine === 'recours'" size="x-small" label color="#00838F" variant="tonal">Recours</v-chip>
@@ -556,6 +589,53 @@ onMounted(rechargerAppels)
       <v-icon size="48" color="grey-lighten-1" class="mb-2">mdi-trophy-outline</v-icon>
       <p class="text-body-2 text-medium-emphasis mb-0">Sélectionnez un appel à candidature pour gérer sa liste de retenus.</p>
     </v-card>
+
+    <!-- Affectation automatique des salles -->
+    <v-dialog v-model="dialogSalles" max-width="480">
+      <v-card rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 pa-4">
+          <v-icon color="#00838F">mdi-door-open</v-icon>
+          <span class="text-h6">Affecter les salles</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <p class="text-body-2 text-medium-emphasis mb-4">
+            Les candidats de la ville choisie (triés par <strong>code</strong>) sont répartis par
+            paquets dans des salles <strong>A, B, C…</strong> Ré-exécutable à tout moment : les codes
+            étant stables, chacun retrouve la même salle.
+          </p>
+          <v-select v-model="salleForm.ville" :items="VILLES_VAL" label="Ville du test"
+                    variant="outlined" density="comfortable" class="mb-3" hide-details />
+          <div class="text-caption text-medium-emphasis mb-3">
+            <strong>{{ nbVilleChoisie }}</strong> candidat(s) à {{ LBL_VILLE[salleForm.ville] }} sur la liste définitive.
+          </div>
+          <v-row dense>
+            <v-col cols="6">
+              <v-text-field v-model.number="salleForm.nombre_salles" type="number" min="1"
+                            label="Nombre de salles" variant="outlined" density="comfortable" hide-details />
+            </v-col>
+            <v-col cols="6">
+              <v-text-field v-model.number="salleForm.par_salle" type="number" min="1"
+                            label="Personnes / salle" variant="outlined" density="comfortable" hide-details />
+            </v-col>
+          </v-row>
+          <v-alert v-if="nbVilleChoisie > salleForm.nombre_salles * salleForm.par_salle"
+                   type="warning" variant="tonal" density="compact" class="mt-3">
+            Capacité ({{ salleForm.nombre_salles * salleForm.par_salle }}) inférieure au nombre de candidats
+            ({{ nbVilleChoisie }}) : les derniers ne seront pas affectés.
+          </v-alert>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-3">
+          <v-btn variant="text" @click="dialogSalles = false">Annuler</v-btn>
+          <v-spacer />
+          <v-btn color="#00838F" variant="flat" prepend-icon="mdi-door-open" :loading="enSalles"
+                 :disabled="!salleForm.nombre_salles || !salleForm.par_salle" @click="affecterSalles">
+            Affecter
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Examen d'une demande de ville -->
     <v-dialog v-model="dialogDemande" max-width="560">
