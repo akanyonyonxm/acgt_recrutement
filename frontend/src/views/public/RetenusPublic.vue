@@ -27,12 +27,11 @@ function _msg(champ) {
   return (appels.value.find((x) => (x[champ] || '').trim())?.[champ] || '').trim()
 }
 const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement aura lieu le "
-  + "**dimanche 28 juin 2026 à 07h00 (TU+1)**, simultanément sur les sites suivants :\n\n"
+  + "**dimanche 28 juin 2026 à 07h00 (TU+1)**, simultanément sur les sites suivants :\n"
   + "**KINSHASA** : Institut de la Gombe (en diagonal du Palais de Justice).\n"
   + "**LUBUMBASHI** : Lycée Kiwele, Av. Kimbangu, Q. Kimbwambwa, C. Lubumbashi, "
   + "au croisement des avenues Kimbangu et du 30 Juin, après le Marché Eureka.\n"
-  + "**MBUJI-MAYI** : Collège Saint Léon, n°01 Av. Monseigneur Nkongolo, Q. Mulekayi, C. Bipemba.\n\n"
-  + "Chaque candidat est prié de se présenter au site correspondant à sa ville."
+  + "**MBUJI-MAYI** : Collège Saint Léon, n°01 Av. Monseigneur Nkongolo, Q. Mulekayi, C. Bipemba."
 const messageActif = computed(() => modeDefinitif.value
   ? (_msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT)
   : _msg('message_retenus'))
