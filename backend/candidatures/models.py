@@ -77,6 +77,12 @@ class AppelCandidature(models.Model):
     afficher_salle_public = models.BooleanField(
         'afficher la salle au public', default=False,
     )
+    # Inclut (ou non) les ajouts SUPPLÉMENTAIRES (origine « supplement ») dans la
+    # liste définitive partout : page publique, aperçu back-office, PDF, Excel et
+    # affectation des salles. Permet d'activer/désactiver ce lot sans le supprimer.
+    afficher_supplements_definitif = models.BooleanField(
+        'afficher les ajouts supplémentaires sur la liste définitive', default=True,
+    )
     # Communiqué affiché en haut de la page publique des retenus (échéances de
     # recours, critères, date de la liste définitive…). Vide = aucun bandeau.
     message_retenus = models.TextField(

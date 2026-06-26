@@ -317,7 +317,10 @@ def _sources_liste_definitive(appel):
     # source) : déjà figés dans RetenuDefinitif. On les réinjecte ici pour qu'ils
     # apparaissent dans l'aperçu back-office et le PDF (le public et l'Excel lisent
     # la table directement). _generer_liste_definitive les ignore (déjà présents).
-    for e in appel.retenus_definitifs.filter(origine=RetenuDefinitif.Origine.SUPPLEMENT):
+    # Masqués si l'appel a désactivé l'affichage des suppléments.
+    sup_qs = (appel.retenus_definitifs.filter(origine=RetenuDefinitif.Origine.SUPPLEMENT)
+              if appel.afficher_supplements_definitif else appel.retenus_definitifs.none())
+    for e in sup_qs:
         tr = e.texte_recherche or normaliser_texte(f'{e.nom} {e.postnom} {e.prenom}')
         if tr in vus:
             continue
@@ -645,6 +648,9 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
 
         from collections import defaultdict
         entries = appel.retenus_definitifs.filter(ville_examen=ville).order_by('code')
+        # Si les suppléments sont masqués, ils ne reçoivent pas de salle.
+        if not appel.afficher_supplements_definitif:
+            entries = entries.exclude(origine=RetenuDefinitif.Origine.SUPPLEMENT)
         ids = list(entries.values_list('id', flat=True))
         par_room = defaultdict(list)
         non_affectes = 0
@@ -679,6 +685,19 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         appel.save(update_fields=['afficher_salle_public'])
         return Response({'afficher_salle_public': appel.afficher_salle_public})
 
+    @action(detail=True, methods=['post'], url_path='afficher-supplements',
+            permission_classes=[IsAuthenticated])
+    def afficher_supplements(self, request, pk=None):
+        """Active/désactive l'inclusion des ajouts SUPPLÉMENTAIRES dans la liste
+        définitive (page publique, aperçu, PDF, Excel, salles). Corps :
+        { afficher: bool } (superviseur). Ne supprime pas les entrées."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        appel = self.get_object()
+        appel.afficher_supplements_definitif = bool(request.data.get('afficher'))
+        appel.save(update_fields=['afficher_supplements_definitif'])
+        return Response({'afficher_supplements_definitif': appel.afficher_supplements_definitif})
+
     @action(detail=True, methods=['get'], url_path='liste-definitive-export',
             permission_classes=[IsAuthenticated])
     def liste_definitive_export(self, request, pk=None):
@@ -700,7 +719,10 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         ws.append(entetes)
         for cell in ws[1]:
             cell.font = Font(bold=True)
-        for e in appel.retenus_definitifs.all().order_by('code'):
+        export_qs = appel.retenus_definitifs.all().order_by('code')
+        if not appel.afficher_supplements_definitif:
+            export_qs = export_qs.exclude(origine=RetenuDefinitif.Origine.SUPPLEMENT)
+        for e in export_qs:
             ws.append([
                 e.code, e.nom, e.postnom, e.prenom, e.poste_libelle,
                 e.get_ville_examen_display(), e.salle,
@@ -941,6 +963,9 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = RetenuDefinitif.objects.filter(appel__liste_definitive_publiee=True)
+        # Suppléments masqués pour les appels qui ont désactivé leur affichage.
+        qs = qs.exclude(origine=RetenuDefinitif.Origine.SUPPLEMENT,
+                        appel__afficher_supplements_definitif=False)
         appel = self.request.query_params.get('appel')
         if appel:
             qs = qs.filter(appel_id=appel)

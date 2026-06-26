@@ -197,6 +197,22 @@ async function basculerSallePublic(val) {
     sallePublic.value = !val
   }
 }
+// Inclusion des ajouts supplémentaires dans la liste définitive (interrupteur)
+const supplementsVisibles = ref(true)
+watch(() => appelCourant.value?.afficher_supplements_definitif,
+  (v) => { supplementsVisibles.value = v !== false }, { immediate: true })
+async function basculerSupplements(val) {
+  try {
+    await api.post(`/appels/${appelId.value}/afficher-supplements/`, { afficher: val })
+    notifier(val ? 'Ajouts supplémentaires inclus dans la liste définitive.'
+                 : 'Ajouts supplémentaires masqués de la liste définitive.')
+    await rechargerAppels()
+    await chargerDefinitif()
+  } catch (e) {
+    notifier(e.response?.data?.detail || 'Action impossible.', 'error')
+    supplementsVisibles.value = !val
+  }
+}
 async function affecterSalles() {
   enSalles.value = true
   try {
@@ -507,6 +523,9 @@ onMounted(rechargerAppels)
                         prepend-inner-icon="mdi-magnify" variant="outlined" density="compact" hide-details
                         clearable style="max-width: 240px" @click:clear="qDef = ''; chargerDefinitif()" />
           <v-spacer />
+          <v-switch v-if="auth.peutSuperviser" v-model="supplementsVisibles" @update:modelValue="basculerSupplements"
+                    color="amber-darken-2" hide-details density="compact" inset
+                    label="Suppléments visibles" class="flex-grow-0 mr-1" />
           <v-switch v-if="auth.peutSuperviser" v-model="sallePublic" @update:modelValue="basculerSallePublic"
                     color="#00838F" hide-details density="compact" inset
                     label="Salle visible au public" class="flex-grow-0 mr-1" />

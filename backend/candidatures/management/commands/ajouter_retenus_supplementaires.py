@@ -38,13 +38,13 @@ SUPPLEMENTAIRES = [
     ('MUNENE', 'CIBANVUNYA', 'FELICIEN', 'Bâtiment et travaux publics', V.KINSHASA),
     ('NGIAMA', 'KIMVUTA', 'Levieux', 'Bâtiment et travaux publics / PC', V.KINSHASA),
     ('NSIANA', 'MAKONKO', 'ARNAULD', 'Architecte', V.KINSHASA),
-    ('NTUMBA', 'MUKEBA', 'ELYSEE', 'Architecte', V.KINSHASA),
+    # NTUMBA MUKEBA ELYSEE : déjà présent sur la liste définitive (flux normal) — exclu.
     # --- Lubumbashi (image 2) ---
     ('MWAMBA', 'BANZE', 'CREDO', 'Architecte', V.LUBUMBASHI),
     ('EBUMA', 'GBENYE', 'JONATHAN', 'Environnementaliste', V.LUBUMBASHI),
     # --- Mbuji-Mayi (image 2) ---
     ('CILUMBU', 'CINGUTA', 'SHEKINA', 'Ingénieur civil', V.MBUJI_MAYI),
-    ('MPOYI', 'TSHIMANDA', 'JONATHAN', 'Ingénieur civil', V.MBUJI_MAYI),
+    # MPOYI TSHIMANDA JONATHAN : déjà présent sur la liste définitive (flux normal) — exclu.
 ]
 
 
