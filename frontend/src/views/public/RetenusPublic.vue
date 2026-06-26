@@ -47,7 +47,6 @@ const INSTRUCTIONS_DEFAUT = "Les candidats retenus sont priés de respecter les 
   + "5. L'examen est individuel : **aucune collaboration ne sera tolérée**.\n"
   + "6. Le port d'une tenue décente est de rigueur.\n"
   + "7. Le non-respect du local d'affectation **vaut disqualification**.\n\n"
-  + "**Note :** Les lieux précis du test à Lubumbashi et Mbuji-Mayi seront communiqués le **vendredi 26 juin 2026** sur le portail de recrutement ACGT."
 const instructionsActif = computed(() => _msg('instructions_examen') || INSTRUCTIONS_DEFAUT)
 const showInstructions = ref(false)
 
@@ -221,6 +220,18 @@ onMounted(async () => {
           imprimez votre <strong>badge d'accès</strong> et présentez-le, signé, le jour du test,
           accompagné de votre <strong>carte d'identité valide</strong>.
           Prière de lire les <a class="lien-instructions" @click="showInstructions = true">instructions</a>.
+          <div v-if="showInstructions" class="modal-fond" @click.self="showInstructions = false">
+            <div class="modal-carte">
+              <div class="modal-tete">
+                <span>📋 Instructions du test</span>
+                <button class="modal-x" @click="showInstructions = false">✕</button>
+              </div>
+              <p class="modal-texte" v-html="enrichir(instructionsActif)"></p>
+              <div class="modal-pied">
+                <button class="btn-act btn-act-vert" @click="showInstructions = false">J'ai compris</button>
+              </div>
+            </div>
+          </div>
         </p>
         <p v-else class="hero-sous">
           Liste provisoire des candidats présélectionnés.
@@ -308,18 +319,7 @@ onMounted(async () => {
     </template>
 
     <!-- Modal Instructions -->
-    <div v-if="showInstructions" class="modal-fond" @click.self="showInstructions = false">
-      <div class="modal-carte">
-        <div class="modal-tete">
-          <span>📋 Instructions du test</span>
-          <button class="modal-x" @click="showInstructions = false">✕</button>
-        </div>
-        <p class="modal-texte" v-html="enrichir(instructionsActif)"></p>
-        <div class="modal-pied">
-          <button class="btn-act btn-act-vert" @click="showInstructions = false">J'ai compris</button>
-        </div>
-      </div>
-    </div>
+    
   </div>
 </template>
 
