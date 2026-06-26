@@ -542,6 +542,7 @@ onMounted(rechargerAppels)
           </template>
           <template #item.origine="{ item }">
             <v-chip v-if="item.origine === 'recours'" size="x-small" label color="#00838F" variant="tonal">Recours</v-chip>
+            <v-chip v-else-if="item.origine === 'supplement'" size="x-small" label color="amber-darken-2" variant="tonal">Supplément</v-chip>
             <v-chip v-else size="x-small" label color="grey" variant="tonal">Liste</v-chip>
           </template>
         </v-data-table>

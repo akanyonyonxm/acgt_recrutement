@@ -980,6 +980,11 @@ class RetenuDefinitif(models.Model):
     class Origine(models.TextChoices):
         LISTE = 'liste', 'Retenu (liste provisoire)'
         RECOURS = 'recours', 'Validé après recours'
+        # Ajout manuel hors flux (liste supplémentaire décidée hors plateforme) :
+        # figure sur la liste définitive (web + PDF) mais sans dossier/recours
+        # source. N'entre dans aucune statistique (RapportsView ne lit pas cette
+        # table). Inséré via la commande manuelle ajouter_retenus_supplementaires.
+        SUPPLEMENT = 'supplement', 'Ajout supplémentaire'
 
     class Ville(models.TextChoices):
         KINSHASA = 'kinshasa', 'Kinshasa'

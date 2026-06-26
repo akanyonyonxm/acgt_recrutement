@@ -313,6 +313,20 @@ def _sources_liste_definitive(appel):
             'poste_libelle': poste,
             'origine': RetenuDefinitif.Origine.RECOURS, 'dossier_id': None, 'recours_id': r.id,
         })
+    # Ajouts supplémentaires (liste décidée hors plateforme, sans dossier/recours
+    # source) : déjà figés dans RetenuDefinitif. On les réinjecte ici pour qu'ils
+    # apparaissent dans l'aperçu back-office et le PDF (le public et l'Excel lisent
+    # la table directement). _generer_liste_definitive les ignore (déjà présents).
+    for e in appel.retenus_definitifs.filter(origine=RetenuDefinitif.Origine.SUPPLEMENT):
+        tr = e.texte_recherche or normaliser_texte(f'{e.nom} {e.postnom} {e.prenom}')
+        if tr in vus:
+            continue
+        vus.add(tr)
+        out.append({
+            'texte_recherche': tr, 'nom': e.nom, 'postnom': e.postnom, 'prenom': e.prenom,
+            'poste_libelle': e.poste_libelle,
+            'origine': RetenuDefinitif.Origine.SUPPLEMENT, 'dossier_id': None, 'recours_id': None,
+        })
     out.sort(key=lambda s: (s['nom'].lower(), s['postnom'].lower(), s['prenom'].lower()))
     return out
 
