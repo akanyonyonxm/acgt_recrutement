@@ -219,18 +219,10 @@ onMounted(async () => {
           Chaque candidat dispose d'un <mark class="surbrillance-claire">code unique</mark> ;
           imprimez votre <strong>badge d'accès</strong> et présentez-le, signé, le jour du test,
           accompagné de votre <strong>carte d'identité valide</strong>.
-          Prière de lire les <a class="lien-instructions" @click="showInstructions = true">instructions</a>.
-          <div v-if="showInstructions" class="modal-fond" @click.self="showInstructions = false">
-            <div class="modal-carte">
-              <div class="modal-tete">
-                <span>📋 Instructions du test</span>
-                <button class="modal-x" @click="showInstructions = false">✕</button>
-              </div>
-              <p class="modal-texte" v-html="enrichir(instructionsActif)"></p>
-              <div class="modal-pied">
-                <button class="btn-act btn-act-vert" @click="showInstructions = false">J'ai compris</button>
-              </div>
-            </div>
+          Prière de lire les <a class="lien-instructions" @click="showInstructions = true">instructions</a>.        
+          <!-- Actions (liste définitive) : juste sous le message -->
+          <div v-if="modeDefinitif" class="actions-def">
+            <button class="btn-act btn-act-clair" @click="showInstructions = true">📋 Instructions du test</button>
           </div>
         </p>
         <p v-else class="hero-sous">
@@ -252,10 +244,6 @@ onMounted(async () => {
         <p class="comm-texte" v-html="enrichir(messageActif)"></p>
       </div>
 
-      <!-- Actions (liste définitive) : juste sous le message -->
-      <div v-if="modeDefinitif" class="actions-def">
-        <button class="btn-act btn-act-clair" @click="showInstructions = true">📋 Instructions du test</button>
-      </div>
 
       <!-- Recherche flottante -->
       <div class="recherche" :class="{ 'rech-mt': messageActif }">
@@ -319,7 +307,18 @@ onMounted(async () => {
     </template>
 
     <!-- Modal Instructions -->
-    
+    <div v-if="showInstructions" class="modal-fond" @click.self="showInstructions = false">
+      <div class="modal-carte">
+        <div class="modal-tete">
+          <span>📋 Instructions du test</span>
+          <button class="modal-x" @click="showInstructions = false">✕</button>
+        </div>
+        <p class="modal-texte" v-html="enrichir(instructionsActif)"></p>
+        <div class="modal-pied">
+          <button class="btn-act btn-act-vert" @click="showInstructions = false">J'ai compris</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
