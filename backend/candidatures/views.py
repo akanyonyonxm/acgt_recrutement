@@ -512,6 +512,10 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             })
         for token in tokens_recherche(request.query_params.get('q', '')):
             rows = [r for r in rows if token in r['texte_recherche']]
+        # Tri par CODE croissant (codes sur 4 chiffres = ordre numérique) : les
+        # ajouts supplémentaires (codes les plus élevés) restent en fin de liste.
+        # Les entrées pas encore codées (avant publication) passent à la fin.
+        rows.sort(key=lambda r: (r['code'] == '', r['code']))
         nb_recours = sum(1 for r in rows if r['origine'] == RetenuDefinitif.Origine.RECOURS)
         return Response({
             'publiee': appel.liste_definitive_publiee,
