@@ -27,7 +27,7 @@ function _msg(champ) {
   return (appels.value.find((x) => (x[champ] || '').trim())?.[champ] || '').trim()
 }
 const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement aura lieu le "
-  + "**dimanche 28 juin 2026 à 07h00 (TU+1)**, simultanément sur les sites suivants :\n"
+  + "**dimanche 28 juin 2026 à 07h00 (TU+1)**, simultanément sur les sites suivants :\n\n"
   + "**KINSHASA** : Institut de la Gombe (en diagonal du Palais de Justice).\n"
   + "**LUBUMBASHI** : Lycée Kiwele, Av. Kimbangu, Q. Kimbwambwa, C. Lubumbashi, "
   + "au croisement des avenues Kimbangu et du 30 Juin, après le Marché Eureka.\n"
