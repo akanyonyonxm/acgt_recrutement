@@ -29,13 +29,10 @@ function _msg(champ) {
 const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement aura lieu le "
   + "**dimanche 28 juin 2026 à 07h00 (TU+1)**, simultanément sur les sites suivants :\n\n"
   + "**KINSHASA** : Institut de la Gombe (en diagonal du Palais de Justice).\n"
-  + "**LUBUMBASHI** : Lycée Kiwele, Avenue Kimbangu (Commune de Lubumbashi, Quartier Kimbwambwa), "
+  + "**LUBUMBASHI** : Lycée Kiwele, Av. Kimbangu, Q. Kimbwambwa, C. Lubumbashi, "
   + "au croisement des avenues Kimbangu et du 30 Juin, après le Marché Eureka.\n"
-  + "**MBUJI-MAYI** : Collège Saint Léon, n°01 (Commune de Bipemba, Quartier Mulekayi), "
-  + "Avenue Monseigneur Nkongolo.\n\n"
-  + "Toutefois, les candidats souhaitant passer le test dans un autre site en dehors de Kinshasa sont "
-  + "invités **à sélectionner Lubumbashi ou Mbuji-Mayi** sur le portail au plus tard le "
-  + "**jeudi 25 juin 2026 à 12h00 (TU+1)**."
+  + "**MBUJI-MAYI** : Collège Saint Léon, n°01 Av. Monseigneur Nkongolo, Q. Mulekayi, C. Bipemba.\n\n"
+  + "Chaque candidat est prié de se présenter au site correspondant à sa ville."
 const messageActif = computed(() => modeDefinitif.value
   ? (_msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT)
   : _msg('message_retenus'))
@@ -248,7 +245,6 @@ onMounted(async () => {
       <!-- Actions (liste définitive) : juste sous le message -->
       <div v-if="modeDefinitif" class="actions-def">
         <button class="btn-act btn-act-clair" @click="showInstructions = true">📋 Instructions du test</button>
-        <RouterLink :to="{ name: 'ville-examen' }" class="btn-act btn-act-vert">📍 Préciser ma ville d'examen</RouterLink>
       </div>
 
       <!-- Recherche flottante -->
