@@ -80,6 +80,29 @@ class RetenuDefinitifSerializer(serializers.ModelSerializer):
                   'ville_examen', 'ville_examen_libelle', 'salle']
 
 
+class RetenuSupplementSerializer(serializers.ModelSerializer):
+    """Ajout SUPPLÉMENTAIRE à la liste définitive (back-office). Le code, la salle
+    et l'origine sont gérés par la vue (non modifiables ici)."""
+
+    ville_examen_libelle = serializers.CharField(source='get_ville_examen_display', read_only=True)
+
+    class Meta:
+        model = RetenuDefinitif
+        fields = ['id', 'appel', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle',
+                  'ville_examen', 'ville_examen_libelle', 'salle', 'origine']
+        read_only_fields = ['code', 'salle', 'origine']
+
+    def validate_nom(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le nom est requis.")
+        return v.strip()
+
+    def validate_prenom(self, v):
+        if not (v or '').strip():
+            raise serializers.ValidationError("Le prénom est requis.")
+        return v.strip()
+
+
 class EligibiliteAdminSerializer(serializers.ModelSerializer):
     """Vue admin : tous les champs, y compris la référence interne."""
 

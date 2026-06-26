@@ -83,16 +83,20 @@ const definitif = ref({ publiee: false, total: 0, nb_recours: 0, nb_codes: 0, re
 const qDef = ref('')
 const chargementDef = ref(false)
 const defPubliee = computed(() => !!appelCourant.value?.liste_definitive_publiee)
-const ENTETES_DEF = [
-  { title: 'Code', key: 'code', width: 90 },
-  { title: 'Nom', key: 'nom' },
-  { title: 'Postnom', key: 'postnom' },
-  { title: 'Prénom', key: 'prenom' },
-  { title: 'Domaine', key: 'poste_libelle' },
-  { title: 'Ville du test', key: 'ville_examen' },
-  { title: 'Salle', key: 'salle' },
-  { title: 'Origine', key: 'origine', sortable: false },
-]
+const ENTETES_DEF = computed(() => {
+  const base = [
+    { title: 'Code', key: 'code', width: 90 },
+    { title: 'Nom', key: 'nom' },
+    { title: 'Postnom', key: 'postnom' },
+    { title: 'Prénom', key: 'prenom' },
+    { title: 'Domaine', key: 'poste_libelle' },
+    { title: 'Ville du test', key: 'ville_examen' },
+    { title: 'Salle', key: 'salle' },
+    { title: 'Origine', key: 'origine', sortable: false },
+  ]
+  if (auth.estAdmin) base.push({ title: '', key: 'actions', sortable: false, width: 96, align: 'end' })
+  return base
+})
 // Filtre par ville du test (côté client, sur les libellés renvoyés).
 const villeFiltre = ref('')
 const VILLES_FILTRE = ['Kinshasa', 'Lubumbashi', 'Mbuji-Mayi']
@@ -242,6 +246,62 @@ async function chargerDefinitif() {
 let minuteurDef
 function rechercherDef() { clearTimeout(minuteurDef); minuteurDef = setTimeout(chargerDefinitif, 300) }
 
+// --- Ajouts supplémentaires : CRUD (admin) ---
+// Personnes décidées hors plateforme, ajoutées à la fin de la liste définitive
+// (origine « supplément », code attribué automatiquement à la suite).
+const postes = ref([])
+const dialogSupp = ref(false)
+const suppEdit = ref(false)
+const enSupp = ref(false)
+const suppVierge = () => ({ id: null, nom: '', postnom: '', prenom: '', poste_libelle: '', ville_examen: 'kinshasa' })
+const suppForm = ref(suppVierge())
+
+function ouvrirSupplement() {
+  suppEdit.value = false
+  suppForm.value = suppVierge()
+  dialogSupp.value = true
+}
+function modifierSupplement(row) {
+  suppEdit.value = true
+  suppForm.value = {
+    id: row.id, nom: row.nom, postnom: row.postnom, prenom: row.prenom,
+    poste_libelle: row.poste_libelle || '', ville_examen: row.ville_examen_code || 'kinshasa',
+  }
+  dialogSupp.value = true
+}
+async function enregistrerSupplement() {
+  if (!suppForm.value.nom.trim() || !suppForm.value.prenom.trim()) {
+    notifier('Le nom et le prénom sont requis.', 'error'); return
+  }
+  enSupp.value = true
+  try {
+    const corps = {
+      nom: suppForm.value.nom, postnom: suppForm.value.postnom, prenom: suppForm.value.prenom,
+      poste_libelle: suppForm.value.poste_libelle, ville_examen: suppForm.value.ville_examen,
+    }
+    if (suppEdit.value) {
+      await api.patch(`/supplements/${suppForm.value.id}/`, corps)
+      notifier('Ajout supplémentaire modifié.')
+    } else {
+      await api.post('/supplements/', { ...corps, appel: appelId.value })
+      notifier('Ajout supplémentaire enregistré.')
+    }
+    dialogSupp.value = false
+    await chargerDefinitif()
+  } catch (e) {
+    const d = e.response?.data
+    notifier(d?.detail || d?.nom?.[0] || d?.prenom?.[0] || 'Enregistrement impossible.', 'error')
+  } finally { enSupp.value = false }
+}
+async function supprimerSupplement(row) {
+  if (!window.confirm(`Supprimer définitivement l'ajout « ${row.nom} ${row.postnom} ${row.prenom} » (code ${row.code}) ?`)) return
+  try {
+    await api.delete(`/supplements/${row.id}/`)
+    notifier('Ajout supplémentaire supprimé.')
+    await chargerDefinitif()
+  } catch (e) { notifier(e.response?.data?.detail || 'Suppression impossible.', 'error') }
+}
+
 async function publierDefinitive() {
   try {
     const { data } = await api.post(`/appels/${appelId.value}/publier-liste-definitive/`)
@@ -390,7 +450,15 @@ async function envoyerTout() {
 // Recharge la définitive, les demandes et l'aperçu des résultats au changement d'appel.
 watch(appelId, () => { chargerDefinitif(); chargerDemandes(); chargerResultats(); chargerEtatEnvoi() })
 
-onMounted(rechargerAppels)
+onMounted(async () => {
+  await rechargerAppels()
+  if (auth.estAdmin) {
+    try {
+      const { data } = await api.get('/postes/', { params: { page_size: 200 } })
+      postes.value = (data.results || data).map((p) => p.libelle)
+    } catch { /* non bloquant */ }
+  }
+})
 </script>
 
 <template>
@@ -529,6 +597,8 @@ onMounted(rechargerAppels)
           <v-switch v-if="auth.peutSuperviser" v-model="sallePublic" @update:modelValue="basculerSallePublic"
                     color="#00838F" hide-details density="compact" inset
                     label="Salle visible au public" class="flex-grow-0 mr-1" />
+          <v-btn v-if="auth.estAdmin" color="amber-darken-3" variant="tonal" prepend-icon="mdi-account-plus-outline"
+                 :disabled="!appelId" @click="ouvrirSupplement">Ajouter un supplément</v-btn>
           <v-btn v-if="auth.peutSuperviser" color="#00838F" variant="tonal" prepend-icon="mdi-door-open"
                  :disabled="!definitif.total" @click="dialogSalles = true">Affecter les salles</v-btn>
           <v-btn color="#5E35B1" variant="tonal" prepend-icon="mdi-file-pdf-box" :loading="enPdf"
@@ -563,6 +633,12 @@ onMounted(rechargerAppels)
             <v-chip v-if="item.origine === 'recours'" size="x-small" label color="#00838F" variant="tonal">Recours</v-chip>
             <v-chip v-else-if="item.origine === 'supplement'" size="x-small" label color="amber-darken-2" variant="tonal">Supplément</v-chip>
             <v-chip v-else size="x-small" label color="grey" variant="tonal">Liste</v-chip>
+          </template>
+          <template #item.actions="{ item }">
+            <template v-if="item.origine === 'supplement' && item.id">
+              <v-btn icon="mdi-pencil" size="x-small" variant="text" color="primary" @click="modifierSupplement(item)" />
+              <v-btn icon="mdi-delete-outline" size="x-small" variant="text" color="error" @click="supprimerSupplement(item)" />
+            </template>
           </template>
         </v-data-table>
         <v-card-text class="text-caption text-medium-emphasis">
@@ -706,6 +782,43 @@ onMounted(rechargerAppels)
     </v-card>
 
     <!-- Affectation automatique des salles -->
+    <!-- Ajout / modification d'un supplément (admin) -->
+    <v-dialog v-model="dialogSupp" max-width="580">
+      <v-card rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 pa-4">
+          <v-icon color="amber-darken-3">mdi-account-plus-outline</v-icon>
+          <span class="text-h6">{{ suppEdit ? 'Modifier' : 'Ajouter' }} un supplément</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <p class="text-body-2 text-medium-emphasis mb-3">
+            Personne admise décidée hors plateforme. Elle est ajoutée
+            <strong>à la fin</strong> de la liste définitive ; le <strong>code</strong> est attribué
+            automatiquement à la suite.
+          </p>
+          <v-row dense>
+            <v-col cols="12" sm="4"><v-text-field v-model="suppForm.nom" label="Nom *" density="compact" variant="outlined" hide-details /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="suppForm.postnom" label="Postnom" density="compact" variant="outlined" hide-details /></v-col>
+            <v-col cols="12" sm="4"><v-text-field v-model="suppForm.prenom" label="Prénom *" density="compact" variant="outlined" hide-details /></v-col>
+          </v-row>
+          <v-combobox v-model="suppForm.poste_libelle" :items="postes" label="Domaine"
+                      density="compact" variant="outlined" hide-details class="mt-3" />
+          <v-select v-model="suppForm.ville_examen" :items="VILLES_VAL" label="Ville du test"
+                    density="compact" variant="outlined" hide-details class="mt-3" />
+          <p v-if="suppEdit" class="text-caption text-medium-emphasis mt-2">
+            Le code reste inchangé. Après modification de la ville, réattribuez les salles via « Affecter les salles ».
+          </p>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-3">
+          <v-spacer />
+          <v-btn variant="text" @click="dialogSupp = false">Annuler</v-btn>
+          <v-btn color="amber-darken-3" variant="flat" prepend-icon="mdi-content-save"
+                 :loading="enSupp" @click="enregistrerSupplement">Enregistrer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="dialogSalles" max-width="480">
       <v-card rounded="lg">
         <v-card-title class="d-flex align-center ga-2 pa-4">

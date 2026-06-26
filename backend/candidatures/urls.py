@@ -11,6 +11,7 @@ from .views import (
     ReclamationViewSet,
     RecoursViewSet,
     RetenusDefinitifsViewSet,
+    RetenuSupplementViewSet,
     RetenusViewSet,
     TypePieceViewSet,
 )
@@ -21,6 +22,7 @@ router.register('postes', PosteViewSet, basename='poste')
 router.register('eligibilite', EligibiliteViewSet, basename='eligibilite')
 router.register('retenus', RetenusViewSet, basename='retenu')
 router.register('retenus-definitifs', RetenusDefinitifsViewSet, basename='retenu-definitif')
+router.register('supplements', RetenuSupplementViewSet, basename='supplement')
 router.register('appels', AppelCandidatureViewSet, basename='appel')
 router.register('dossiers', DossierViewSet, basename='dossier')
 router.register('reclamations', ReclamationViewSet, basename='reclamation')

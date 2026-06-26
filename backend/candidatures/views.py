@@ -66,6 +66,7 @@ from .serializers import (
     RecoursCreationSerializer,
     RecoursModificationSerializer,
     RetenuDefinitifSerializer,
+    RetenuSupplementSerializer,
     RetenuPubliqueSerializer,
     TypePieceSerializer,
 )
@@ -502,7 +503,9 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
             e = entrees.get(s['texte_recherche'])
             rows.append({
                 **s,
+                'id': e.id if e else None,
                 'code': e.code if e else '',
+                'ville_examen_code': e.ville_examen if e else '',
                 'ville_examen': e.get_ville_examen_display() if e else '',
                 'salle': e.salle if e else '',
                 'ville_choisie': bool(e and e.ville_choisie_le) if e else False,
@@ -943,6 +946,45 @@ class VilleExamenThrottle(AnonRateThrottle):
     """Limite le formulaire public de choix de ville (anti-spam)."""
 
     scope = 'reclamation'
+
+
+class RetenuSupplementViewSet(viewsets.ModelViewSet):
+    """CRUD des ajouts SUPPLÉMENTAIRES à la liste définitive (origine=supplement) :
+    back-office, réservé aux administrateurs. Le CODE est attribué automatiquement
+    à la suite du dernier code définitif de l'appel (stable). On ne touche jamais
+    les entrées normales (liste/recours) : ce ViewSet ne voit que les suppléments."""
+
+    serializer_class = RetenuSupplementSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        if not roles.acces_backoffice(self.request.user):
+            return RetenuDefinitif.objects.none()
+        qs = RetenuDefinitif.objects.filter(origine=RetenuDefinitif.Origine.SUPPLEMENT)
+        appel = self.request.query_params.get('appel')
+        if appel:
+            qs = qs.filter(appel_id=appel)
+        return qs.order_by('code')
+
+    def _verifier_admin(self):
+        if not roles.est_admin(self.request.user):
+            raise PermissionDenied("La gestion des ajouts supplémentaires est réservée aux administrateurs.")
+
+    def perform_create(self, serializer):
+        self._verifier_admin()
+        appel = serializer.validated_data['appel']
+        codes = [int(e.code) for e in appel.retenus_definitifs.all() if e.code.isdigit()]
+        prochain = (max(codes) + 1) if codes else 1
+        serializer.save(code=f'{prochain:04d}', origine=RetenuDefinitif.Origine.SUPPLEMENT)
+
+    def perform_update(self, serializer):
+        self._verifier_admin()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._verifier_admin()
+        instance.delete()
 
 
 class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
