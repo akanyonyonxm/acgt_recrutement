@@ -26,10 +26,16 @@ function _msg(champ) {
   if (appelId.value) return (appelCourant.value?.[champ] || '').trim()
   return (appels.value.find((x) => (x[champ] || '').trim())?.[champ] || '').trim()
 }
-const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement est prévu le **dimanche 28 juin 2026 à 07h00 (TU+1)** "
-  + "à **Kinshasa**, à **l'Institut de la Gombe** (en diagonal du Palais de Justice). Toutefois, les candidats "
-  + "souhaitant passer le test dans un autre site en dehors de Kinshasa sont invités **à sélectionner** "
-  + "**Lubumbashi** ou **Mbuji-Mayi** sur le portail au plus tard le **jeudi 25 juin 2026 à 12h00 (TU+1)**."
+const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement aura lieu le "
+  + "**dimanche 28 juin 2026 à 07h00 (TU+1)**, simultanément sur les sites suivants :\n\n"
+  + "**KINSHASA** : Institut de la Gombe (en diagonal du Palais de Justice).\n"
+  + "**LUBUMBASHI** : Lycée Kiwele, Avenue Kimbangu (Commune de Lubumbashi, Quartier Kimbwambwa), "
+  + "au croisement des avenues Kimbangu et du 30 Juin, après le Marché Eureka.\n"
+  + "**MBUJI-MAYI** : Collège Saint Léon, n°01 (Commune de Bipemba, Quartier Mulekayi), "
+  + "Avenue Monseigneur Nkongolo.\n\n"
+  + "Toutefois, les candidats souhaitant passer le test dans un autre site en dehors de Kinshasa sont "
+  + "invités **à sélectionner Lubumbashi ou Mbuji-Mayi** sur le portail au plus tard le "
+  + "**jeudi 25 juin 2026 à 12h00 (TU+1)**."
 const messageActif = computed(() => modeDefinitif.value
   ? (_msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT)
   : _msg('message_retenus'))
