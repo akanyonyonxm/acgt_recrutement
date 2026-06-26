@@ -928,6 +928,14 @@ class Recours(models.Model):
     date_naissance = models.DateField('date de naissance')
     email = models.EmailField('email de contact')
     message = models.TextField('message')
+    # Domaine (poste) du recours. Par défaut hérité de la source (dossier ou
+    # réclamation liée) ; un administrateur peut le corriger ici sans toucher à
+    # la source. C'est ce domaine qui figure sur la liste définitive si le
+    # recours est validé. NULL = on retombe sur le domaine de la source.
+    poste = models.ForeignKey(
+        'Poste', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='recours', verbose_name='domaine (correction)',
+    )
     statut = models.CharField(
         'statut', max_length=20, choices=Statut.choices,
         default=Statut.EN_ATTENTE, db_index=True,

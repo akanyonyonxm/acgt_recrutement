@@ -249,6 +249,32 @@ async function enregistrer() {
   }
 }
 
+// --- Mise à jour du domaine (poste) — admin uniquement ---
+const postes = ref([])
+const dialogDomaine = ref(false)
+const domaineChoisi = ref(null)
+
+function ouvrirDomaine() {
+  domaineChoisi.value = detail.value.poste || null   // override existant, sinon vide
+  dialogDomaine.value = true
+}
+
+async function majDomaine() {
+  enAction.value = true
+  try {
+    const { data } = await api.post(`/recours/${detail.value.id}/domaine/`,
+      { poste_id: domaineChoisi.value || null })
+    Object.assign(detail.value, data)
+    notifier('Domaine mis à jour.')
+    dialogDomaine.value = false
+    charger()
+  } catch (e) {
+    notifier(e.response?.data?.detail || 'Mise à jour du domaine impossible.', 'error')
+  } finally {
+    enAction.value = false
+  }
+}
+
 // --- Répartition de la charge entre agents (supervision) ---
 async function repartir() {
   if (!agentsChoisis.value.length) {
@@ -278,6 +304,13 @@ async function repartir() {
 watch(affecte, () => memoriser())
 
 onMounted(async () => {
+  // Référentiel des domaines (postes) — pour la correction du domaine (admin).
+  if (auth.estAdmin) {
+    try {
+      const { data } = await api.get('/postes/', { params: { page_size: 200 } })
+      postes.value = data.results || data
+    } catch { /* non bloquant */ }
+  }
   // Liste des agents pouvant traiter (pour répartir / filtrer) — supervision.
   if (auth.peutSuperviser) {
     try {
@@ -427,6 +460,15 @@ onMounted(async () => {
                   </template>
                   <span v-else class="text-medium-emphasis">source supprimée</span>
                 </div>
+                <div class="mb-3">
+                  <span class="text-caption text-medium-emphasis mr-2">Domaine retenu :</span>
+                  <v-chip size="small" variant="tonal" color="primary" prepend-icon="mdi-briefcase-outline">
+                    {{ detail.poste_libelle || 'non précisé' }}
+                  </v-chip>
+                  <v-chip v-if="detail.poste" size="x-small" variant="flat" color="amber-darken-2" class="ml-1">
+                    corrigé
+                  </v-chip>
+                </div>
                 <v-alert type="info" variant="tonal" density="compact" class="mb-3" icon="mdi-card-account-details-outline">
                   Vérifiez la <strong>date de naissance</strong> ci-dessus avec la pièce d'identité du demandeur.
                 </v-alert>
@@ -532,6 +574,9 @@ onMounted(async () => {
             <v-btn v-if="auth.estAdmin" variant="text" prepend-icon="mdi-pencil" @click="ouvrirEdition">
               Modifier
             </v-btn>
+            <v-btn v-if="auth.estAdmin" variant="text" prepend-icon="mdi-briefcase-edit-outline" @click="ouvrirDomaine">
+              Domaine
+            </v-btn>
             <v-btn v-if="auth.peutSuperviser && detail.statut !== 'en_attente'" variant="text"
                    prepend-icon="mdi-lock-open-variant-outline" :loading="enAction" @click="rouvrir">
               Rouvrir
@@ -551,6 +596,37 @@ onMounted(async () => {
                      :loading="enAction" @click="demanderDecision('valider')">Valider</v-btn>
             </template>
           </template>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Mise à jour du domaine (poste) — admin -->
+    <v-dialog v-model="dialogDomaine" max-width="480">
+      <v-card v-if="detail" rounded="lg">
+        <v-card-title class="d-flex align-center ga-2 pa-4">
+          <v-icon color="primary">mdi-briefcase-edit-outline</v-icon>
+          <span class="text-h6">Domaine du recours</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <p class="text-body-2 text-medium-emphasis mb-3">
+            Domaine retenu pour <strong>{{ nomComplet(detail) }}</strong>.
+            C'est ce domaine qui figurera sur la liste définitive si le recours est validé.
+          </p>
+          <v-select v-model="domaineChoisi" :items="postes" item-title="libelle" item-value="id"
+                    label="Domaine (poste)" density="comfortable" variant="outlined"
+                    clearable hide-details />
+          <p class="text-caption text-medium-emphasis mt-2">
+            Laisser vide = reprendre le domaine de l'enregistrement source
+            <template v-if="detail.source"> ({{ detail.source.poste || 'non précisé' }})</template>.
+          </p>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-3">
+          <v-spacer />
+          <v-btn variant="text" @click="dialogDomaine = false">Annuler</v-btn>
+          <v-btn color="primary" variant="flat" prepend-icon="mdi-content-save"
+                 :loading="enAction" @click="majDomaine">Enregistrer</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

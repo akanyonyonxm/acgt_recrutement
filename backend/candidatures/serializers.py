@@ -754,13 +754,16 @@ class RecoursAdminSerializer(serializers.ModelSerializer):
     source = serializers.SerializerMethodField()
     affecte_a = serializers.PrimaryKeyRelatedField(read_only=True)
     affecte_a_nom = serializers.SerializerMethodField()
+    # Domaine effectif (correction admin sinon source) + id de la correction.
+    poste = serializers.PrimaryKeyRelatedField(read_only=True)
+    poste_libelle = serializers.SerializerMethodField()
 
     class Meta:
         model = Recours
         fields = [
             'id', 'nom', 'postnom', 'prenom', 'date_naissance', 'email', 'message',
-            'source', 'statut', 'statut_libelle', 'affecte_a', 'affecte_a_nom',
-            'reponse', 'traite_par', 'traite_le', 'cree_le',
+            'source', 'poste', 'poste_libelle', 'statut', 'statut_libelle',
+            'affecte_a', 'affecte_a_nom', 'reponse', 'traite_par', 'traite_le', 'cree_le',
         ]
         read_only_fields = ['nom', 'postnom', 'prenom', 'date_naissance', 'email',
                             'message', 'cree_le']
@@ -770,6 +773,17 @@ class RecoursAdminSerializer(serializers.ModelSerializer):
         if not u:
             return ''
         return (u.get_full_name() or u.email)
+
+    def get_poste_libelle(self, obj):
+        """Domaine effectif : correction admin (obj.poste) sinon domaine de la
+        source (dossier ou réclamation liée)."""
+        if obj.poste_id:
+            return obj.poste.libelle
+        if obj.dossier_id and obj.dossier.poste_id:
+            return obj.dossier.poste.libelle
+        if obj.reclamation_id and obj.reclamation.poste_id:
+            return obj.reclamation.poste.libelle
+        return ''
 
     def get_source(self, obj):
         if obj.dossier_id:

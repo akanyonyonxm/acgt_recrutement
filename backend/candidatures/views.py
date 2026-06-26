@@ -268,6 +268,20 @@ def _docs_retenu_definitif(e):
     return docs
 
 
+def _domaine_recours(r):
+    """Libellé du domaine (poste) effectif d'un recours : la correction admin
+    (`r.poste`) si présente, sinon le domaine hérité de la source (dossier ou
+    réclamation liée). Source unique de vérité, utilisée pour la liste
+    définitive comme pour l'affichage back-office."""
+    if r.poste_id:
+        return r.poste.libelle
+    if r.dossier_id and r.dossier.poste_id:
+        return r.dossier.poste.libelle
+    if r.reclamation_id and r.reclamation.poste_id:
+        return r.reclamation.poste.libelle
+    return ''
+
+
 def _sources_liste_definitive(appel):
     """Liste combinée de la liste DÉFINITIVE : retenus publiés (dossiers RETENU)
     + recours VALIDÉS rattachés à cet appel, dédupliqués par identité normalisée
@@ -287,17 +301,13 @@ def _sources_liste_definitive(appel):
         })
     rec_qs = (Recours.objects.filter(statut=Recours.Statut.VALIDE)
               .filter(Q(dossier__appel=appel) | Q(reclamation__appel=appel))
-              .select_related('dossier__poste', 'reclamation__poste'))
+              .select_related('poste', 'dossier__poste', 'reclamation__poste'))
     for r in rec_qs:
         tr = normaliser_texte(f'{r.nom} {r.postnom} {r.prenom}')
         if tr in vus:
             continue
         vus.add(tr)
-        poste = ''
-        if r.dossier and r.dossier.poste:
-            poste = r.dossier.poste.libelle
-        elif r.reclamation and r.reclamation.poste:
-            poste = r.reclamation.poste.libelle
+        poste = _domaine_recours(r)
         out.append({
             'texte_recherche': tr, 'nom': r.nom, 'postnom': r.postnom, 'prenom': r.prenom,
             'poste_libelle': poste,
@@ -2941,6 +2951,23 @@ class RecoursViewSet(viewsets.ModelViewSet):
     def rejeter(self, request, pk=None):
         """Back-office : REJETTE le recours (décision défavorable)."""
         return self._decider(request, Recours.Statut.REJETE)
+
+    @action(detail=True, methods=['post'])
+    def domaine(self, request, pk=None):
+        """Met à jour UNIQUEMENT le domaine (poste) du recours — réservé aux
+        administrateurs. `poste_id` vide/absent = retour au domaine de la source.
+        Si une entrée de liste définitive existe déjà pour ce recours (entrée
+        figée), son domaine est aussi mis à jour pour rester cohérent."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("La correction du domaine est réservée aux administrateurs.")
+        recours = self.get_object()
+        pid = request.data.get('poste_id')
+        recours.poste = get_object_or_404(Poste, pk=pid) if pid else None
+        recours.save(update_fields=['poste'])
+        # Répercute sur la liste définitive déjà générée (entrées figées).
+        libelle = _domaine_recours(recours)
+        RetenuDefinitif.objects.filter(recours=recours).update(poste_libelle=libelle)
+        return Response(RecoursAdminSerializer(recours).data)
 
     @action(detail=True, methods=['get'])
     def personne(self, request, pk=None):
