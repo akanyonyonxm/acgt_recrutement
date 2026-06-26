@@ -215,11 +215,9 @@ onMounted(async () => {
       <div class="hero-inner">
         <h1 class="hero-titre">{{ modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
         <p v-if="modeDefinitif" class="hero-sous">
-          <strong>Liste définitive</strong> des candidats retenus.
           Chaque candidat dispose d'un <mark class="surbrillance-claire">code unique</mark> ;
-          imprimez votre <strong>badge d'accès</strong> et présentez-le, signé, le jour du test,
-          accompagné de votre <strong>carte d'identité valide</strong>.
-          Prière de lire les <a class="lien-instructions" @click="showInstructions = true">instructions</a>.        
+          imprimez votre <strong>badge d'accès</strong> et présentez-le, le jour du test,
+          accompagné de votre <strong>carte d'identité valide</strong>.      
           <!-- Actions (liste définitive) : juste sous le message -->
           <div v-if="modeDefinitif" class="actions-def">
             <button class="btn-act btn-act-clair" @click="showInstructions = true">📋 Instructions du test</button>
