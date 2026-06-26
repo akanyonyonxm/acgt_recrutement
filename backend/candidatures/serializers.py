@@ -90,7 +90,12 @@ class RetenuSupplementSerializer(serializers.ModelSerializer):
         model = RetenuDefinitif
         fields = ['id', 'appel', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle',
                   'ville_examen', 'ville_examen_libelle', 'salle', 'origine']
-        read_only_fields = ['code', 'salle', 'origine']
+        # La salle est saisissable ICI (attribution manuelle d'un supplément, sans
+        # relancer la répartition globale qui réécrirait toute la ville).
+        read_only_fields = ['code', 'origine']
+
+    def validate_salle(self, v):
+        return (v or '').strip().upper()[:4]
 
     def validate_nom(self, v):
         if not (v or '').strip():

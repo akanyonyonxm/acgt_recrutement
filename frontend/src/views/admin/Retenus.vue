@@ -253,7 +253,7 @@ const postes = ref([])
 const dialogSupp = ref(false)
 const suppEdit = ref(false)
 const enSupp = ref(false)
-const suppVierge = () => ({ id: null, nom: '', postnom: '', prenom: '', poste_libelle: '', ville_examen: 'kinshasa' })
+const suppVierge = () => ({ id: null, nom: '', postnom: '', prenom: '', poste_libelle: '', ville_examen: 'kinshasa', salle: '' })
 const suppForm = ref(suppVierge())
 
 function ouvrirSupplement() {
@@ -266,6 +266,7 @@ function modifierSupplement(row) {
   suppForm.value = {
     id: row.id, nom: row.nom, postnom: row.postnom, prenom: row.prenom,
     poste_libelle: row.poste_libelle || '', ville_examen: row.ville_examen_code || 'kinshasa',
+    salle: row.salle || '',
   }
   dialogSupp.value = true
 }
@@ -278,6 +279,7 @@ async function enregistrerSupplement() {
     const corps = {
       nom: suppForm.value.nom, postnom: suppForm.value.postnom, prenom: suppForm.value.prenom,
       poste_libelle: suppForm.value.poste_libelle, ville_examen: suppForm.value.ville_examen,
+      salle: (suppForm.value.salle || '').trim().toUpperCase(),
     }
     if (suppEdit.value) {
       await api.patch(`/supplements/${suppForm.value.id}/`, corps)
@@ -803,10 +805,20 @@ onMounted(async () => {
           </v-row>
           <v-combobox v-model="suppForm.poste_libelle" :items="postes" label="Domaine"
                       density="compact" variant="outlined" hide-details class="mt-3" />
-          <v-select v-model="suppForm.ville_examen" :items="VILLES_VAL" label="Ville du test"
-                    density="compact" variant="outlined" hide-details class="mt-3" />
-          <p v-if="suppEdit" class="text-caption text-medium-emphasis mt-2">
-            Le code reste inchangé. Après modification de la ville, réattribuez les salles via « Affecter les salles ».
+          <v-row dense class="mt-1">
+            <v-col cols="12" sm="8">
+              <v-select v-model="suppForm.ville_examen" :items="VILLES_VAL" label="Ville du test"
+                        density="compact" variant="outlined" hide-details />
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-text-field v-model="suppForm.salle" label="Salle" placeholder="ex. A"
+                            density="compact" variant="outlined" hide-details
+                            hint="Lettre de la salle (facultatif)" />
+            </v-col>
+          </v-row>
+          <p class="text-caption text-medium-emphasis mt-2">
+            Saisissez la <strong>salle manuellement</strong> (ex. la dernière salle de la ville) pour
+            ne pas relancer « Affecter les salles », qui réécrirait toute la ville.
           </p>
         </v-card-text>
         <v-divider />
