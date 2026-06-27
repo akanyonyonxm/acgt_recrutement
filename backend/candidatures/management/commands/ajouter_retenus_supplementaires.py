@@ -45,6 +45,8 @@ SUPPLEMENTAIRES = [
     # --- Mbuji-Mayi (image 2) ---
     ('CILUMBU', 'CINGUTA', 'SHEKINA', 'Ingénieur civil', V.MBUJI_MAYI),
     # MPOYI TSHIMANDA JONATHAN : déjà présent sur la liste définitive (flux normal) — exclu.
+    # --- Ajout ultérieur ---
+    ('MBODI', 'KABAMBA', 'JOHNNY', 'Ingénieur en Bâtiment et Travaux Publics (BTP)', V.KINSHASA),
 ]
 
 
