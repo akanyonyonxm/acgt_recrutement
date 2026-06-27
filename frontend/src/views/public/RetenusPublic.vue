@@ -383,11 +383,12 @@ onMounted(async () => {
 .tableau-scroll { overflow-x: auto; }
 .tableau { width: 100%; border-collapse: collapse; }
 .tableau th { background: #eae7ef; text-align: left; padding: 16px 24px; font-size: 0.9rem; font-weight: 700; color: #1a237e; }
-.tableau td { padding: 16px 24px; border-top: 1px solid #e4e1ea; font-size: 0.95rem; }
+.tableau td { padding: 16px 24px; border-top: 1px solid #e4e1ea; font-size: 0.95rem; color: #000; }
 .tableau tbody tr:hover { background: #f5f2fb; }
 .tableau tr.zebra { background: #fcfbff; }
 .num { width: 64px; color: #767683; font-weight: 600; }
-.nom-cell { font-weight: 600; color: #1b1b21; text-transform: uppercase; }
+.nom-cell { font-weight: 600; color: #000; text-transform: uppercase; }
+.muted { color: #000; }
 .code-cell { font-weight: 800; color: #1a237e; letter-spacing: 1px; white-space: nowrap; }
 .badge-col { width: 120px; text-align: center; }
 .btn-badge { background: #FDD835; color: #1a237e; border: none; border-radius: 9999px; padding: 7px 20px;
@@ -408,7 +409,7 @@ onMounted(async () => {
   .tableau td.code-cell::before { content: 'Code '; font-size: 0.82rem; color: #6b7280; font-weight: 600; letter-spacing: 0; }
   .tableau td.nom-cell { display: inline; font-size: 1.05rem; }
   .tableau td.nom-cell + .nom-cell { margin-left: 4px; }
-  .tableau td.muted { margin-top: 8px; color: #525f71; }
+  .tableau td.muted { margin-top: 8px; color: #000; }
   .tableau td.muted::before { content: 'Domaine : '; font-size: 0.78rem; color: #6b7280; }
   .tableau td.ville-cell { margin-top: 4px; }
   .tableau td.ville-cell::before { content: 'Ville : '; font-size: 0.78rem; color: #6b7280; }
