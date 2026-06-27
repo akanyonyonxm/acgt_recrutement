@@ -152,7 +152,7 @@ async function exporterSallesPdf() {
         startY: 40,
         margin: { top: 40, left: 12, right: 12 },
         headStyles: { fillColor: [26, 35, 126], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+        styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak', textColor: [0, 0, 0] },
         alternateRowStyles: { fillColor: [245, 246, 251] },
         columnStyles: { 0: { fontStyle: 'bold', textColor: [26, 35, 126], cellWidth: 22 } },
         didDrawPage: () => {
