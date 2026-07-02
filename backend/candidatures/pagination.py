@@ -6,7 +6,9 @@ class PaginationPublique(PageNumberPagination):
 
     page_size = 10
     page_size_query_param = 'page_size'
-    max_page_size = 100
+    # Permet d'afficher une liste complète (ex. tous les admis d'un domaine) en
+    # une seule page côté public, sans pagination.
+    max_page_size = 2000
 
 
 class PaginationStandard(PageNumberPagination):

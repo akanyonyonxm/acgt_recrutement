@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import api from '../../api'
 
 const appels = ref([])
@@ -14,9 +14,16 @@ const modeDefinitif = computed(() => appelId.value
   ? !!appelCourant.value?.liste_definitive_publiee
   : appels.value.some((a) => a.liste_definitive_publiee))
 
-// Affichage de la salle au public : seulement en mode définitif et si l'appel
-// concerné l'a activé.
-const afficherSalle = computed(() => modeDefinitif.value && (appelId.value
+// Mode INTERVIEW : si l'appel a publié la liste des admis à l'interview → la page
+// n'affiche plus que ce sous-ensemble (le back-end filtre), avec un communiqué
+// dédié. Ce mode « remplace » l'affichage de la liste définitive.
+const modeInterview = computed(() => appelId.value
+  ? !!appelCourant.value?.liste_interview_publiee
+  : appels.value.some((a) => a.liste_interview_publiee))
+
+// Affichage de la salle au public : seulement en mode définitif (test), pas en
+// mode interview, et si l'appel concerné l'a activé.
+const afficherSalle = computed(() => modeDefinitif.value && !modeInterview.value && (appelId.value
   ? !!appelCourant.value?.afficher_salle_public
   : appels.value.some((a) => a.liste_definitive_publiee && a.afficher_salle_public)))
 
@@ -32,9 +39,17 @@ const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement aura lie
   + "**LUBUMBASHI** : Lycée Kiwele, Av. Kimbangu, Q. Kimbwambwa, C. Lubumbashi, "
   + "au croisement des avenues Kimbangu et du 30 Juin, après le Marché Eureka.\n"
   + "**MBUJI-MAYI** : Collège Saint Léon, n°01 Av. Monseigneur Nkongolo, Q. Mulekayi, C. Bipemba."
-const messageActif = computed(() => modeDefinitif.value
-  ? (_msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT)
-  : _msg('message_retenus'))
+const MSG_INTERVIEW_DEFAUT = "La **liste définitive des candidats retenus** à l'issue du test de "
+  + "recrutement du personnel métier de l'ACGT est désormais disponible sur ce portail. "
+  + "Les **entretiens débuteront le mercredi 08 juillet 2026**. Le chronogramme détaillé sera "
+  + "publié sur ce portail le **lundi 06 juillet 2026**.\n\n"
+  + "Les candidats retenus **en province** passeront leurs interviews aux **sièges provinciaux "
+  + "respectifs** de l'ACGT."
+const messageActif = computed(() => {
+  if (modeInterview.value) return _msg('message_interview') || MSG_INTERVIEW_DEFAUT
+  if (modeDefinitif.value) return _msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT
+  return _msg('message_retenus')
+})
 
 // Instructions du test (bouton « Instructions ») : texte réglable en console, sinon défaut officiel.
 const INSTRUCTIONS_DEFAUT = "Les candidats retenus sont priés de respecter les instructions ci-après :\n\n"
@@ -52,11 +67,18 @@ const showInstructions = ref(false)
 
 // Message d'état vide, contextuel : recherche sans résultat vs aucune liste publiée.
 const messageVide = computed(() => {
-  if (q.value.trim()) {
-    return `Aucune personne trouvée pour « ${q.value.trim()} » dans la liste ${modeDefinitif.value ? 'définitive' : 'des retenus'}. Vérifiez l'orthographe.`
+  // Invite à choisir un domaine tant qu'aucun n'est sélectionné (mode définitif).
+  if (modeDefinitif.value && !domaineFiltre.value) {
+    return '👆 Sélectionnez un domaine ci-dessus pour afficher la liste.'
   }
+  const libelle = modeInterview.value ? "des admis à l'interview"
+    : modeDefinitif.value ? 'définitive' : 'des retenus'
+  if (q.value.trim()) {
+    return `Aucune personne trouvée pour « ${q.value.trim()} » dans la liste ${libelle}. Vérifiez l'orthographe.`
+  }
+  if (modeInterview.value) return "Aucun candidat admis à l'interview dans ce domaine."
   return modeDefinitif.value
-    ? 'Aucun candidat dans la liste définitive pour le moment.'
+    ? 'Aucun candidat dans ce domaine pour le moment.'
     : 'Aucune liste de retenus publiée pour le moment.'
 })
 
@@ -77,12 +99,45 @@ const loading = ref(false)
 const q = ref('')
 const page = ref(1)
 const PAR_PAGE = 10
+// Sélection du domaine (liste définitive/interview) : la liste ne s'affiche
+// qu'APRÈS avoir choisi un domaine (remplace la recherche par nom).
+const domaines = ref([])
+const domaineFiltre = ref('')
+
+// Nombre de colonnes du tableau (pour le colspan de la ligne « vide »).
+const nbColonnes = computed(() => {
+  if (!modeDefinitif.value) return 5
+  let n = 6 // code, nom, postnom, prénom, domaine, ville de test
+  if (afficherSalle.value) n += 1
+  if (!modeInterview.value) n += 1 // colonne badge (masquée en interview)
+  return n
+})
+
+async function chargerDomaines() {
+  if (!modeDefinitif.value) { domaines.value = []; return }
+  try {
+    const params = {}
+    if (appelId.value) params.appel = appelId.value
+    const { data } = await api.get('/retenus-definitifs/domaines/', { params })
+    domaines.value = data
+  } catch { domaines.value = [] }
+}
 
 async function charger() {
+  // Mode définitif/interview : rien tant qu'aucun domaine n'est sélectionné.
+  if (modeDefinitif.value && !domaineFiltre.value) {
+    items.value = []; total.value = 0; return
+  }
   loading.value = true
   try {
-    const params = { q: q.value, page: page.value }
+    const params = { page: page.value }
     if (appelId.value) params.appel = appelId.value
+    if (modeDefinitif.value) {
+      params.domaine = domaineFiltre.value
+      params.page_size = 2000  // tout le domaine d'un coup, sans pagination
+    } else {
+      params.q = q.value
+    }
     const url = modeDefinitif.value ? '/retenus-definitifs/' : '/retenus/'
     const { data } = await api.get(url, { params })
     items.value = data.results
@@ -97,7 +152,35 @@ function rechercher() {
   clearTimeout(minuteur)
   minuteur = setTimeout(() => { page.value = 1; charger() }, 350)
 }
-function changerAppel() { page.value = 1; charger() }
+function changerDomaine() { page.value = 1; charger() }
+
+// Menu déroulant personnalisé (domaine) : ouverture stylée juste sous la boîte.
+const menuOuvert = ref(false)
+const selWrap = ref(null)
+// Libellés d'affichage raccourcis (la valeur réelle reste inchangée pour le filtre).
+const DOMAINE_COURT = { 'Ingénieur en Bâtiment et Travaux Publics (BTP)': 'Ingénieur BTP' }
+const domCourt = (lib) => DOMAINE_COURT[(lib || '').trim()] || lib
+const domaineLabel = computed(() => {
+  if (!domaineFiltre.value) return 'Choisissez un domaine…'
+  const d = domaines.value.find((x) => x.domaine === domaineFiltre.value)
+  return d ? `${domCourt(d.domaine)} (${d.count})` : domCourt(domaineFiltre.value)
+})
+function choisirDomaine(dom) {
+  domaineFiltre.value = dom
+  menuOuvert.value = false
+  changerDomaine()
+}
+function onDocClick(e) {
+  if (selWrap.value && !selWrap.value.contains(e.target)) menuOuvert.value = false
+}
+onMounted(() => document.addEventListener('mousedown', onDocClick))
+onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick))
+async function changerAppel() {
+  page.value = 1
+  domaineFiltre.value = ''
+  await chargerDomaines()
+  charger()
+}
 
 // Normalise les caractères Unicode « stylisés » (lettres mathématiques, pleine
 // largeur, ligatures…) en lettres normales pour un affichage homogène.
@@ -184,6 +267,7 @@ onMounted(async () => {
   } finally {
     pret.value = true
   }
+  await chargerDomaines()
   charger()
 })
 </script>
@@ -197,7 +281,7 @@ onMounted(async () => {
 
     <template v-else>
     <!-- HERO -->
-    <section class="hero" :class="{ 'hero--def': modeDefinitif }">
+    <section class="hero" :class="{ 'hero--def': modeDefinitif && !modeInterview, 'hero--interview': modeInterview }">
       <svg class="hero-courbes" viewBox="0 0 1440 420" preserveAspectRatio="none" aria-hidden="true">
         <defs>
           <linearGradient id="lgr" x1="0" y1="0" x2="1" y2="1">
@@ -213,8 +297,9 @@ onMounted(async () => {
         <circle cx="180" cy="400" r="80" fill="#FDD835" opacity="0.04" />
       </svg>
       <div class="hero-inner">
-        <h1 class="hero-titre">{{ modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
-        <p v-if="modeDefinitif" class="hero-sous">
+        <div v-if="modeInterview" class="hero-eyebrow">Publication officielle · Interviews</div>
+        <h1 class="hero-titre">{{ modeInterview ? 'Candidats retenus pour les interviews' : modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
+        <p v-if="modeDefinitif && !modeInterview" class="hero-sous">
           Chaque candidat dispose d'un <mark class="surbrillance-claire">code unique</mark> ;
           imprimez votre <strong>badge d'accès</strong> et présentez-le, le jour du test,
           accompagné de votre <strong>carte d'identité valide</strong>.      
@@ -223,7 +308,7 @@ onMounted(async () => {
             <button class="btn-act btn-act-clair" @click="showInstructions = true">📋 Instructions du test</button>
           </div>
         </p>
-        <p v-else class="hero-sous">
+        <p v-else-if="!modeDefinitif" class="hero-sous">
           Liste provisoire des candidats présélectionnés.
           Les candidats dont le nom n'apparaît pas et qui estiment remplir les critères requis
           (<i>âge maximum de 40 ans, niveau minimum requis de BAC&nbsp;+5, soumission des dossiers dans la période requise, domaines de métier publiés</i>)
@@ -234,7 +319,7 @@ onMounted(async () => {
 
     <div class="wrap">
       <!-- Communiqué officiel (éditable dans la console : champ « message public ») -->
-      <div v-if="messageActif" class="communique" :class="{ 'communique--def': modeDefinitif }">
+      <div v-if="messageActif" class="communique" :class="{ 'communique--def': modeDefinitif && !modeInterview, 'communique--interview': modeInterview }">
         <div class="comm-entete">
           <span class="comm-icone">📢</span>
           <span>Communiqué</span>
@@ -243,9 +328,23 @@ onMounted(async () => {
       </div>
 
 
-      <!-- Recherche flottante -->
+      <!-- Barre flottante : sélection du domaine (définitif/interview) ou recherche (provisoire) -->
       <div class="recherche" :class="{ 'rech-mt': messageActif }">
-        <div class="rech-input">
+        <div v-if="modeDefinitif" class="rech-domaine-wrap" ref="selWrap">
+          <div class="select-cust" :class="{ ouvert: menuOuvert }" @click="menuOuvert = !menuOuvert">
+            <span class="select-ic">🎓</span>
+            <span class="select-val" :class="{ placeholder: !domaineFiltre }">{{ domaineLabel }}</span>
+            <span class="select-caret">▾</span>
+          </div>
+          <div v-if="menuOuvert" class="select-menu">
+            <div v-for="d in domaines" :key="d.domaine" class="select-opt"
+                 :class="{ actif: d.domaine === domaineFiltre }" @click="choisirDomaine(d.domaine)">
+              <span class="opt-lib">{{ domCourt(d.domaine) }}</span>
+              <span class="opt-count">{{ d.count }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="rech-input">
           <span class="loupe">🔍</span>
           <input v-model="q" @input="rechercher" type="text" placeholder="Rechercher un nom…" />
         </div>
@@ -253,21 +352,23 @@ onMounted(async () => {
           <option value="">Tous les appels</option>
           <option v-for="a in appels" :key="a.id" :value="a.id">{{ a.titre }}</option>
         </select>
-        <span class="pastille"><strong>{{ total }}</strong> retenu(s)</span>
+        <span v-if="!modeDefinitif || domaineFiltre" class="pastille">
+          <strong>{{ total }}</strong> {{ modeInterview ? 'admis' : 'retenu(s)' }}
+        </span>
       </div>
 
       <!-- Tableau -->
       <div class="tableau-carte">
-        <div class="tableau-scroll">
+        <div class="tableau-scroll" :class="{ 'mode-table': modeDefinitif }">
           <table class="tableau">
             <thead>
               <tr>
                 <th v-if="modeDefinitif" class="num">CODE</th>
                 <th v-else class="num">#</th>
                 <th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th>
-                <th v-if="modeDefinitif">VILLE</th>
+                <th v-if="modeDefinitif">VILLE DE TEST</th>
                 <th v-if="afficherSalle">SALLE</th>
-                <th v-if="modeDefinitif" class="badge-col">BADGE</th>
+                <th v-if="modeDefinitif && !modeInterview" class="badge-col">BADGE</th>
               </tr>
             </thead>
             <tbody>
@@ -277,20 +378,24 @@ onMounted(async () => {
                 <td class="nom-cell" data-label="Nom">{{ aff(e.nom) }}</td>
                 <td class="nom-cell" data-label="Postnom">{{ aff(e.postnom) }}</td>
                 <td class="nom-cell" data-label="Prénom">{{ aff(e.prenom) }}</td>
-                <td class="muted" data-label="Domaine">{{ e.poste_libelle || '—' }}</td>
-                <td v-if="modeDefinitif" class="ville-cell" data-label="Ville">{{ e.ville_examen_libelle || '—' }}</td>
+                <td class="muted" data-label="Domaine">{{ domCourt(e.poste_libelle) || '—' }}</td>
+                <td v-if="modeDefinitif" class="ville-cell" data-label="Ville de test">{{ e.ville_examen_libelle || '—' }}</td>
                 <td v-if="afficherSalle" class="salle-cell" data-label="Salle">{{ e.salle || '—' }}</td>
-                <td v-if="modeDefinitif" class="badge-col" data-label="">
+                <td v-if="modeDefinitif && !modeInterview" class="badge-col" data-label="">
                   <button class="btn-badge" @click="imprimerBadge(e)">Badge</button>
                 </td>
               </tr>
               <tr v-if="!loading && !items.length">
-                <td :colspan="modeDefinitif ? (afficherSalle ? 8 : 7) : 5" class="vide">{{ messageVide }}</td>
+                <td :colspan="nbColonnes" class="vide">{{ messageVide }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="pagination">
+        <!-- Mode définitif/interview : tout le domaine affiché, pas de pagination -->
+        <div v-if="modeDefinitif" class="pagination">
+          <span v-if="domaineFiltre" class="affichage"><strong>{{ total }}</strong> candidat(s) — {{ domCourt(domaineFiltre) }}</span>
+        </div>
+        <div v-else class="pagination">
           <span class="affichage">Affichage {{ debut }} à {{ fin }} sur {{ total }}</span>
           <div class="pages">
             <button class="rond" :disabled="page <= 1" @click="aller(page - 1)">‹</button>
@@ -327,6 +432,12 @@ onMounted(async () => {
 .hero { background: linear-gradient(135deg, #1a237e 0%, #0d1b2a 100%); position: relative; overflow: hidden; padding: 56px 24px 64px; }
 .hero--def { background: linear-gradient(135deg, #1b5e20 0%, #0b3d1a 100%); }
 .hero--def .hero-sous strong { color: #FDD835; }
+/* Publication des INTERVIEWS : palette indigo/nuit premium + accents dorés */
+.hero--interview { background: radial-gradient(1200px 400px at 80% -10%, rgba(125,110,255,0.35), transparent 60%), linear-gradient(135deg, #312e81 0%, #1e1b4b 55%, #14113a 100%); padding-top: 44px; }
+.hero--interview .hero-sous strong { color: #FDD835; }
+.hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0 auto 16px; padding: 7px 16px;
+  border: 1px solid rgba(253,216,53,0.55); border-radius: 9999px; color: #FDD835; background: rgba(253,216,53,0.08);
+  font-size: 0.78rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
 .lien-instructions { color: #FDD835; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .lien-instructions:hover { color: #fff; }
 
@@ -367,23 +478,54 @@ onMounted(async () => {
 .surb-comm { background: transparent; color: #1b5e20; font-weight: 800; }
 .communique--def { border-left-color: #2E7D32; box-shadow: 0 12px 30px rgba(27,94,32,0.14); }
 .communique--def .comm-entete { color: #1b5e20; }
+/* Communiqué interview : accents indigo + liseré doré, plus aéré */
+.communique--interview { border-color: #e2e0f0; border-left: 6px solid #FDD835; padding: 22px 26px;
+  box-shadow: 0 16px 40px rgba(30,27,75,0.14); }
+.communique--interview .comm-entete { color: #312e81; }
+.communique--interview .comm-texte { color: #2a2a35; font-size: 1.04rem; }
+.communique--interview .comm-texte :deep(strong) { color: #312e81; }
+.communique--interview .surb-comm { color: #4338ca; }
 .rech-mt { margin-top: 24px !important; }
 
-.recherche { background: #fff; border: 2px solid #29b6f6; border-radius: 18px; box-shadow: 0 12px 30px rgba(41,182,246,0.15);
+.recherche { background: #fff; border: 1px solid #e6e4f0; border-radius: 18px; box-shadow: 0 14px 36px rgba(30,27,75,0.10);
   margin-top: -40px; position: relative; z-index: 10; padding: 22px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .rech-input { position: relative; flex: 1; min-width: 220px; }
 .rech-input .loupe { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); opacity: 0.5; }
 .rech-input input { width: 100%; padding: 12px 16px 12px 42px; border: 1px solid #c6c5d4; border-radius: 12px; outline: none; font-size: 0.95rem; transition: border-color 0.2s; }
 .rech-input input:focus { border-color: #1a237e; box-shadow: 0 0 0 1px #1a237e; }
+/* Sélecteur de domaine personnalisé (menu stylé, ouvert sous la boîte) */
+.rech-domaine-wrap { position: relative; flex: 1; min-width: 240px; }
+.select-cust { display: flex; align-items: center; gap: 10px; width: 100%; padding: 13px 16px;
+  border: 1.5px solid #c6c5d4; border-radius: 12px; background: #fff; cursor: pointer;
+  font-size: 1rem; font-weight: 600; color: #1a237e; transition: border-color 0.2s, box-shadow 0.2s; user-select: none; }
+.select-cust:hover { border-color: #1a237e; }
+.select-cust.ouvert { border-color: #1a237e; box-shadow: 0 0 0 3px rgba(26,35,126,0.12); }
+.select-ic { font-size: 1.05rem; line-height: 1; }
+.select-val { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.select-val.placeholder { color: #8a8a99; font-weight: 500; }
+.select-caret { color: #1a237e; font-size: 0.9rem; transition: transform 0.2s; }
+.select-cust.ouvert .select-caret { transform: rotate(180deg); }
+.select-menu { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40; background: #fff;
+  border: 1px solid #e4e1ea; border-radius: 12px; box-shadow: 0 16px 40px rgba(26,35,126,0.18);
+  overflow: hidden auto; max-height: 340px; padding: 6px; }
+.select-opt { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 9px; cursor: pointer; font-size: 0.95rem; color: #1b1b21; }
+.select-opt + .select-opt { margin-top: 2px; }
+.select-opt:hover { background: #eef2ff; }
+.select-opt.actif { background: #1a237e; color: #fff; }
+.opt-lib { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt-count { flex: none; background: #eef0f8; color: #1a237e; border-radius: 9999px; padding: 2px 10px;
+  font-size: 0.8rem; font-weight: 700; }
+.select-opt.actif .opt-count { background: rgba(255,255,255,0.22); color: #fff; }
 .rech-select { padding: 12px 16px; border: 1px solid #c6c5d4; border-radius: 12px; outline: none; font-size: 0.95rem; background: #fff; min-width: 220px; cursor: pointer; }
 .rech-select:focus { border-color: #1a237e; }
 .pastille { background: #e7f5ef; color: #166534; padding: 8px 18px; border-radius: 9999px; font-size: 0.9rem; }
 
-.tableau-carte { background: #fff; border: 2px solid #29b6f6; border-radius: 18px; overflow: hidden; margin-top: 24px; box-shadow: 0 6px 20px rgba(41,182,246,0.12); }
+.tableau-carte { background: #fff; border: 1px solid #e6e4f0; border-radius: 18px; overflow: hidden; margin-top: 24px; box-shadow: 0 10px 30px rgba(30,27,75,0.09); }
 .tableau-scroll { overflow-x: auto; }
 .tableau { width: 100%; border-collapse: collapse; }
-.tableau th { background: #eae7ef; text-align: left; padding: 16px 24px; font-size: 0.9rem; font-weight: 700; color: #1a237e; }
-.tableau td { padding: 16px 24px; border-top: 1px solid #e4e1ea; font-size: 0.95rem; color: #000; }
+.tableau th { background: #eae7ef; text-align: left; padding: 10px 20px; font-size: 0.82rem; font-weight: 700; color: #1a237e; letter-spacing: 0.02em; }
+.tableau td { padding: 7px 20px; border-top: 1px solid #e8e6ef; font-size: 0.9rem; color: #000; }
 .tableau tbody tr:hover { background: #f5f2fb; }
 .tableau tr.zebra { background: #fcfbff; }
 .num { width: 64px; color: #767683; font-weight: 600; }
@@ -416,6 +558,26 @@ onMounted(async () => {
   .tableau td.salle-cell::before { content: 'Salle : '; font-size: 0.78rem; color: #6b7280; }
   .tableau td.badge-col { margin-top: 14px; }
   .btn-badge { width: 100%; padding: 12px; font-size: 0.95rem; }
+
+  /* Liste définitive / interview : on GARDE le tableau (avec défilement
+     horizontal) au lieu des cartes, même sur petit écran. */
+  .mode-table.tableau-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .mode-table .tableau thead { display: table-header-group; }
+  .mode-table .tableau tbody { display: table-row-group; }
+  .mode-table .tableau tr { display: table-row; border: none; margin: 0; padding: 0;
+    box-shadow: none; background: transparent !important; }
+  .mode-table .tableau td { display: table-cell; border: none; border-top: 1px solid #e8e6ef;
+    padding: 7px 14px; margin: 0; white-space: nowrap; }
+  .mode-table .tableau td.num,
+  .mode-table .tableau td.nom-cell { display: table-cell; }
+  .mode-table .tableau td.nom-cell + .nom-cell { margin-left: 0; }
+  .mode-table .tableau td.code-cell { font-size: 0.9rem; margin: 0; }
+  .mode-table .tableau td.muted,
+  .mode-table .tableau td.ville-cell { margin: 0; }
+  .mode-table .tableau td.code-cell::before,
+  .mode-table .tableau td.muted::before,
+  .mode-table .tableau td.ville-cell::before,
+  .mode-table .tableau td.salle-cell::before { content: none; }
 }
 .muted { color: #525f71; }
 .vide { text-align: center; color: #767683; padding: 32px; }

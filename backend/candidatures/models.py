@@ -83,6 +83,13 @@ class AppelCandidature(models.Model):
     afficher_supplements_definitif = models.BooleanField(
         'afficher les ajouts supplémentaires sur la liste définitive', default=True,
     )
+    # Étape INTERVIEW : quand la liste des admis à l'interview est publiée, la
+    # page publique des retenus n'affiche plus que ce sous-ensemble (avec un
+    # communiqué dédié). Elle « remplace » l'affichage de la liste définitive.
+    liste_interview_publiee = models.BooleanField(
+        'liste des admis à l’interview publiée', default=False,
+    )
+    message_interview = models.TextField('communiqué (admis à l’interview)', blank=True)
     # Communiqué affiché en haut de la page publique des retenus (échéances de
     # recours, critères, date de la liste définitive…). Vide = aucun bandeau.
     message_retenus = models.TextField(
@@ -1017,6 +1024,14 @@ class RetenuDefinitif(models.Model):
     # Salle d'examen (libellé alphabétique A, B, C…), attribuée automatiquement
     # par ville selon l'ordre des codes. Vide = non encore affectée.
     salle = models.CharField('salle', max_length=4, blank=True, db_index=True)
+    # Admis à l'INTERVIEW (étape suivant le test) : sous-ensemble des admis au
+    # test. Marqué à l'import de la liste d'interview (rattachement PAR NOM). Le
+    # code reste celui de la liste définitive. Publié via liste_interview_publiee.
+    admis_interview = models.BooleanField('admis à l’interview', default=False, db_index=True)
+    # Position dans le fichier de publication de l'interview (ordre par feuille de
+    # domaine puis par ligne). 0 = non concerné. Sert à afficher la liste des
+    # admis à l'interview DANS L'ORDRE DU FICHIER (et non par code).
+    interview_ordre = models.PositiveIntegerField('ordre (interview)', default=0, db_index=True)
     # Traçabilité de la source (facultative : SET_NULL pour survivre à une purge).
     dossier = models.ForeignKey(
         Dossier, on_delete=models.SET_NULL, null=True, blank=True,
