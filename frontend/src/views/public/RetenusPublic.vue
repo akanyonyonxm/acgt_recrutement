@@ -45,9 +45,9 @@ const MSG_INTERVIEW_DEFAUT = "Chronogramme des **interviews** des candidats rete
   + "**Jeudi 09 juillet 2026** - Environnementalistes, Géomètres-topographes & Électromécaniciens.\n"
   + "**Vendredi 10 juillet 2026** - Architectes & Urbanistes.\n\n"
   + "Chaque candidat se présente à la **date** et à l'**heure d'arrivée** indiquées sur sa ligne "
-  + "(horaire des interviews : 08h00 à 16h30, heure locale).\n"
+  + "(voir le tableau des retenus ci-après).\n"
   + "**Kinshasa** : Institut de la Gombe (en diagonale du Palais de Justice) ;\n"
-  + "**Provinces** : siège de la Direction provinciale de l'ACGT, selon la ville du test.\n\n"
+  + "**Provinces** : Siège de la Direction provinciale de l'ACGT, selon la province où le candidat a passé le test.\n\n"
   + "Se munir d'une **pièce d'identité valide** et des **documents académiques** (diplôme, "
   + "attestation de scolarité + relevé de la dernière année, attestation d'authentification). "
   + "==Aucun candidat ne sera reçu en dehors du jour prévu pour son profil.=="
@@ -367,7 +367,7 @@ onMounted(async () => {
 
       <!-- Tableau -->
       <div class="tableau-carte">
-        <div class="tableau-scroll" :class="{ 'mode-table': modeDefinitif }">
+        <div class="tableau-scroll" :class="{ 'mode-table': modeDefinitif && !modeInterview, 'mode-cartes': modeInterview }">
           <table class="tableau">
             <thead>
               <tr>
@@ -567,10 +567,15 @@ onMounted(async () => {
   .tableau td.muted { margin-top: 8px; color: #000; }
   .tableau td.muted::before { content: 'Domaine : '; font-size: 0.78rem; color: #6b7280; }
   .tableau td.ville-cell { margin-top: 4px; }
-  .tableau td.ville-cell::before { content: 'Ville : '; font-size: 0.78rem; color: #6b7280; }
+  .tableau td.ville-cell::before { content: 'Ville de test : '; font-size: 0.78rem; color: #6b7280; font-weight: 600; }
   .tableau td.salle-cell::before { content: 'Salle : '; font-size: 0.78rem; color: #6b7280; }
   .tableau td.badge-col { margin-top: 14px; }
   .btn-badge { width: 100%; padding: 12px; font-size: 0.95rem; }
+  /* Carte interview : date + heure d'arrivée mises en avant */
+  .tableau td.date-cell { margin-top: 8px; font-size: 1rem; }
+  .tableau td.date-cell::before { content: 'Interview : '; font-size: 0.78rem; color: #6b7280; font-weight: 600; }
+  .tableau td.heure-cell { margin-top: 2px; font-size: 1.05rem; }
+  .tableau td.heure-cell::before { content: 'Heure d’arrivée : '; font-size: 0.78rem; color: #6b7280; font-weight: 600; }
 
   /* Liste définitive / interview : on GARDE le tableau (avec défilement
      horizontal) au lieu des cartes, même sur petit écran. */
