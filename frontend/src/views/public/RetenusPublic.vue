@@ -446,7 +446,7 @@ onMounted(async () => {
 .hero--def { background: linear-gradient(135deg, #1b5e20 0%, #0b3d1a 100%); }
 .hero--def .hero-sous strong { color: #FDD835; }
 /* Publication des INTERVIEWS : palette indigo/nuit premium + accents dorés */
-.hero--interview { background: radial-gradient(1200px 400px at 80% -10%, rgba(125,110,255,0.35), transparent 60%), linear-gradient(135deg, #312e81 0%, #1e1b4b 55%, #14113a 100%); padding-top: 44px; }
+.hero--interview { background: radial-gradient(1200px 400px at 80% -10%, rgba(96,165,250,0.38), transparent 60%), linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%); padding-top: 44px; }
 .hero--interview .hero-sous strong { color: #FDD835; }
 .hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0 auto 16px; padding: 7px 16px;
   border: 1px solid rgba(253,216,53,0.55); border-radius: 9999px; color: #FDD835; background: rgba(253,216,53,0.08);
@@ -494,10 +494,10 @@ onMounted(async () => {
 /* Communiqué interview : accents indigo + liseré doré, plus aéré */
 .communique--interview { border-color: #e2e0f0; border-left: 6px solid #FDD835; padding: 22px 26px;
   box-shadow: 0 16px 40px rgba(30,27,75,0.14); }
-.communique--interview .comm-entete { color: #312e81; }
+.communique--interview .comm-entete { color: #1e3a8a; }
 .communique--interview .comm-texte { color: #2a2a35; font-size: 1.04rem; }
-.communique--interview .comm-texte :deep(strong) { color: #312e81; }
-.communique--interview .surb-comm { color: #4338ca; }
+.communique--interview .comm-texte :deep(strong) { color: #1e40af; }
+.communique--interview .surb-comm { color: #1d4ed8; }
 .rech-mt { margin-top: 24px !important; }
 
 .recherche { background: #fff; border: 1px solid #e6e4f0; border-radius: 18px; box-shadow: 0 14px 36px rgba(30,27,75,0.10);
@@ -602,7 +602,7 @@ onMounted(async () => {
 }
 .muted { color: #525f71; }
 .date-cell { white-space: nowrap; color: #1b1b21; font-weight: 600; }
-.heure-cell { white-space: nowrap; font-weight: 800; color: #312e81; }
+.heure-cell { white-space: nowrap; font-weight: 800; color: #1e40af; }
 .vide { text-align: center; color: #767683; padding: 32px; }
 
 .pagination { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; background: #f5f2fb; border-top: 1px solid #e4e1ea; flex-wrap: wrap; gap: 12px; }
