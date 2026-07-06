@@ -555,7 +555,7 @@ onMounted(async () => {
 @media (max-width: 700px) {
   .tableau-scroll { overflow-x: visible; }
   .tableau thead { display: none; }
-  .tableau tbody { display: block; }
+  .tableau tbody { display: block; padding: 14px 14px 2px; }
   .tableau tr { display: block; border: 1px solid #dbe0ee; border-radius: 14px;
     margin: 0 0 14px; padding: 14px 16px; background: #fff !important; box-shadow: 0 2px 10px rgba(26,35,126,0.06); }
   .tableau td { display: block; border: none; padding: 0; }
