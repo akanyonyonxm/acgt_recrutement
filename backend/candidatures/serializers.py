@@ -81,15 +81,9 @@ class RetenuDefinitifSerializer(serializers.ModelSerializer):
                   'ville_examen', 'ville_examen_libelle', 'salle',
                   'interview_date', 'interview_date_libelle', 'interview_heure']
 
-    _MOIS = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
-             'août', 'septembre', 'octobre', 'novembre', 'décembre']
-    _JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
-
     def get_interview_date_libelle(self, obj):
         d = obj.interview_date
-        if not d:
-            return ''
-        return f"{self._JOURS[d.weekday()]} {d.day:02d} {self._MOIS[d.month]} {d.year}"
+        return f"{d.day:02d}/{d.month:02d}/{d.year}" if d else ''
 
 
 class RetenuSupplementSerializer(serializers.ModelSerializer):

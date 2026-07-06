@@ -41,13 +41,13 @@ const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement aura lie
   + "**MBUJI-MAYI** : Collège Saint Léon, n°01 Av. Monseigneur Nkongolo, Q. Mulekayi, C. Bipemba."
 const MSG_INTERVIEW_DEFAUT = "Chronogramme des **interviews** des candidats retenus au test de "
   + "recrutement du personnel métier de l'ACGT :\n\n"
-  + "**Mercredi 08 juillet 2026** — Ingénieurs civils & Ingénieurs BTP.\n"
-  + "**Jeudi 09 juillet 2026** — Environnementalistes, Géomètres-topographes & Électromécaniciens.\n"
-  + "**Vendredi 10 juillet 2026** — Architectes & Urbanistes.\n\n"
+  + "**Mercredi 08 juillet 2026** - Ingénieurs civils & Ingénieurs BTP.\n"
+  + "**Jeudi 09 juillet 2026** - Environnementalistes, Géomètres-topographes & Électromécaniciens.\n"
+  + "**Vendredi 10 juillet 2026** - Architectes & Urbanistes.\n\n"
   + "Chaque candidat se présente à la **date** et à l'**heure d'arrivée** indiquées sur sa ligne "
   + "(horaire des interviews : 08h00 à 16h30, heure locale).\n"
-  + "**Lieu** — Kinshasa : Institut de la Gombe (en diagonale du Palais de Justice) ; "
-  + "**provinces** : siège de la Direction provinciale de l'ACGT, selon la ville du test.\n\n"
+  + "**Kinshasa** : Institut de la Gombe (en diagonale du Palais de Justice) ;\n"
+  + "**Provinces** : siège de la Direction provinciale de l'ACGT, selon la ville du test.\n\n"
   + "Se munir d'une **pièce d'identité valide** et des **documents académiques** (diplôme, "
   + "attestation de scolarité + relevé de la dernière année, attestation d'authentification). "
   + "==Aucun candidat ne sera reçu en dehors du jour prévu pour son profil.=="
@@ -113,7 +113,8 @@ const domaineFiltre = ref('')
 // Nombre de colonnes du tableau (pour le colspan de la ligne « vide »).
 const nbColonnes = computed(() => {
   if (!modeDefinitif.value) return 5
-  let n = 6 // code, nom, postnom, prénom, domaine, ville de test
+  let n = 5 // code, nom, postnom, prénom, ville de test
+  if (!modeInterview.value) n += 1  // domaine (masqué en interview car déjà filtré)
   if (afficherSalle.value) n += 1
   if (modeInterview.value) n += 2   // date + heure d'arrivée
   else n += 1                       // colonne badge (mode test)
@@ -372,7 +373,8 @@ onMounted(async () => {
               <tr>
                 <th v-if="modeDefinitif" class="num">CODE</th>
                 <th v-else class="num">#</th>
-                <th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th>
+                <th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th>
+                <th v-if="!modeInterview">DOMAINE</th>
                 <th v-if="modeDefinitif">VILLE DE TEST</th>
                 <th v-if="modeInterview">DATE INTERVIEW</th>
                 <th v-if="modeInterview">HEURE D'ARRIVÉE</th>
@@ -387,7 +389,7 @@ onMounted(async () => {
                 <td class="nom-cell" data-label="Nom">{{ aff(e.nom) }}</td>
                 <td class="nom-cell" data-label="Postnom">{{ aff(e.postnom) }}</td>
                 <td class="nom-cell" data-label="Prénom">{{ aff(e.prenom) }}</td>
-                <td class="muted" data-label="Domaine">{{ domCourt(e.poste_libelle) || '—' }}</td>
+                <td v-if="!modeInterview" class="muted" data-label="Domaine">{{ domCourt(e.poste_libelle) || '—' }}</td>
                 <td v-if="modeDefinitif" class="ville-cell" data-label="Ville de test">{{ e.ville_examen_libelle || '—' }}</td>
                 <td v-if="modeInterview" class="date-cell" data-label="Date interview">{{ e.interview_date_libelle || '—' }}</td>
                 <td v-if="modeInterview" class="heure-cell" data-label="Heure d'arrivée">{{ e.interview_heure || '—' }}</td>
@@ -577,12 +579,15 @@ onMounted(async () => {
   .mode-table .tableau tbody { display: table-row-group; }
   .mode-table .tableau tr { display: table-row; border: none; margin: 0; padding: 0;
     box-shadow: none; background: transparent !important; }
+  .mode-table .tableau th { padding: 8px 10px; font-size: 0.72rem; }
   .mode-table .tableau td { display: table-cell; border: none; border-top: 1px solid #e8e6ef;
-    padding: 7px 14px; margin: 0; white-space: nowrap; }
+    padding: 6px 10px; margin: 0; white-space: nowrap; font-size: 0.82rem; }
   .mode-table .tableau td.num,
   .mode-table .tableau td.nom-cell { display: table-cell; }
+  .mode-table .tableau td.nom-cell { font-size: 0.82rem; }
   .mode-table .tableau td.nom-cell + .nom-cell { margin-left: 0; }
-  .mode-table .tableau td.code-cell { font-size: 0.9rem; margin: 0; }
+  .mode-table .tableau td.code-cell { font-size: 0.85rem; margin: 0; }
+  .mode-table .tableau td.heure-cell { font-size: 0.85rem; }
   .mode-table .tableau td.muted,
   .mode-table .tableau td.ville-cell { margin: 0; }
   .mode-table .tableau td.code-cell::before,
