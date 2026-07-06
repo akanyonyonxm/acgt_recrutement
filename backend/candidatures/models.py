@@ -1032,6 +1032,11 @@ class RetenuDefinitif(models.Model):
     # domaine puis par ligne). 0 = non concerné. Sert à afficher la liste des
     # admis à l'interview DANS L'ORDRE DU FICHIER (et non par code).
     interview_ordre = models.PositiveIntegerField('ordre (interview)', default=0, db_index=True)
+    # Convocation à l'interview : date (par profil/domaine) et heure d'arrivée
+    # (créneau ÉCHELONNÉ, propre à chaque candidat). Importées du fichier de
+    # publication. Affichées sur la liste des admis à l'interview.
+    interview_date = models.DateField('date de l’interview', null=True, blank=True)
+    interview_heure = models.CharField('heure d’arrivée', max_length=40, blank=True)
     # Traçabilité de la source (facultative : SET_NULL pour survivre à une purge).
     dossier = models.ForeignKey(
         Dossier, on_delete=models.SET_NULL, null=True, blank=True,

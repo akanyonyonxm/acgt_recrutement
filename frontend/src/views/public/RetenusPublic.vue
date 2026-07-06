@@ -39,12 +39,18 @@ const MSG_DEFINITIF_DEFAUT = "Le test de sélection pour le recrutement aura lie
   + "**LUBUMBASHI** : Lycée Kiwele, Av. Kimbangu, Q. Kimbwambwa, C. Lubumbashi, "
   + "au croisement des avenues Kimbangu et du 30 Juin, après le Marché Eureka.\n"
   + "**MBUJI-MAYI** : Collège Saint Léon, n°01 Av. Monseigneur Nkongolo, Q. Mulekayi, C. Bipemba."
-const MSG_INTERVIEW_DEFAUT = "La **liste définitive des candidats retenus** à l'issue du test de "
-  + "recrutement du personnel métier de l'ACGT est désormais disponible sur ce portail. "
-  + "Les **entretiens débuteront le mercredi 08 juillet 2026**. Le chronogramme détaillé sera "
-  + "publié sur ce portail le **lundi 06 juillet 2026**.\n\n"
-  + "Les candidats retenus **en province** passeront leurs interviews aux **sièges provinciaux "
-  + "respectifs** de l'ACGT."
+const MSG_INTERVIEW_DEFAUT = "Chronogramme des **interviews** des candidats retenus au test de "
+  + "recrutement du personnel métier de l'ACGT :\n\n"
+  + "**Mercredi 08 juillet 2026** — Ingénieurs civils & Ingénieurs BTP.\n"
+  + "**Jeudi 09 juillet 2026** — Environnementalistes, Géomètres-topographes & Électromécaniciens.\n"
+  + "**Vendredi 10 juillet 2026** — Architectes & Urbanistes.\n\n"
+  + "Chaque candidat se présente à la **date** et à l'**heure d'arrivée** indiquées sur sa ligne "
+  + "(horaire des interviews : 08h00 à 16h30, heure locale).\n"
+  + "**Lieu** — Kinshasa : Institut de la Gombe (en diagonale du Palais de Justice) ; "
+  + "**provinces** : siège de la Direction provinciale de l'ACGT, selon la ville du test.\n\n"
+  + "Se munir d'une **pièce d'identité valide** et des **documents académiques** (diplôme, "
+  + "attestation de scolarité + relevé de la dernière année, attestation d'authentification). "
+  + "==Aucun candidat ne sera reçu en dehors du jour prévu pour son profil.=="
 const messageActif = computed(() => {
   if (modeInterview.value) return _msg('message_interview') || MSG_INTERVIEW_DEFAUT
   if (modeDefinitif.value) return _msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT
@@ -109,7 +115,8 @@ const nbColonnes = computed(() => {
   if (!modeDefinitif.value) return 5
   let n = 6 // code, nom, postnom, prénom, domaine, ville de test
   if (afficherSalle.value) n += 1
-  if (!modeInterview.value) n += 1 // colonne badge (masquée en interview)
+  if (modeInterview.value) n += 2   // date + heure d'arrivée
+  else n += 1                       // colonne badge (mode test)
   return n
 })
 
@@ -367,6 +374,8 @@ onMounted(async () => {
                 <th v-else class="num">#</th>
                 <th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th><th>DOMAINE</th>
                 <th v-if="modeDefinitif">VILLE DE TEST</th>
+                <th v-if="modeInterview">DATE INTERVIEW</th>
+                <th v-if="modeInterview">HEURE D'ARRIVÉE</th>
                 <th v-if="afficherSalle">SALLE</th>
                 <th v-if="modeDefinitif && !modeInterview" class="badge-col">BADGE</th>
               </tr>
@@ -380,6 +389,8 @@ onMounted(async () => {
                 <td class="nom-cell" data-label="Prénom">{{ aff(e.prenom) }}</td>
                 <td class="muted" data-label="Domaine">{{ domCourt(e.poste_libelle) || '—' }}</td>
                 <td v-if="modeDefinitif" class="ville-cell" data-label="Ville de test">{{ e.ville_examen_libelle || '—' }}</td>
+                <td v-if="modeInterview" class="date-cell" data-label="Date interview">{{ e.interview_date_libelle || '—' }}</td>
+                <td v-if="modeInterview" class="heure-cell" data-label="Heure d'arrivée">{{ e.interview_heure || '—' }}</td>
                 <td v-if="afficherSalle" class="salle-cell" data-label="Salle">{{ e.salle || '—' }}</td>
                 <td v-if="modeDefinitif && !modeInterview" class="badge-col" data-label="">
                   <button class="btn-badge" @click="imprimerBadge(e)">Badge</button>
@@ -580,6 +591,8 @@ onMounted(async () => {
   .mode-table .tableau td.salle-cell::before { content: none; }
 }
 .muted { color: #525f71; }
+.date-cell { white-space: nowrap; color: #1b1b21; font-weight: 600; }
+.heure-cell { white-space: nowrap; font-weight: 800; color: #312e81; }
 .vide { text-align: center; color: #767683; padding: 32px; }
 
 .pagination { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; background: #f5f2fb; border-top: 1px solid #e4e1ea; flex-wrap: wrap; gap: 12px; }

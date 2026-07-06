@@ -73,11 +73,23 @@ class RetenuDefinitifSerializer(serializers.ModelSerializer):
     domaine. Le code est figé à la publication (stable et définitif)."""
 
     ville_examen_libelle = serializers.CharField(source='get_ville_examen_display', read_only=True)
+    interview_date_libelle = serializers.SerializerMethodField()
 
     class Meta:
         model = RetenuDefinitif
         fields = ['id', 'code', 'nom', 'postnom', 'prenom', 'poste_libelle', 'origine',
-                  'ville_examen', 'ville_examen_libelle', 'salle']
+                  'ville_examen', 'ville_examen_libelle', 'salle',
+                  'interview_date', 'interview_date_libelle', 'interview_heure']
+
+    _MOIS = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+             'août', 'septembre', 'octobre', 'novembre', 'décembre']
+    _JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
+
+    def get_interview_date_libelle(self, obj):
+        d = obj.interview_date
+        if not d:
+            return ''
+        return f"{self._JOURS[d.weekday()]} {d.day:02d} {self._MOIS[d.month]} {d.year}"
 
 
 class RetenuSupplementSerializer(serializers.ModelSerializer):
