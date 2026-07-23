@@ -186,7 +186,10 @@ function changerDomaine() { page.value = 1; charger() }
 const menuOuvert = ref(false)
 const selWrap = ref(null)
 // Libellés d'affichage raccourcis (la valeur réelle reste inchangée pour le filtre).
-const DOMAINE_COURT = { 'Ingénieur en Bâtiment et Travaux Publics (BTP)': 'Ingénieur BTP' }
+const DOMAINE_COURT = {
+  'Ingénieur en Bâtiment et Travaux Publics (BTP)': 'Ingénieur BTP',
+  'Ingénieurs civils Constructions et BTP': 'Ingénieurs civils & BTP',
+}
 const domCourt = (lib) => DOMAINE_COURT[(lib || '').trim()] || lib
 const domaineLabel = computed(() => {
   if (!domaineFiltre.value) return 'Choisissez un domaine…'
@@ -545,7 +548,7 @@ onMounted(async () => {
 .select-cust:hover { border-color: #1a237e; }
 .select-cust.ouvert { border-color: #1a237e; box-shadow: 0 0 0 3px rgba(26,35,126,0.12); }
 .select-ic { font-size: 1.05rem; line-height: 1; }
-.select-val { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.select-val { flex: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
 .select-val.placeholder { color: #8a8a99; font-weight: 500; }
 .select-caret { color: #1a237e; font-size: 0.9rem; transition: transform 0.2s; }
 .select-cust.ouvert .select-caret { transform: rotate(180deg); }
@@ -557,7 +560,7 @@ onMounted(async () => {
 .select-opt + .select-opt { margin-top: 2px; }
 .select-opt:hover { background: #eef2ff; }
 .select-opt.actif { background: #1a237e; color: #fff; }
-.opt-lib { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt-lib { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
 .opt-count { flex: none; background: #eef0f8; color: #1a237e; border-radius: 9999px; padding: 2px 10px;
   font-size: 0.8rem; font-weight: 700; }
 .select-opt.actif .opt-count { background: rgba(255,255,255,0.22); color: #fff; }
