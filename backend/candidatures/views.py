@@ -1147,6 +1147,12 @@ class RetenuSupplementViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+# Regroupement d'affichage (liste FINALE) : « Ingénieur civil » et « Ingénieur
+# BTP » sont présentés sous une seule rubrique, comme la liste officielle.
+GROUPE_CIVIL_BTP = 'Ingénieurs civils Constructions et BTP'
+POSTES_CIVIL_BTP = ['Ingénieur civil', 'Ingénieur en Bâtiment et Travaux Publics (BTP)']
+
+
 class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
     """Liste publique DÉFINITIVE (lecture seule) : CODE stable + identité +
     domaine, pour les appels dont la liste définitive est publiée. `?appel=`/`?q=`.
@@ -1180,9 +1186,12 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = self._base_public()
-        # Filtre par domaine (sélection sur la page publique).
+        # Filtre par domaine (sélection sur la page publique). La rubrique groupée
+        # « Ingénieurs civils Constructions et BTP » couvre civil + BTP.
         domaine = (self.request.query_params.get('domaine') or '').strip()
-        if domaine:
+        if domaine == GROUPE_CIVIL_BTP:
+            qs = qs.filter(poste_libelle__in=POSTES_CIVIL_BTP)
+        elif domaine:
             qs = qs.filter(poste_libelle=domaine)
         # Recherche par CODE (ex. « 0001 » ou « 1 ») : utilisée par le formulaire
         # de choix de ville (le candidat saisit son code et retrouve son nom).
@@ -1212,6 +1221,22 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
         if self._mode_final(appel):
             rows = (qs.values('poste_libelle')
                       .annotate(n=Count('id'), o=Min('final_ordre')).order_by('o'))
+            # Fusionne civil + BTP sous une seule rubrique (ordre du document).
+            out, groupe = [], None
+            for r in rows:
+                lib = (r['poste_libelle'] or '').strip()
+                if not lib:
+                    continue
+                if lib in POSTES_CIVIL_BTP:
+                    if groupe is None:
+                        groupe = {'domaine': GROUPE_CIVIL_BTP, 'count': 0, 'o': r['o']}
+                        out.append(groupe)
+                    groupe['count'] += r['n']
+                    groupe['o'] = min(groupe['o'], r['o'])
+                else:
+                    out.append({'domaine': lib, 'count': r['n'], 'o': r['o']})
+            out.sort(key=lambda x: x['o'])
+            return Response([{'domaine': x['domaine'], 'count': x['count']} for x in out])
         elif self._mode_interview(appel):
             rows = (qs.values('poste_libelle')
                       .annotate(n=Count('id'), o=Min('interview_ordre')).order_by('o'))

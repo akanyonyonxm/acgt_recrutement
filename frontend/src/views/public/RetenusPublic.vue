@@ -325,7 +325,7 @@ onMounted(async () => {
         <circle cx="180" cy="400" r="80" fill="#FDD835" opacity="0.04" />
       </svg>
       <div class="hero-inner">
-        <div v-if="modeFinal" class="hero-eyebrow">Résultats définitifs · Concours</div>
+        <div v-if="modeFinal" class="hero-eyebrow">Résultats · Concours et Interviews</div>
         <div v-else-if="modeInterview" class="hero-eyebrow">Publication officielle · Interviews</div>
         <h1 class="hero-titre">{{ modeFinal ? 'Liste des candidats retenus à l’issue du concours et des interviews' : modeInterview ? 'Candidats retenus pour les interviews' : modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
         <p v-if="modeDefinitif && !modeRestreint" class="hero-sous">
