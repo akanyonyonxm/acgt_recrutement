@@ -60,10 +60,14 @@ const MSG_INTERVIEW_DEFAUT = "Chronogramme des **interviews** des candidats rete
   + "Se munir d'une **pièce d'identité valide** et des **documents académiques** (diplôme, "
   + "attestation de scolarité + relevé de la dernière année, attestation d'authentification). "
   + "==Aucun candidat ne sera reçu en dehors du jour prévu pour son profil.=="
-const MSG_FINAL_DEFAUT = "La **liste définitive des candidats retenus** au terme du concours de "
-  + "recrutement du personnel métier de l'ACGT est publiée ci-dessous.\n\n"
-  + "Les candidats retenus seront **contactés par la Direction des Ressources Humaines** pour "
-  + "la suite du processus."
+const MSG_FINAL_DEFAUT = "La **liste des candidats retenus à l'issue des interviews**, dans le cadre du "
+  + "recrutement du personnel métier de l'Agence Congolaise des Grands Travaux (ACGT), est désormais "
+  + "disponible sur ce portail.\n\n"
+  + "L'ACGT tient à **féliciter sincèrement** tous les candidats ayant réussi aux **deux épreuves** "
+  + "(test et interview).\n\n"
+  + "Cette liste constitue désormais une base de données crédible. Les candidats ainsi retenus seront "
+  + "contactés par l'ACGT, selon son chronogramme interne, pour la poursuite et la finalisation de "
+  + "leur processus de recrutement."
 const messageActif = computed(() => {
   if (modeFinal.value) return _msg('message_final') || MSG_FINAL_DEFAUT
   if (modeInterview.value) return _msg('message_interview') || MSG_INTERVIEW_DEFAUT
@@ -323,7 +327,7 @@ onMounted(async () => {
       <div class="hero-inner">
         <div v-if="modeFinal" class="hero-eyebrow">Résultats définitifs · Concours</div>
         <div v-else-if="modeInterview" class="hero-eyebrow">Publication officielle · Interviews</div>
-        <h1 class="hero-titre">{{ modeFinal ? 'Candidats retenus au concours' : modeInterview ? 'Candidats retenus pour les interviews' : modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
+        <h1 class="hero-titre">{{ modeFinal ? 'Liste des candidats retenus à l’issue du concours et des interviews' : modeInterview ? 'Candidats retenus pour les interviews' : modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
         <p v-if="modeDefinitif && !modeRestreint" class="hero-sous">
           Chaque candidat dispose d'un <mark class="surbrillance-claire">code unique</mark> ;
           imprimez votre <strong>badge d'accès</strong> et présentez-le, le jour du test,
