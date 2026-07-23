@@ -780,6 +780,83 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         wb.save(reponse)
         return reponse
 
+    @action(detail=True, methods=['get'], url_path='contacts-interview-export',
+            permission_classes=[IsAuthenticated])
+    def contacts_interview_export(self, request, pk=None):
+        """Exporte (Excel, ADMIN) les CONTACTS des admis à l'interview pour l'envoi
+        des accès aux résultats : email, téléphone (si dispo) et statut du compte.
+
+        ⚠ Le téléphone n'est PAS collecté au dépôt en ligne (le modèle Dossier n'a
+        pas ce champ) : il n'existe que pour les personnes venues par réclamation
+        d'éligibilité. « Compte opérationnel » = un utilisateur existe pour cet
+        email, actif et email vérifié."""
+        if not roles.est_admin(request.user):
+            raise PermissionDenied("Réservé aux administrateurs.")
+        appel = self.get_object()
+
+        from django.contrib.auth import get_user_model
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+        from openpyxl.utils import get_column_letter
+        User = get_user_model()
+
+        def _contact(e):
+            email, tel = '', ''
+            if e.dossier_id and e.dossier:
+                email = e.dossier.email or ''
+                rec = ReclamationEligibilite.objects.filter(dossier_cree=e.dossier).first()
+                if rec:
+                    tel = rec.telephone or ''
+            elif e.recours_id and e.recours:
+                email = e.recours.email or ''
+                if e.recours.reclamation_id and e.recours.reclamation:
+                    tel = e.recours.reclamation.telephone or ''
+            return email.strip(), tel.strip()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Contacts interview'
+        entetes = ['Code', 'Nom', 'Postnom', 'Prénom', 'Domaine', 'Ville du test',
+                   'Date interview', 'Heure', 'Email', 'Téléphone', 'Compte',
+                   'Compte opérationnel', 'Origine']
+        ws.append(entetes)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+
+        qs = appel.retenus_definitifs.filter(admis_interview=True).order_by('interview_ordre')
+        n_email = n_tel = n_compte = n_op = 0
+        for e in qs:
+            email, tel = _contact(e)
+            u = User.objects.filter(email__iexact=email).first() if email else None
+            op = bool(u and u.is_active and u.email_verifie)
+            n_email += 1 if email else 0
+            n_tel += 1 if tel else 0
+            n_compte += 1 if u else 0
+            n_op += 1 if op else 0
+            ws.append([
+                e.code, e.nom, e.postnom, e.prenom, e.poste_libelle,
+                e.get_ville_examen_display(),
+                e.interview_date.strftime('%d/%m/%Y') if e.interview_date else '',
+                e.interview_heure, email, tel,
+                'Oui' if u else 'Non', 'Oui' if op else 'Non', e.get_origine_display(),
+            ])
+        total = qs.count()
+        ws.append([])
+        ws.append(['SYNTHÈSE', f'{total} admis', '', '', '', '', '', '',
+                   f'{n_email} email(s)', f'{n_tel} tél.',
+                   f'{n_compte} compte(s)', f'{n_op} opérationnel(s)', ''])
+        for i, largeur in enumerate([8, 18, 18, 18, 26, 14, 14, 8, 32, 16, 10, 18, 20], start=1):
+            ws.column_dimensions[get_column_letter(i)].width = largeur
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = f'A1:{get_column_letter(len(entetes))}{total + 1}'
+
+        reponse = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        reponse['Content-Disposition'] = 'attachment; filename="contacts_interview.xlsx"'
+        wb.save(reponse)
+        return reponse
+
     # --- E-mails de résultat (aperçu / export ; envoi en phase 2) --------
 
     @action(detail=True, methods=['get'], url_path='resultats-apercu',

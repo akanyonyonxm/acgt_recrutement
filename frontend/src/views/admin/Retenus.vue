@@ -232,6 +232,9 @@ async function affecterSalles() {
 function exporterDefinitive() {
   window.open(`/api/appels/${appelId.value}/liste-definitive-export/`, '_blank')
 }
+function exporterContactsInterview() {
+  window.open(`/api/appels/${appelId.value}/contacts-interview-export/`, '_blank')
+}
 
 async function chargerDefinitif() {
   if (!appelId.value) { definitif.value = { publiee: false, total: 0, nb_recours: 0, nb_codes: 0, results: [] }; return }
@@ -607,6 +610,9 @@ onMounted(async () => {
                  :disabled="!definitif.total" @click="exporterSallesPdf">Feuilles de salle (PDF)</v-btn>
           <v-btn color="#1D6F42" variant="tonal" prepend-icon="mdi-microsoft-excel"
                  :disabled="!definitif.total" @click="exporterDefinitive">Exporter Excel</v-btn>
+          <v-btn v-if="auth.estAdmin && appelCourant?.liste_interview_publiee" color="#1565C0" variant="tonal"
+                 prepend-icon="mdi-card-account-mail-outline" :disabled="!appelId"
+                 @click="exporterContactsInterview">Contacts interview</v-btn>
         </div>
         <v-divider />
         <v-alert v-if="defPubliee" type="success" variant="tonal" density="compact" class="ma-3" icon="mdi-information-outline">
