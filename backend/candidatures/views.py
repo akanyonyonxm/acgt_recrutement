@@ -813,39 +813,52 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
                     tel = e.recours.reclamation.telephone or ''
             return email.strip(), tel.strip()
 
+        def _statut_email(email, u):
+            """Aptitude à recevoir un email d'accès aux résultats."""
+            if not email:
+                return 'Sans email'
+            if not u:
+                return 'Email sans compte'
+            if u.is_active and u.email_verifie:
+                return 'Opérationnel'
+            return 'Compte non vérifié'
+
         wb = Workbook()
         ws = wb.active
         ws.title = 'Contacts interview'
         entetes = ['Code', 'Nom', 'Postnom', 'Prénom', 'Domaine', 'Ville du test',
-                   'Date interview', 'Heure', 'Email', 'Téléphone', 'Compte',
-                   'Compte opérationnel', 'Origine']
+                   'Date interview', 'Heure', 'Email', 'Statut email', 'Téléphone', 'Origine']
         ws.append(entetes)
         for cell in ws[1]:
             cell.font = Font(bold=True)
 
         qs = appel.retenus_definitifs.filter(admis_interview=True).order_by('interview_ordre')
-        n_email = n_tel = n_compte = n_op = 0
+        from collections import Counter
+        stats = Counter()
+        n_email = n_tel = 0
         for e in qs:
             email, tel = _contact(e)
             u = User.objects.filter(email__iexact=email).first() if email else None
-            op = bool(u and u.is_active and u.email_verifie)
+            statut = _statut_email(email, u)
+            stats[statut] += 1
             n_email += 1 if email else 0
             n_tel += 1 if tel else 0
-            n_compte += 1 if u else 0
-            n_op += 1 if op else 0
             ws.append([
                 e.code, e.nom, e.postnom, e.prenom, e.poste_libelle,
                 e.get_ville_examen_display(),
                 e.interview_date.strftime('%d/%m/%Y') if e.interview_date else '',
-                e.interview_heure, email, tel,
-                'Oui' if u else 'Non', 'Oui' if op else 'Non', e.get_origine_display(),
+                e.interview_heure, email, statut, tel, e.get_origine_display(),
             ])
         total = qs.count()
         ws.append([])
         ws.append(['SYNTHÈSE', f'{total} admis', '', '', '', '', '', '',
-                   f'{n_email} email(s)', f'{n_tel} tél.',
-                   f'{n_compte} compte(s)', f'{n_op} opérationnel(s)', ''])
-        for i, largeur in enumerate([8, 18, 18, 18, 26, 14, 14, 8, 32, 16, 10, 18, 20], start=1):
+                   f'{n_email} email(s)',
+                   f"{stats['Opérationnel']} opérationnel · "
+                   f"{stats['Compte non vérifié']} non vérifié · "
+                   f"{stats['Email sans compte']} sans compte · "
+                   f"{stats['Sans email']} sans email",
+                   f'{n_tel} tél.', ''])
+        for i, largeur in enumerate([8, 18, 18, 18, 26, 14, 14, 8, 32, 18, 16, 20], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
         ws.freeze_panes = 'A2'
         ws.auto_filter.ref = f'A1:{get_column_letter(len(entetes))}{total + 1}'
