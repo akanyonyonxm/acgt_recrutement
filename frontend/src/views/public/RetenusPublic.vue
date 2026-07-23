@@ -14,16 +14,25 @@ const modeDefinitif = computed(() => appelId.value
   ? !!appelCourant.value?.liste_definitive_publiee
   : appels.value.some((a) => a.liste_definitive_publiee))
 
-// Mode INTERVIEW : si l'appel a publié la liste des admis à l'interview → la page
-// n'affiche plus que ce sous-ensemble (le back-end filtre), avec un communiqué
-// dédié. Ce mode « remplace » l'affichage de la liste définitive.
-const modeInterview = computed(() => appelId.value
+// Mode FINAL : la liste finale des retenus est publiée → la page n'affiche plus
+// que ces retenus (le back-end filtre). Ce mode « remplace » l'interview.
+const modeFinal = computed(() => appelId.value
+  ? !!appelCourant.value?.liste_finale_publiee
+  : appels.value.some((a) => a.liste_finale_publiee))
+
+// Mode INTERVIEW : liste des admis à l'interview publiée ET liste finale PAS encore
+// publiée (la finale remplace l'interview). Communiqué + colonnes dédiés.
+const modeInterview = computed(() => !modeFinal.value && (appelId.value
   ? !!appelCourant.value?.liste_interview_publiee
-  : appels.value.some((a) => a.liste_interview_publiee))
+  : appels.value.some((a) => a.liste_interview_publiee)))
+
+// Un « sous-mode » (interview ou final) : liste restreinte, sélecteur de domaine,
+// pas de badge/salle, reflow en cartes sur mobile.
+const modeRestreint = computed(() => modeInterview.value || modeFinal.value)
 
 // Affichage de la salle au public : seulement en mode définitif (test), pas en
-// mode interview, et si l'appel concerné l'a activé.
-const afficherSalle = computed(() => modeDefinitif.value && !modeInterview.value && (appelId.value
+// mode restreint, et si l'appel concerné l'a activé.
+const afficherSalle = computed(() => modeDefinitif.value && !modeRestreint.value && (appelId.value
   ? !!appelCourant.value?.afficher_salle_public
   : appels.value.some((a) => a.liste_definitive_publiee && a.afficher_salle_public)))
 
@@ -51,7 +60,12 @@ const MSG_INTERVIEW_DEFAUT = "Chronogramme des **interviews** des candidats rete
   + "Se munir d'une **pièce d'identité valide** et des **documents académiques** (diplôme, "
   + "attestation de scolarité + relevé de la dernière année, attestation d'authentification). "
   + "==Aucun candidat ne sera reçu en dehors du jour prévu pour son profil.=="
+const MSG_FINAL_DEFAUT = "La **liste définitive des candidats retenus** au terme du concours de "
+  + "recrutement du personnel métier de l'ACGT est publiée ci-dessous.\n\n"
+  + "Les candidats retenus seront **contactés par la Direction des Ressources Humaines** pour "
+  + "la suite du processus."
 const messageActif = computed(() => {
+  if (modeFinal.value) return _msg('message_final') || MSG_FINAL_DEFAUT
   if (modeInterview.value) return _msg('message_interview') || MSG_INTERVIEW_DEFAUT
   if (modeDefinitif.value) return _msg('message_retenus_definitif') || MSG_DEFINITIF_DEFAUT
   return _msg('message_retenus')
@@ -77,11 +91,13 @@ const messageVide = computed(() => {
   if (modeDefinitif.value && !domaineFiltre.value) {
     return '👆 Sélectionnez un domaine ci-dessus pour afficher la liste.'
   }
-  const libelle = modeInterview.value ? "des admis à l'interview"
+  const libelle = modeFinal.value ? 'des retenus'
+    : modeInterview.value ? "des admis à l'interview"
     : modeDefinitif.value ? 'définitive' : 'des retenus'
   if (q.value.trim()) {
     return `Aucune personne trouvée pour « ${q.value.trim()} » dans la liste ${libelle}. Vérifiez l'orthographe.`
   }
+  if (modeFinal.value) return 'Aucun retenu dans ce domaine.'
   if (modeInterview.value) return "Aucun candidat admis à l'interview dans ce domaine."
   return modeDefinitif.value
     ? 'Aucun candidat dans ce domaine pour le moment.'
@@ -113,11 +129,11 @@ const domaineFiltre = ref('')
 // Nombre de colonnes du tableau (pour le colspan de la ligne « vide »).
 const nbColonnes = computed(() => {
   if (!modeDefinitif.value) return 5
-  let n = 5 // code, nom, postnom, prénom, ville de test
-  if (!modeInterview.value) n += 1  // domaine (masqué en interview car déjà filtré)
+  let n = 5 // code, nom, postnom, prénom, ville
+  if (!modeRestreint.value) n += 1  // domaine (masqué en interview/final, déjà filtré)
   if (afficherSalle.value) n += 1
-  if (modeInterview.value) n += 2   // date + heure d'arrivée
-  else n += 1                       // colonne badge (mode test)
+  if (modeInterview.value) n += 2   // date + heure d'arrivée (interview seulement)
+  if (!modeRestreint.value) n += 1  // colonne badge (mode test seulement)
   return n
 })
 
@@ -289,7 +305,7 @@ onMounted(async () => {
 
     <template v-else>
     <!-- HERO -->
-    <section class="hero" :class="{ 'hero--def': modeDefinitif && !modeInterview, 'hero--interview': modeInterview }">
+    <section class="hero" :class="{ 'hero--def': modeDefinitif && !modeRestreint, 'hero--interview': modeRestreint }">
       <svg class="hero-courbes" viewBox="0 0 1440 420" preserveAspectRatio="none" aria-hidden="true">
         <defs>
           <linearGradient id="lgr" x1="0" y1="0" x2="1" y2="1">
@@ -305,9 +321,10 @@ onMounted(async () => {
         <circle cx="180" cy="400" r="80" fill="#FDD835" opacity="0.04" />
       </svg>
       <div class="hero-inner">
-        <div v-if="modeInterview" class="hero-eyebrow">Publication officielle · Interviews</div>
-        <h1 class="hero-titre">{{ modeInterview ? 'Candidats retenus pour les interviews' : modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
-        <p v-if="modeDefinitif && !modeInterview" class="hero-sous">
+        <div v-if="modeFinal" class="hero-eyebrow">Résultats définitifs · Concours</div>
+        <div v-else-if="modeInterview" class="hero-eyebrow">Publication officielle · Interviews</div>
+        <h1 class="hero-titre">{{ modeFinal ? 'Candidats retenus au concours' : modeInterview ? 'Candidats retenus pour les interviews' : modeDefinitif ? 'Candidats admis au test' : 'Candidats retenus' }}</h1>
+        <p v-if="modeDefinitif && !modeRestreint" class="hero-sous">
           Chaque candidat dispose d'un <mark class="surbrillance-claire">code unique</mark> ;
           imprimez votre <strong>badge d'accès</strong> et présentez-le, le jour du test,
           accompagné de votre <strong>carte d'identité valide</strong>.      
@@ -327,7 +344,7 @@ onMounted(async () => {
 
     <div class="wrap">
       <!-- Communiqué officiel (éditable dans la console : champ « message public ») -->
-      <div v-if="messageActif" class="communique" :class="{ 'communique--def': modeDefinitif && !modeInterview, 'communique--interview': modeInterview }">
+      <div v-if="messageActif" class="communique" :class="{ 'communique--def': modeDefinitif && !modeRestreint, 'communique--interview': modeRestreint }">
         <div class="comm-entete">
           <span class="comm-icone">📢</span>
           <span>Communiqué</span>
@@ -367,14 +384,14 @@ onMounted(async () => {
 
       <!-- Tableau -->
       <div class="tableau-carte">
-        <div class="tableau-scroll" :class="{ 'mode-table': modeDefinitif && !modeInterview, 'mode-cartes': modeInterview }">
+        <div class="tableau-scroll" :class="{ 'mode-table': modeDefinitif && !modeRestreint, 'mode-cartes': modeRestreint }">
           <table class="tableau">
             <thead>
               <tr>
                 <th v-if="modeDefinitif" class="num">CODE</th>
                 <th v-else class="num">#</th>
                 <th>NOM</th><th>POSTNOM</th><th>PRÉNOM</th>
-                <th v-if="!modeInterview">DOMAINE</th>
+                <th v-if="!modeRestreint">DOMAINE</th>
                 <th v-if="modeDefinitif">VILLE DE TEST</th>
                 <th v-if="modeInterview">DATE INTERVIEW</th>
                 <th v-if="modeInterview">HEURE D'ARRIVÉE</th>
@@ -389,7 +406,7 @@ onMounted(async () => {
                 <td class="nom-cell" data-label="Nom">{{ aff(e.nom) }}</td>
                 <td class="nom-cell" data-label="Postnom">{{ aff(e.postnom) }}</td>
                 <td class="nom-cell" data-label="Prénom">{{ aff(e.prenom) }}</td>
-                <td v-if="!modeInterview" class="muted" data-label="Domaine">{{ domCourt(e.poste_libelle) || '—' }}</td>
+                <td v-if="!modeRestreint" class="muted" data-label="Domaine">{{ domCourt(e.poste_libelle) || '—' }}</td>
                 <td v-if="modeDefinitif" class="ville-cell" data-label="Ville de test">{{ e.ville_examen_libelle || '—' }}</td>
                 <td v-if="modeInterview" class="date-cell" data-label="Date interview">{{ e.interview_date_libelle || '—' }}</td>
                 <td v-if="modeInterview" class="heure-cell" data-label="Heure d'arrivée">{{ e.interview_heure || '—' }}</td>

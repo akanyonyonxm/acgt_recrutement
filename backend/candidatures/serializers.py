@@ -614,6 +614,7 @@ class AppelCandidatureSerializer(serializers.ModelSerializer):
             'message_retenus', 'liste_definitive_publiee', 'message_retenus_definitif',
             'instructions_examen', 'afficher_salle_public', 'afficher_supplements_definitif',
             'liste_interview_publiee', 'message_interview',
+            'liste_finale_publiee', 'message_final',
             'date_limite_recours', 'candidature_unique',
             'pieces_exigees', 'nb_dossiers', 'cree_le', 'modifie_le',
         ]

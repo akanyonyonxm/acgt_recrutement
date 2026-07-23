@@ -589,6 +589,37 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         appel.save(update_fields=['liste_interview_publiee'])
         return Response({'detail': "Liste des admis à l'interview retirée de l'affichage public."})
 
+    # --- Liste FINALE des retenus (à l'issue de l'interview) ------------
+
+    @action(detail=True, methods=['post'], url_path='publier-liste-finale',
+            permission_classes=[IsAuthenticated])
+    def publier_liste_finale(self, request, pk=None):
+        """Publie la liste FINALE des retenus (admin/superviseur). La page publique
+        n'affiche alors plus que ces retenus (elle remplace la liste interview).
+        Les retenus finaux doivent d'abord être marqués (import)."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        appel = self.get_object()
+        nb = appel.retenus_definitifs.filter(retenu_final=True).count()
+        if not nb:
+            raise ValidationError("Aucun retenu final n'est marqué pour cet appel "
+                                  "(importez d'abord la liste finale).")
+        appel.liste_finale_publiee = True
+        appel.save(update_fields=['liste_finale_publiee'])
+        return Response({'detail': 'Liste finale des retenus publiée.', 'total': nb})
+
+    @action(detail=True, methods=['post'], url_path='depublier-liste-finale',
+            permission_classes=[IsAuthenticated])
+    def depublier_liste_finale(self, request, pk=None):
+        """Retire la liste finale de l'affichage public : la page publique
+        réaffiche la liste des admis à l'interview."""
+        if not roles.peut_superviser(request.user):
+            raise PermissionDenied("Réservé aux administrateurs et superviseurs.")
+        appel = self.get_object()
+        appel.liste_finale_publiee = False
+        appel.save(update_fields=['liste_finale_publiee'])
+        return Response({'detail': "Liste finale retirée de l'affichage public."})
+
     # --- Demandes de ville d'examen (validées par un agent) -------------
 
     @action(detail=True, methods=['get'], url_path='demandes-ville',
@@ -1140,6 +1171,8 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
         qs = qs.exclude(origine=RetenuDefinitif.Origine.SUPPLEMENT,
                         appel__afficher_supplements_definitif=False)
         qs = qs.exclude(appel__liste_interview_publiee=True, admis_interview=False)
+        # Étape FINALE : ne garde que les retenus finaux (remplace l'interview).
+        qs = qs.exclude(appel__liste_finale_publiee=True, retenu_final=False)
         appel = self.request.query_params.get('appel')
         if appel:
             qs = qs.filter(appel_id=appel)
@@ -1158,9 +1191,12 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(code=code.zfill(4) if code.isdigit() else code)
         for token in tokens_recherche(self.request.query_params.get('q', '')):
             qs = qs.filter(texte_recherche__contains=token)
-        # En mode INTERVIEW, on respecte l'ORDRE DU FICHIER (interview_ordre) ;
-        # sinon (liste définitive/test), l'ordre reste celui des codes.
-        if self._mode_interview(self.request.query_params.get('appel')):
+        # Ordre : liste finale → final_ordre ; interview → interview_ordre ;
+        # sinon (test) → code.
+        appel = self.request.query_params.get('appel')
+        if self._mode_final(appel):
+            return qs.order_by('final_ordre', 'code')
+        if self._mode_interview(appel):
             return qs.order_by('interview_ordre', 'code')
         return qs.order_by('code')
 
@@ -1172,7 +1208,11 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
         les domaines suivent l'ordre du fichier ; sinon, ordre alphabétique."""
         from django.db.models import Count, Min
         qs = self._base_public()
-        if self._mode_interview(request.query_params.get('appel')):
+        appel = request.query_params.get('appel')
+        if self._mode_final(appel):
+            rows = (qs.values('poste_libelle')
+                      .annotate(n=Count('id'), o=Min('final_ordre')).order_by('o'))
+        elif self._mode_interview(appel):
             rows = (qs.values('poste_libelle')
                       .annotate(n=Count('id'), o=Min('interview_ordre')).order_by('o'))
         else:
@@ -1182,10 +1222,19 @@ class RetenusDefinitifsViewSet(viewsets.ReadOnlyModelViewSet):
                          for r in rows if (r['poste_libelle'] or '').strip()])
 
     def _mode_interview(self, appel_id):
-        """Vrai si la liste des admis à l'interview est publiée (pour l'appel
-        demandé, sinon pour au moins un appel publié)."""
+        """Vrai si la liste des admis à l'interview est publiée ET que la liste
+        FINALE ne l'est pas encore (la finale remplace l'interview)."""
         aq = AppelCandidature.objects.filter(liste_definitive_publiee=True,
-                                             liste_interview_publiee=True)
+                                             liste_interview_publiee=True,
+                                             liste_finale_publiee=False)
+        if appel_id:
+            aq = aq.filter(id=appel_id)
+        return aq.exists()
+
+    def _mode_final(self, appel_id):
+        """Vrai si la liste FINALE des retenus est publiée."""
+        aq = AppelCandidature.objects.filter(liste_definitive_publiee=True,
+                                             liste_finale_publiee=True)
         if appel_id:
             aq = aq.filter(id=appel_id)
         return aq.exists()

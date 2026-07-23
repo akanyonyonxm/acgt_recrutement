@@ -90,6 +90,12 @@ class AppelCandidature(models.Model):
         'liste des admis à l’interview publiée', default=False,
     )
     message_interview = models.TextField('communiqué (admis à l’interview)', blank=True)
+    # Étape FINALE : quand la liste des retenus finaux est publiée, la page
+    # publique n'affiche plus que ces retenus (elle remplace la liste interview).
+    liste_finale_publiee = models.BooleanField(
+        'liste finale des retenus publiée', default=False,
+    )
+    message_final = models.TextField('communiqué (retenus finaux)', blank=True)
     # Communiqué affiché en haut de la page publique des retenus (échéances de
     # recours, critères, date de la liste définitive…). Vide = aucun bandeau.
     message_retenus = models.TextField(
@@ -1037,6 +1043,11 @@ class RetenuDefinitif(models.Model):
     # publication. Affichées sur la liste des admis à l'interview.
     interview_date = models.DateField('date de l’interview', null=True, blank=True)
     interview_heure = models.CharField('heure d’arrivée', max_length=40, blank=True)
+    # RETENU FINAL (à l'issue de l'interview) : sous-ensemble des admis à
+    # l'interview. Marqué à l'import de la liste finale (par nom). Publié via
+    # liste_finale_publiee → la page publique n'affiche plus que ces retenus.
+    retenu_final = models.BooleanField('retenu final', default=False, db_index=True)
+    final_ordre = models.PositiveIntegerField('ordre (liste finale)', default=0, db_index=True)
     # Traçabilité de la source (facultative : SET_NULL pour survivre à une purge).
     dossier = models.ForeignKey(
         Dossier, on_delete=models.SET_NULL, null=True, blank=True,
