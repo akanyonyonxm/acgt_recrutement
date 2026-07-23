@@ -63,11 +63,11 @@ const MSG_INTERVIEW_DEFAUT = "Chronogramme des **interviews** des candidats rete
 const MSG_FINAL_DEFAUT = "La **liste des candidats retenus à l'issue des interviews**, dans le cadre du "
   + "recrutement du personnel métier de l'Agence Congolaise des Grands Travaux (ACGT), est désormais "
   + "disponible sur ce portail.\n\n"
-  + "L'ACGT tient à **féliciter sincèrement** tous les candidats ayant réussi aux **deux épreuves** "
+  + "L'ACGT tient à féliciter sincèrement tous les candidats ayant réussi aux deux épreuves "
   + "(test et interview).\n\n"
-  + "Cette liste constitue désormais une base de données crédible. Les candidats ainsi retenus seront "
+  + "**Cette liste constitue désormais une base de données crédible. Les candidats ainsi retenus seront "
   + "contactés par l'ACGT, selon son chronogramme interne, pour la poursuite et la finalisation de "
-  + "leur processus de recrutement."
+  + "leur processus de recrutement.**"
 const messageActif = computed(() => {
   if (modeFinal.value) return _msg('message_final') || MSG_FINAL_DEFAUT
   if (modeInterview.value) return _msg('message_interview') || MSG_INTERVIEW_DEFAUT
@@ -400,7 +400,7 @@ onMounted(async () => {
                 <th v-if="modeInterview">DATE INTERVIEW</th>
                 <th v-if="modeInterview">HEURE D'ARRIVÉE</th>
                 <th v-if="afficherSalle">SALLE</th>
-                <th v-if="modeDefinitif && !modeInterview" class="badge-col">BADGE</th>
+                <th v-if="modeDefinitif && !modeRestreint" class="badge-col">BADGE</th>
               </tr>
             </thead>
             <tbody>
@@ -415,7 +415,7 @@ onMounted(async () => {
                 <td v-if="modeInterview" class="date-cell" data-label="Date interview">{{ e.interview_date_libelle || '—' }}</td>
                 <td v-if="modeInterview" class="heure-cell" data-label="Heure d'arrivée">{{ e.interview_heure || '—' }}</td>
                 <td v-if="afficherSalle" class="salle-cell" data-label="Salle">{{ e.salle || '—' }}</td>
-                <td v-if="modeDefinitif && !modeInterview" class="badge-col" data-label="">
+                <td v-if="modeDefinitif && !modeRestreint" class="badge-col" data-label="">
                   <button class="btn-badge" @click="imprimerBadge(e)">Badge</button>
                 </td>
               </tr>
