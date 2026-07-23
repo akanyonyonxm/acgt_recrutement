@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 export const navEnCours = ref(false)
 
 const routes = [
-  { path: '/', redirect: '/eligibles' },
+  { path: '/', redirect: '/retenus' },
   {
     path: '/',
     component: () => import('../layouts/PublicLayout.vue'),
