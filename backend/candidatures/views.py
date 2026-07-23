@@ -827,7 +827,8 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
         ws = wb.active
         ws.title = 'Contacts interview'
         entetes = ['Code', 'Nom', 'Postnom', 'Prénom', 'Domaine', 'Ville du test',
-                   'Date interview', 'Heure', 'Email', 'Statut email', 'Téléphone', 'Origine']
+                   'Date interview', 'Heure', 'Email', 'Email opérationnel',
+                   'Statut email', 'Téléphone', 'Origine']
         ws.append(entetes)
         for cell in ws[1]:
             cell.font = Font(bold=True)
@@ -847,18 +848,21 @@ class AppelCandidatureViewSet(viewsets.ModelViewSet):
                 e.code, e.nom, e.postnom, e.prenom, e.poste_libelle,
                 e.get_ville_examen_display(),
                 e.interview_date.strftime('%d/%m/%Y') if e.interview_date else '',
-                e.interview_heure, email, statut, tel, e.get_origine_display(),
+                e.interview_heure, email,
+                'Oui' if statut == 'Opérationnel' else 'Non', statut, tel,
+                e.get_origine_display(),
             ])
         total = qs.count()
         ws.append([])
         ws.append(['SYNTHÈSE', f'{total} admis', '', '', '', '', '', '',
                    f'{n_email} email(s)',
+                   f"{stats['Opérationnel']} oui",
                    f"{stats['Opérationnel']} opérationnel · "
                    f"{stats['Compte non vérifié']} non vérifié · "
                    f"{stats['Email sans compte']} sans compte · "
                    f"{stats['Sans email']} sans email",
                    f'{n_tel} tél.', ''])
-        for i, largeur in enumerate([8, 18, 18, 18, 26, 14, 14, 8, 32, 18, 16, 20], start=1):
+        for i, largeur in enumerate([8, 18, 18, 18, 26, 14, 14, 8, 32, 16, 18, 16, 20], start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
         ws.freeze_panes = 'A2'
         ws.auto_filter.ref = f'A1:{get_column_letter(len(entetes))}{total + 1}'
