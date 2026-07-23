@@ -26,12 +26,10 @@ async function deconnexion() {
     <!-- Top nav -->
     <header class="nav">
       <div class="nav-inner">
-        <RouterLink :to="{ name: 'eligibles' }" class="logo">ACGT</RouterLink>
+        <RouterLink :to="{ name: 'retenus-public' }" class="logo">ACGT</RouterLink>
 
         <nav class="liens">
-          <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" class="lien">Mes dossiers</RouterLink>
           <RouterLink v-if="appels.ouvertes" :to="{ name: 'guide' }" class="lien">Comment postuler ?</RouterLink>
-          <RouterLink :to="{ name: 'eligibles' }" class="lien">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" class="lien">Candidats retenus</RouterLink>
         </nav>
 
@@ -66,9 +64,7 @@ async function deconnexion() {
       <!-- menu mobile -->
       <transition name="fade">
         <nav v-if="drawer" class="liens-mobile">
-          <RouterLink v-if="auth.estConnecte" :to="{ name: 'mes-dossiers' }" @click="drawer = false">Mes dossiers</RouterLink>
           <RouterLink v-if="appels.ouvertes" :to="{ name: 'guide' }" @click="drawer = false">Comment postuler ?</RouterLink>
-          <RouterLink :to="{ name: 'eligibles' }" @click="drawer = false">Candidats éligibles</RouterLink>
           <RouterLink :to="{ name: 'retenus-public' }" @click="drawer = false">Candidats retenus</RouterLink>
           <RouterLink v-if="appels.recoursOuverts" :to="{ name: 'recours-public' }" @click="drawer = false">Recours</RouterLink>
           <RouterLink v-if="!auth.estConnecte && appels.ouvertes" :to="{ name: 'reclamation' }" @click="drawer = false">Réclamation</RouterLink>
