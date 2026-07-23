@@ -309,7 +309,7 @@ onMounted(async () => {
 
     <template v-else>
     <!-- HERO -->
-    <section class="hero" :class="{ 'hero--def': modeDefinitif && !modeRestreint, 'hero--interview': modeRestreint }">
+    <section class="hero" :class="{ 'hero--def': modeDefinitif && !modeRestreint, 'hero--interview': modeInterview, 'hero--final': modeFinal }">
       <svg class="hero-courbes" viewBox="0 0 1440 420" preserveAspectRatio="none" aria-hidden="true">
         <defs>
           <linearGradient id="lgr" x1="0" y1="0" x2="1" y2="1">
@@ -348,7 +348,7 @@ onMounted(async () => {
 
     <div class="wrap">
       <!-- Communiqué officiel (éditable dans la console : champ « message public ») -->
-      <div v-if="messageActif" class="communique" :class="{ 'communique--def': modeDefinitif && !modeRestreint, 'communique--interview': modeRestreint }">
+      <div v-if="messageActif" class="communique" :class="{ 'communique--def': modeDefinitif && !modeRestreint, 'communique--interview': modeInterview, 'communique--final': modeFinal }">
         <div class="comm-entete">
           <span class="comm-icone">📢</span>
           <span>Communiqué</span>
@@ -469,6 +469,9 @@ onMounted(async () => {
 /* Publication des INTERVIEWS : palette indigo/nuit premium + accents dorés */
 .hero--interview { background: radial-gradient(1200px 400px at 80% -10%, rgba(96,165,250,0.38), transparent 60%), linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%); padding-top: 44px; }
 .hero--interview .hero-sous strong { color: #FDD835; }
+/* Liste FINALE des retenus : vert émeraude (succès), accent doré conservé */
+.hero--final { background: radial-gradient(1200px 400px at 80% -10%, rgba(52,211,153,0.34), transparent 60%), linear-gradient(135deg, #047857 0%, #043d2e 100%); padding-top: 44px; }
+.hero--final .hero-sous strong { color: #FDD835; }
 .hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0 auto 16px; padding: 7px 16px;
   border: 1px solid rgba(253,216,53,0.55); border-radius: 9999px; color: #FDD835; background: rgba(253,216,53,0.08);
   font-size: 0.78rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
@@ -519,6 +522,13 @@ onMounted(async () => {
 .communique--interview .comm-texte { color: #2a2a35; font-size: 1.04rem; }
 .communique--interview .comm-texte :deep(strong) { color: #1e40af; }
 .communique--interview .surb-comm { color: #1d4ed8; }
+/* Communiqué liste finale : accents émeraude + liseré doré */
+.communique--final { border-color: #d5e8df; border-left: 6px solid #FDD835; padding: 22px 26px;
+  box-shadow: 0 16px 40px rgba(4,61,46,0.14); }
+.communique--final .comm-entete { color: #065f46; }
+.communique--final .comm-texte { color: #2a2a35; font-size: 1.04rem; }
+.communique--final .comm-texte :deep(strong) { color: #047857; }
+.communique--final .surb-comm { color: #047857; }
 .rech-mt { margin-top: 24px !important; }
 
 .recherche { background: #fff; border: 1px solid #e6e4f0; border-radius: 18px; box-shadow: 0 14px 36px rgba(30,27,75,0.10);
